@@ -30,14 +30,28 @@ export class OpenAiClientService implements LLMClient {
     request: LLMCompletionRequest
   ): Promise<LLMCompletionResponse> {
     const response = await this.getClient().chat.completions.create({
-      messages: request.messages.map(({ content, name, role, toolCallId }) => {
-        return {
-          ...(name ? { name } : {}),
-          ...(toolCallId ? { tool_call_id: toolCallId } : {}),
-          content,
-          role
-        };
-      }) as any,
+      messages: request.messages.map(
+        ({ content, name, role, toolCallId, toolCalls }) => {
+          return {
+            ...(name ? { name } : {}),
+            ...(toolCallId ? { tool_call_id: toolCallId } : {}),
+            ...(toolCalls?.length
+              ? {
+                  tool_calls: toolCalls.map((tc) => ({
+                    id: tc.id,
+                    type: 'function' as const,
+                    function: {
+                      name: tc.name,
+                      arguments: JSON.stringify(tc.arguments)
+                    }
+                  }))
+                }
+              : {}),
+            content,
+            role
+          };
+        }
+      ) as any,
       model: this.model,
       ...(request.temperature !== undefined
         ? { temperature: request.temperature }

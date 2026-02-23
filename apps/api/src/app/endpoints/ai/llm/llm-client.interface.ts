@@ -7,6 +7,7 @@ export interface LLMMessage {
   name?: string;
   role: LLMRole;
   toolCallId?: string;
+  toolCalls?: LLMToolCall[];
 }
 
 export interface LLMToolDefinition {
