@@ -6,10 +6,12 @@ import { permissions } from '@ghostfolio/common/permissions';
 import type { AiPromptMode, RequestWithUser } from '@ghostfolio/common/types';
 
 import {
+  Body,
   Controller,
   Get,
   Inject,
   Param,
+  Post,
   Query,
   UseGuards
 } from '@nestjs/common';
@@ -17,6 +19,7 @@ import { REQUEST } from '@nestjs/core';
 import { AuthGuard } from '@nestjs/passport';
 
 import { AiService } from './ai.service';
+import { ChatDto } from './chat.dto';
 
 @Controller('ai')
 export class AiController {
@@ -29,6 +32,18 @@ export class AiController {
   @Get('health')
   public getHealth() {
     return this.aiService.getHealth();
+  }
+
+  @Post('chat')
+  @HasPermission(permissions.accessAssistant)
+  @UseGuards(AuthGuard('jwt'), HasPermissionGuard)
+  public chat(@Body() { message, systemPrompt, toolNames }: ChatDto) {
+    return this.aiService.chat({
+      message,
+      systemPrompt,
+      toolNames,
+      userId: this.request.user.id
+    });
   }
 
   @Get('prompt/:mode')

@@ -1,4 +1,8 @@
 import {
+  ReactAgentRunResult,
+  ReactAgentService
+} from '@ghostfolio/api/app/endpoints/ai/agent/react-agent.service';
+import {
   LLM_CLIENT_TOKEN,
   LLMClient
 } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
@@ -36,7 +40,8 @@ export class AiService {
   public constructor(
     @Inject(LLM_CLIENT_TOKEN)
     private readonly llmClient: LLMClient,
-    private readonly portfolioService: PortfolioService
+    private readonly portfolioService: PortfolioService,
+    private readonly reactAgentService: ReactAgentService
   ) {}
 
   public getHealth() {
@@ -49,6 +54,25 @@ export class AiService {
     return this.llmClient.complete({
       messages: [{ content: prompt, role: 'user' }],
       temperature: 0
+    });
+  }
+
+  public chat({
+    message,
+    systemPrompt,
+    toolNames,
+    userId
+  }: {
+    message: string;
+    systemPrompt?: string;
+    toolNames?: string[];
+    userId: string;
+  }): Promise<ReactAgentRunResult> {
+    return this.reactAgentService.run({
+      prompt: message,
+      systemPrompt,
+      toolNames,
+      userId
     });
   }
 

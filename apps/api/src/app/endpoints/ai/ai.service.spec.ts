@@ -1,3 +1,4 @@
+import { ReactAgentService } from '@ghostfolio/api/app/endpoints/ai/agent/react-agent.service';
 import {
   LLM_CLIENT_TOKEN,
   LLMClient
@@ -31,6 +32,12 @@ describe('AiService', () => {
           useValue: {
             getDetails: jest.fn()
           }
+        },
+        {
+          provide: ReactAgentService,
+          useValue: {
+            run: jest.fn()
+          }
         }
       ]
     }).compile();
@@ -60,11 +67,52 @@ describe('AiService', () => {
       },
       {
         getDetails: jest.fn()
+      } as any,
+      {
+        run: jest.fn()
       } as any
     );
 
     expect(aiService.getHealth()).toEqual({
       status: getReasonPhrase(StatusCodes.OK)
+    });
+  });
+
+  it('forwards chat requests to the ReAct agent with server-scoped userId', async () => {
+    const run = jest.fn().mockResolvedValue({
+      response: 'Scoped response',
+      status: 'completed'
+    });
+
+    const aiService = new AiService(
+      {
+        complete: jest.fn()
+      },
+      {
+        getDetails: jest.fn()
+      } as any,
+      {
+        run
+      } as any
+    );
+
+    const response = await aiService.chat({
+      message: 'What changed this week?',
+      systemPrompt: 'be concise',
+      toolNames: ['get_portfolio_summary'],
+      userId: 'user-1'
+    });
+
+    expect(run).toHaveBeenCalledWith({
+      prompt: 'What changed this week?',
+      systemPrompt: 'be concise',
+      toolNames: ['get_portfolio_summary'],
+      userId: 'user-1'
+    });
+
+    expect(response).toEqual({
+      response: 'Scoped response',
+      status: 'completed'
     });
   });
 
@@ -96,6 +144,9 @@ describe('AiService', () => {
       },
       {
         getDetails
+      } as any,
+      {
+        run: jest.fn()
       } as any
     );
 
@@ -141,6 +192,9 @@ describe('AiService', () => {
             }
           }
         })
+      } as any,
+      {
+        run: jest.fn()
       } as any
     );
 
