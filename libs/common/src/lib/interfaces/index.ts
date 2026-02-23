@@ -9,6 +9,11 @@ import type {
   AdminMarketDataItem
 } from './admin-market-data.interface';
 import type { AdminUser } from './admin-user.interface';
+import type {
+  AiChatConfidence,
+  AiChatResponse,
+  AiChatStatus
+} from './ai-chat-response.interface';
 import type { AssetClassSelectorOption } from './asset-class-selector-option.interface';
 import type { AssetProfileIdentifier } from './asset-profile-identifier.interface';
 import type { BenchmarkProperty } from './benchmark-property.interface';
@@ -108,6 +113,9 @@ export {
   Activity,
   ActivityError,
   ActivityResponse,
+  AiChatConfidence,
+  AiChatResponse,
+  AiChatStatus,
   AdminData,
   AdminJobs,
   AdminMarketData,

@@ -1,0 +1,91 @@
+<div class="ai-chat-page">
+  <div class="chat-header">
+    <h1 class="chat-title">AI Advisor</h1>
+    <p class="chat-subtitle">Ask questions about your portfolio</p>
+  </div>
+
+  <div class="message-list">
+    @if (messages.length === 0) {
+      <div class="empty-state">
+        <p>No messages yet. Ask something about your portfolio below.</p>
+      </div>
+    }
+
+    @for (message of messages; track $index) {
+      <div
+        class="message"
+        [class.message--assistant]="message.role === 'assistant'"
+        [class.message--user]="message.role === 'user'"
+      >
+        <div class="message-bubble">
+          <p class="message-text">{{ message.text }}</p>
+
+          @if (message.role === 'assistant') {
+            <div class="message-meta">
+              @if (message.confidence) {
+                <span
+                  class="confidence-badge"
+                  [class]="'confidence-badge--' + message.confidence"
+                >
+                  {{ message.confidence }} confidence
+                </span>
+              }
+
+              @if (message.warnings && message.warnings.length > 0) {
+                <div class="warnings">
+                  @for (warning of message.warnings; track $index) {
+                    <div class="warning-item">⚠️ {{ warning }}</div>
+                  }
+                </div>
+              }
+
+              @if (message.sources && message.sources.length > 0) {
+                <div class="sources">
+                  <span class="sources-label">Sources: </span>
+                  @for (source of message.sources; track $index) {
+                    <span class="source-tag">{{ source }}</span>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+    @if (isLoading) {
+      <div class="message message--assistant">
+        <div class="message-bubble message-bubble--loading">
+          <mat-spinner [diameter]="20" />
+        </div>
+      </div>
+    }
+  </div>
+
+  @if (error) {
+    <div class="error-banner">{{ error }}</div>
+  }
+
+  <div class="input-area">
+    <mat-form-field appearance="outline" class="message-input">
+      <textarea
+        #messageInput
+        cdkTextareaAutosize
+        matInput
+        placeholder="Ask about your portfolio..."
+        rows="1"
+        [formControl]="messageControl"
+        (keydown.enter)="$event.preventDefault(); sendMessage()"
+      ></textarea>
+    </mat-form-field>
+
+    <button
+      color="primary"
+      mat-raised-button
+      [disabled]="isLoading || !messageControl.value.trim()"
+      (click)="sendMessage()"
+    >
+      Send
+    </button>
+  </div>
+</div>
