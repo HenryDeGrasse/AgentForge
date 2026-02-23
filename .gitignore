@@ -25,6 +25,7 @@ npm-debug.log
 
 # misc
 /.angular/cache
+/.dev
 .cursor/rules/nx-rules.mdc
 .env
 .env.prod
