@@ -1,8 +1,10 @@
 import { ReactAgentService } from '@ghostfolio/api/app/endpoints/ai/agent/react-agent.service';
+import { VerifiedResponse } from '@ghostfolio/api/app/endpoints/ai/contracts/final-response.schema';
 import {
   LLM_CLIENT_TOKEN,
   LLMClient
 } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
+import { ResponseVerifierService } from '@ghostfolio/api/app/endpoints/ai/verification/response-verifier.service';
 import { PortfolioService } from '@ghostfolio/api/app/portfolio/portfolio.service';
 
 import { Test } from '@nestjs/testing';
@@ -10,7 +12,36 @@ import { StatusCodes, getReasonPhrase } from 'http-status-codes';
 
 import { AiService } from './ai.service';
 
+/** Creates a minimal AiService with lightweight stubs for all 4 deps. */
+function buildService({
+  llmComplete = jest.fn(),
+  agentRun = jest.fn().mockResolvedValue({
+    elapsedMs: 100,
+    estimatedCostUsd: 0,
+    iterations: 1,
+    response: 'ok',
+    status: 'completed',
+    toolCalls: 0
+  }),
+  verifierVerify = jest.fn().mockImplementation((r) => ({
+    ...r,
+    confidence: 'high',
+    warnings: [],
+    sources: []
+  })),
+  portfolioGetDetails = jest.fn()
+} = {}) {
+  return new AiService(
+    { complete: llmComplete } as LLMClient,
+    { getDetails: portfolioGetDetails } as any as PortfolioService,
+    { run: agentRun } as any as ReactAgentService,
+    { verify: verifierVerify } as any as ResponseVerifierService
+  );
+}
+
 describe('AiService', () => {
+  // ─── DI wiring ─────────────────────────────────────────────────────────────
+
   it('resolves the LLM adapter via DI and forwards generateText calls', async () => {
     const llmClient: LLMClient = {
       complete: jest.fn().mockResolvedValue({
@@ -20,30 +51,19 @@ describe('AiService', () => {
       })
     };
 
+    const verifier = { verify: jest.fn().mockImplementation((r) => r) };
+
     const module = await Test.createTestingModule({
       providers: [
         AiService,
-        {
-          provide: LLM_CLIENT_TOKEN,
-          useValue: llmClient
-        },
-        {
-          provide: PortfolioService,
-          useValue: {
-            getDetails: jest.fn()
-          }
-        },
-        {
-          provide: ReactAgentService,
-          useValue: {
-            run: jest.fn()
-          }
-        }
+        { provide: LLM_CLIENT_TOKEN, useValue: llmClient },
+        { provide: PortfolioService, useValue: { getDetails: jest.fn() } },
+        { provide: ReactAgentService, useValue: { run: jest.fn() } },
+        { provide: ResponseVerifierService, useValue: verifier }
       ]
     }).compile();
 
     const aiService = module.get(AiService);
-
     const response = await aiService.generateText({
       prompt: 'Summarize my holdings'
     });
@@ -60,43 +80,40 @@ describe('AiService', () => {
     });
   });
 
-  it('returns an OK health status', async () => {
-    const aiService = new AiService(
-      {
-        complete: jest.fn()
-      },
-      {
-        getDetails: jest.fn()
-      } as any,
-      {
-        run: jest.fn()
-      } as any
-    );
+  // ─── health ─────────────────────────────────────────────────────────────────
 
-    expect(aiService.getHealth()).toEqual({
+  it('returns an OK health status', () => {
+    const service = buildService();
+
+    expect(service.getHealth()).toEqual({
       status: getReasonPhrase(StatusCodes.OK)
     });
   });
 
+  // ─── chat ──────────────────────────────────────────────────────────────────
+
   it('forwards chat requests to the ReAct agent with server-scoped userId', async () => {
-    const run = jest.fn().mockResolvedValue({
+    const rawResult = {
+      elapsedMs: 500,
+      estimatedCostUsd: 0.001,
+      iterations: 2,
       response: 'Scoped response',
-      status: 'completed'
-    });
+      status: 'completed' as const,
+      toolCalls: 1
+    };
 
-    const aiService = new AiService(
-      {
-        complete: jest.fn()
-      },
-      {
-        getDetails: jest.fn()
-      } as any,
-      {
-        run
-      } as any
-    );
+    const verifiedResult: VerifiedResponse = {
+      ...rawResult,
+      confidence: 'high',
+      sources: ['get_portfolio_summary'],
+      warnings: []
+    };
 
-    const response = await aiService.chat({
+    const run = jest.fn().mockResolvedValue(rawResult);
+    const verify = jest.fn().mockReturnValue(verifiedResult);
+    const service = buildService({ agentRun: run, verifierVerify: verify });
+
+    const response = await service.chat({
       message: 'What changed this week?',
       systemPrompt: 'be concise',
       toolNames: ['get_portfolio_summary'],
@@ -110,11 +127,60 @@ describe('AiService', () => {
       userId: 'user-1'
     });
 
-    expect(response).toEqual({
-      response: 'Scoped response',
-      status: 'completed'
-    });
+    expect(verify).toHaveBeenCalledWith(rawResult, ['get_portfolio_summary']);
+    expect(response).toEqual(verifiedResult);
   });
+
+  it('passes empty toolNames array to verifier when none provided', async () => {
+    const verify = jest.fn().mockReturnValue({
+      confidence: 'medium',
+      sources: [],
+      warnings: [
+        'No portfolio data tools were used; response may not reflect current data.'
+      ]
+    });
+
+    const service = buildService({ verifierVerify: verify });
+
+    await service.chat({ message: 'Hello', userId: 'user-1' });
+
+    expect(verify).toHaveBeenCalledWith(expect.anything(), []);
+  });
+
+  it('returns verified response with confidence and warnings from verifier', async () => {
+    const verify = jest.fn().mockReturnValue({
+      confidence: 'low',
+      elapsedMs: 200,
+      estimatedCostUsd: 0,
+      iterations: 1,
+      response: 'No response was generated. Please try again.',
+      sources: [],
+      status: 'failed',
+      toolCalls: 0,
+      warnings: ['Response could not be completed. Please try again.']
+    });
+
+    const service = buildService({
+      agentRun: jest.fn().mockResolvedValue({
+        elapsedMs: 200,
+        estimatedCostUsd: 0,
+        iterations: 1,
+        response: '',
+        status: 'failed',
+        toolCalls: 0
+      }),
+      verifierVerify: verify
+    });
+
+    const result = await service.chat({ message: 'test', userId: 'u1' });
+
+    expect(result.confidence).toBe('low');
+    expect(result.warnings).toContain(
+      'Response could not be completed. Please try again.'
+    );
+  });
+
+  // ─── getPrompt ──────────────────────────────────────────────────────────────
 
   it('returns a holdings markdown table in portfolio mode sorted by allocation', async () => {
     const getDetails = jest.fn().mockResolvedValue({
@@ -138,19 +204,9 @@ describe('AiService', () => {
       }
     });
 
-    const aiService = new AiService(
-      {
-        complete: jest.fn()
-      },
-      {
-        getDetails
-      } as any,
-      {
-        run: jest.fn()
-      } as any
-    );
+    const service = buildService({ portfolioGetDetails: getDetails });
 
-    const prompt = await aiService.getPrompt({
+    const prompt = await service.getPrompt({
       filters: [{ key: 'symbol', values: ['VOO'] }] as any,
       impersonationId: undefined,
       languageCode: 'en',
@@ -168,37 +224,28 @@ describe('AiService', () => {
     expect(prompt).toContain('Name');
     expect(prompt).toContain('Vanguard S&P 500');
     expect(prompt).toContain('Microsoft');
-
     expect(prompt.indexOf('Vanguard S&P 500')).toBeLessThan(
       prompt.indexOf('Microsoft')
     );
   });
 
   it('returns a structured analysis instruction in analysis mode', async () => {
-    const aiService = new AiService(
-      {
-        complete: jest.fn()
-      },
-      {
-        getDetails: jest.fn().mockResolvedValue({
-          holdings: {
-            AAPL: {
-              allocationInPercentage: 0.7,
-              assetClass: 'EQUITY',
-              assetSubClass: undefined,
-              currency: 'USD',
-              name: 'Apple',
-              symbol: 'AAPL'
-            }
+    const service = buildService({
+      portfolioGetDetails: jest.fn().mockResolvedValue({
+        holdings: {
+          AAPL: {
+            allocationInPercentage: 0.7,
+            assetClass: 'EQUITY',
+            assetSubClass: undefined,
+            currency: 'USD',
+            name: 'Apple',
+            symbol: 'AAPL'
           }
-        })
-      } as any,
-      {
-        run: jest.fn()
-      } as any
-    );
+        }
+      })
+    });
 
-    const prompt = await aiService.getPrompt({
+    const prompt = await service.getPrompt({
       impersonationId: undefined,
       languageCode: 'de',
       mode: 'analysis',

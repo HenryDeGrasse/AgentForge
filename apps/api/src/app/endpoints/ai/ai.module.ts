@@ -33,6 +33,7 @@ import { Module } from '@nestjs/common';
 
 import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
+import { ResponseVerifierService } from './verification/response-verifier.service';
 
 @Module({
   controllers: [AiController],
@@ -62,6 +63,7 @@ import { AiService } from './ai.service';
     OpenAiClientService,
     PortfolioCalculatorFactory,
     ReactAgentService,
+    ResponseVerifierService,
     AnalyzeRiskTool,
     GetPortfolioSummaryTool,
     GetTransactionHistoryTool,

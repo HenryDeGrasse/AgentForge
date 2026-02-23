@@ -1,11 +1,10 @@
-import {
-  ReactAgentRunResult,
-  ReactAgentService
-} from '@ghostfolio/api/app/endpoints/ai/agent/react-agent.service';
+import { ReactAgentService } from '@ghostfolio/api/app/endpoints/ai/agent/react-agent.service';
+import { VerifiedResponse } from '@ghostfolio/api/app/endpoints/ai/contracts/final-response.schema';
 import {
   LLM_CLIENT_TOKEN,
   LLMClient
 } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
+import { ResponseVerifierService } from '@ghostfolio/api/app/endpoints/ai/verification/response-verifier.service';
 import { PortfolioService } from '@ghostfolio/api/app/portfolio/portfolio.service';
 import { Filter } from '@ghostfolio/common/interfaces';
 import type { AiPromptMode } from '@ghostfolio/common/types';
@@ -41,7 +40,8 @@ export class AiService {
     @Inject(LLM_CLIENT_TOKEN)
     private readonly llmClient: LLMClient,
     private readonly portfolioService: PortfolioService,
-    private readonly reactAgentService: ReactAgentService
+    private readonly reactAgentService: ReactAgentService,
+    private readonly responseVerifierService: ResponseVerifierService
   ) {}
 
   public getHealth() {
@@ -57,7 +57,7 @@ export class AiService {
     });
   }
 
-  public chat({
+  public async chat({
     message,
     systemPrompt,
     toolNames,
@@ -67,13 +67,15 @@ export class AiService {
     systemPrompt?: string;
     toolNames?: string[];
     userId: string;
-  }): Promise<ReactAgentRunResult> {
-    return this.reactAgentService.run({
+  }): Promise<VerifiedResponse> {
+    const result = await this.reactAgentService.run({
       prompt: message,
       systemPrompt,
       toolNames,
       userId
     });
+
+    return this.responseVerifierService.verify(result, toolNames ?? []);
   }
 
   public async getPrompt({

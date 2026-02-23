@@ -1,6 +1,7 @@
 import { ReactAgentService } from '@ghostfolio/api/app/endpoints/ai/agent/react-agent.service';
 import { LLMClient } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
 import { ToolRegistry } from '@ghostfolio/api/app/endpoints/ai/tools/tool.registry';
+import { ResponseVerifierService } from '@ghostfolio/api/app/endpoints/ai/verification/response-verifier.service';
 
 import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
@@ -72,7 +73,8 @@ describe('Ai chat integration', () => {
       {
         getDetails: jest.fn()
       } as any,
-      reactAgentService
+      reactAgentService,
+      new ResponseVerifierService()
     );
 
     const aiController = new AiController(
