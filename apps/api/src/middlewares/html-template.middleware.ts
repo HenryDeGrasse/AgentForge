@@ -125,10 +125,12 @@ export class HtmlTemplateMiddleware implements NestMiddleware {
     if (
       path.startsWith('/api/') ||
       path.startsWith(STORYBOOK_PATH) ||
-      this.isFileRequest(path) ||
-      !environment.production
+      this.isFileRequest(path)
     ) {
       // Skip
+      next();
+    } else if (!this.indexHtmlMap[languageCode]) {
+      // No compiled client for this locale yet — skip gracefully
       next();
     } else {
       const indexHtml = interpolate(this.indexHtmlMap[languageCode], {

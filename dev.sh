@@ -35,6 +35,11 @@ start_infra() {
   docker compose -f docker/docker-compose.dev.yml up -d
 }
 
+build_client() {
+  echo "[dev] Building Angular client..."
+  npx nx run client:build >/dev/null
+}
+
 build_api() {
   echo "[dev] Building API..."
   npx nx run api:copy-assets >/dev/null
@@ -133,6 +138,7 @@ command="${1:-up}"
 case "$command" in
   up|restart)
     start_infra
+    build_client
     build_api
     stop_api
     start_api
