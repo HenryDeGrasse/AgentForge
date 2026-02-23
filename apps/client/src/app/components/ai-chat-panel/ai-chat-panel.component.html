@@ -1,0 +1,114 @@
+<div class="ai-panel" [class.open]="isOpen$ | async">
+  <!-- Header -->
+  <div class="panel-header">
+    <div class="panel-title">
+      <span class="panel-icon">✦</span>
+      <span>AI Advisor</span>
+    </div>
+
+    <div class="panel-actions">
+      @if ((messages$ | async)?.length) {
+        <button
+          class="btn-clear btn-icon"
+          title="Clear conversation"
+          type="button"
+          (click)="stateService.clearConversation()"
+        >
+          ↺
+        </button>
+      }
+
+      <button
+        class="btn-close btn-icon"
+        title="Close"
+        type="button"
+        (click)="stateService.close()"
+      >
+        ✕
+      </button>
+    </div>
+  </div>
+
+  <!-- Message list -->
+  <div #messageList class="message-list">
+    @if (!(messages$ | async)?.length) {
+      <div class="empty-state">
+        <p class="empty-title">Ask anything about your portfolio</p>
+        <p class="empty-hint">
+          I can summarise holdings, analyse risk, and review transaction
+          history.
+        </p>
+      </div>
+    }
+
+    @for (msg of messages$ | async; track $index) {
+      @if (msg.role === 'user') {
+        <div class="message-user">
+          <span class="bubble">{{ msg.text }}</span>
+        </div>
+      } @else {
+        <div class="message-assistant">
+          <div class="bubble">
+            <p class="message-text">{{ msg.text }}</p>
+
+            @if (hasWarnings(msg)) {
+              <details class="warnings-panel">
+                <summary>⚠ {{ msg.warnings.length }} notice(s)</summary>
+                <ul>
+                  @for (w of msg.warnings; track w) {
+                    <li>{{ w }}</li>
+                  }
+                </ul>
+              </details>
+            }
+
+            @if (msg.sources?.length) {
+              <div class="sources">
+                @for (s of msg.sources; track s) {
+                  <span class="source-tag">{{ s }}</span>
+                }
+              </div>
+            }
+
+            <span class="confidence-badge confidence-{{ msg.confidence }}">
+              {{ msg.confidence }}
+            </span>
+          </div>
+        </div>
+      }
+    }
+
+    @if (isLoading$ | async) {
+      <div class="typing-indicator">
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+      </div>
+    }
+  </div>
+
+  <!-- Error banner -->
+  @if (error$ | async; as errorMsg) {
+    <div class="error-banner">{{ errorMsg }}</div>
+  }
+
+  <!-- Input area -->
+  <div class="input-area">
+    <textarea
+      class="message-input"
+      placeholder="Ask about your portfolio…"
+      rows="1"
+      [formControl]="inputControl"
+      (keydown)="onKeydown($event)"
+    ></textarea>
+
+    <button
+      class="send-btn"
+      type="button"
+      [disabled]="(isLoading$ | async) || !inputControl.value.trim()"
+      (click)="onSend()"
+    >
+      ↑
+    </button>
+  </div>
+</div>

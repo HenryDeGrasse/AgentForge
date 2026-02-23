@@ -12,7 +12,8 @@ import type { AdminUser } from './admin-user.interface';
 import type {
   AiChatConfidence,
   AiChatResponse,
-  AiChatStatus
+  AiChatStatus,
+  ChatMessage
 } from './ai-chat-response.interface';
 import type { AssetClassSelectorOption } from './asset-class-selector-option.interface';
 import type { AssetProfileIdentifier } from './asset-profile-identifier.interface';
@@ -116,6 +117,7 @@ export {
   AiChatConfidence,
   AiChatResponse,
   AiChatStatus,
+  ChatMessage,
   AdminData,
   AdminJobs,
   AdminMarketData,

@@ -14,3 +14,12 @@ export interface AiChatResponse {
   toolCalls: number;
   warnings: string[];
 }
+
+/** A single message in the AI chat conversation history. */
+export interface ChatMessage {
+  confidence?: AiChatConfidence;
+  role: 'assistant' | 'user';
+  sources?: string[];
+  text: string;
+  warnings?: string[];
+}

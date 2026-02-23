@@ -33,6 +33,8 @@ import { DeviceDetectorService } from 'ngx-device-detector';
 import { Subject } from 'rxjs';
 import { filter, takeUntil } from 'rxjs/operators';
 
+import { AiChatFabComponent } from './components/ai-chat-fab/ai-chat-fab.component';
+import { AiChatPanelComponent } from './components/ai-chat-panel/ai-chat-panel.component';
 import { GfFooterComponent } from './components/footer/footer.component';
 import { GfHeaderComponent } from './components/header/header.component';
 import { GfHoldingDetailDialogComponent } from './components/holding-detail-dialog/holding-detail-dialog.component';
@@ -43,7 +45,14 @@ import { UserService } from './services/user/user.service';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [GfFooterComponent, GfHeaderComponent, RouterLink, RouterOutlet],
+  imports: [
+    AiChatFabComponent,
+    AiChatPanelComponent,
+    GfFooterComponent,
+    GfHeaderComponent,
+    RouterLink,
+    RouterOutlet
+  ],
   selector: 'gf-root',
   styleUrls: ['./app.component.scss'],
   templateUrl: './app.component.html'
@@ -59,6 +68,7 @@ export class GfAppComponent implements OnDestroy, OnInit {
   public deviceType: string;
   public hasImpersonationId: boolean;
   public hasInfoMessage: boolean;
+  public hasPermissionToAccessAssistant: boolean;
   public hasPermissionToChangeDateRange: boolean;
   public hasPermissionToChangeFilters: boolean;
   public hasPromotion = false;
@@ -208,6 +218,11 @@ export class GfAppComponent implements OnDestroy, OnInit {
         this.canCreateAccount = hasPermission(
           this.user?.permissions,
           permissions.createUserAccount
+        );
+
+        this.hasPermissionToAccessAssistant = hasPermission(
+          this.user?.permissions,
+          permissions.accessAssistant
         );
 
         this.hasInfoMessage =
