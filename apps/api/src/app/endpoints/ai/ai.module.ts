@@ -1,5 +1,10 @@
 import { AccountBalanceService } from '@ghostfolio/api/app/account-balance/account-balance.service';
 import { AccountService } from '@ghostfolio/api/app/account/account.service';
+import { ReactAgentService } from '@ghostfolio/api/app/endpoints/ai/agent/react-agent.service';
+import { LLM_CLIENT_TOKEN } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
+import { OpenAiClientService } from '@ghostfolio/api/app/endpoints/ai/llm/openai-client.service';
+import { ToolRegistry } from '@ghostfolio/api/app/endpoints/ai/tools/tool.registry';
+import { AI_TOOL_DEFINITIONS_TOKEN } from '@ghostfolio/api/app/endpoints/ai/tools/tool.types';
 import { OrderModule } from '@ghostfolio/api/app/order/order.module';
 import { PortfolioCalculatorFactory } from '@ghostfolio/api/app/portfolio/calculator/portfolio-calculator.factory';
 import { CurrentRateService } from '@ghostfolio/api/app/portfolio/current-rate.service';
@@ -51,9 +56,20 @@ import { AiService } from './ai.service';
     AiService,
     CurrentRateService,
     MarketDataService,
+    OpenAiClientService,
     PortfolioCalculatorFactory,
+    ReactAgentService,
+    ToolRegistry,
     PortfolioService,
-    RulesService
+    RulesService,
+    {
+      provide: AI_TOOL_DEFINITIONS_TOKEN,
+      useValue: []
+    },
+    {
+      provide: LLM_CLIENT_TOKEN,
+      useExisting: OpenAiClientService
+    }
   ]
 })
 export class AiModule {}

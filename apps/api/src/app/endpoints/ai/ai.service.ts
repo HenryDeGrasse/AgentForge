@@ -1,15 +1,13 @@
-import { PortfolioService } from '@ghostfolio/api/app/portfolio/portfolio.service';
-import { PropertyService } from '@ghostfolio/api/services/property/property.service';
 import {
-  PROPERTY_API_KEY_OPENROUTER,
-  PROPERTY_OPENROUTER_MODEL
-} from '@ghostfolio/common/config';
+  LLM_CLIENT_TOKEN,
+  LLMClient
+} from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
+import { PortfolioService } from '@ghostfolio/api/app/portfolio/portfolio.service';
 import { Filter } from '@ghostfolio/common/interfaces';
 import type { AiPromptMode } from '@ghostfolio/common/types';
 
-import { Injectable } from '@nestjs/common';
-import { createOpenRouter } from '@openrouter/ai-sdk-provider';
-import { generateText } from 'ai';
+import { Inject, Injectable } from '@nestjs/common';
+import { StatusCodes, getReasonPhrase } from 'http-status-codes';
 import type { ColumnDescriptor } from 'tablemark';
 
 @Injectable()
@@ -36,26 +34,21 @@ export class AiService {
   ];
 
   public constructor(
-    private readonly portfolioService: PortfolioService,
-    private readonly propertyService: PropertyService
+    @Inject(LLM_CLIENT_TOKEN)
+    private readonly llmClient: LLMClient,
+    private readonly portfolioService: PortfolioService
   ) {}
 
+  public getHealth() {
+    return {
+      status: getReasonPhrase(StatusCodes.OK)
+    };
+  }
+
   public async generateText({ prompt }: { prompt: string }) {
-    const openRouterApiKey = await this.propertyService.getByKey<string>(
-      PROPERTY_API_KEY_OPENROUTER
-    );
-
-    const openRouterModel = await this.propertyService.getByKey<string>(
-      PROPERTY_OPENROUTER_MODEL
-    );
-
-    const openRouterService = createOpenRouter({
-      apiKey: openRouterApiKey
-    });
-
-    return generateText({
-      prompt,
-      model: openRouterService.chat(openRouterModel)
+    return this.llmClient.complete({
+      messages: [{ content: prompt, role: 'user' }],
+      temperature: 0
     });
   }
 
@@ -137,15 +130,9 @@ export class AiService {
         }
       );
 
-    // Dynamic import to load ESM module from CommonJS context
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval
-    const dynamicImport = new Function('s', 'return import(s)') as (
-      s: string
-    ) => Promise<typeof import('tablemark')>;
-    const { tablemark } = await dynamicImport('tablemark');
-
-    const holdingsTableString = tablemark(holdingsTableRows, {
-      columns: holdingsTableColumns
+    const holdingsTableString = await this.toMarkdownTable({
+      columns: holdingsTableColumns,
+      rows: holdingsTableRows
     });
 
     if (mode === 'portfolio') {
@@ -165,5 +152,66 @@ export class AiService {
       'Conclusion: Provide a concise summary highlighting key insights.',
       `Provide your answer in the following language: ${languageCode}.`
     ].join('\n');
+  }
+
+  private escapeMarkdownCell(value: unknown) {
+    if (value === null || value === undefined) {
+      return '';
+    }
+
+    return String(value).split('|').join('\\|');
+  }
+
+  private getMarkdownFallback({
+    columns,
+    rows
+  }: {
+    columns: ColumnDescriptor[];
+    rows: Record<string, string>[];
+  }) {
+    const header = `| ${columns
+      .map(({ name }) => {
+        return this.escapeMarkdownCell(name);
+      })
+      .join(' | ')} |`;
+
+    const separator = `| ${columns
+      .map(() => {
+        return '---';
+      })
+      .join(' | ')} |`;
+
+    const body = rows.map((row) => {
+      return `| ${columns
+        .map(({ name }) => {
+          return this.escapeMarkdownCell(row[name]);
+        })
+        .join(' | ')} |`;
+    });
+
+    return [header, separator, ...body].join('\n');
+  }
+
+  private async toMarkdownTable({
+    columns,
+    rows
+  }: {
+    columns: ColumnDescriptor[];
+    rows: Record<string, string>[];
+  }) {
+    try {
+      // Dynamic import to load ESM module from CommonJS context
+      // eslint-disable-next-line @typescript-eslint/no-implied-eval
+      const dynamicImport = new Function('s', 'return import(s)') as (
+        s: string
+      ) => Promise<typeof import('tablemark')>;
+      const { tablemark } = await dynamicImport('tablemark');
+
+      return tablemark(rows, {
+        columns
+      });
+    } catch {
+      return this.getMarkdownFallback({ columns, rows });
+    }
   }
 }

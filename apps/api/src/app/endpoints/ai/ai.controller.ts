@@ -26,6 +26,11 @@ export class AiController {
     @Inject(REQUEST) private readonly request: RequestWithUser
   ) {}
 
+  @Get('health')
+  public getHealth() {
+    return this.aiService.getHealth();
+  }
+
   @Get('prompt/:mode')
   @HasPermission(permissions.readAiPrompt)
   @UseGuards(AuthGuard('jwt'), HasPermissionGuard)
