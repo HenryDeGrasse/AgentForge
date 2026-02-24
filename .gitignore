@@ -43,3 +43,9 @@ testem.log
 # System Files
 .DS_Store
 Thumbs.db
+
+# Local planning/workspace artifacts
+/.pi/
+/docs/AgentForge_PreSearch_Document_FINAL.md
+/docs/MVP_EPIC.md
+/docs/local-dev.md
