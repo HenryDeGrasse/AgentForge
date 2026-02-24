@@ -6,6 +6,7 @@ import { OpenAiClientService } from '@ghostfolio/api/app/endpoints/ai/llm/openai
 import { AnalyzeRiskTool } from '@ghostfolio/api/app/endpoints/ai/tools/analyze-risk.tool';
 import { GetPortfolioSummaryTool } from '@ghostfolio/api/app/endpoints/ai/tools/get-portfolio-summary.tool';
 import { GetTransactionHistoryTool } from '@ghostfolio/api/app/endpoints/ai/tools/get-transaction-history.tool';
+import { MarketDataLookupTool } from '@ghostfolio/api/app/endpoints/ai/tools/market-data-lookup.tool';
 import { ToolRegistry } from '@ghostfolio/api/app/endpoints/ai/tools/tool.registry';
 import { AI_TOOL_DEFINITIONS_TOKEN } from '@ghostfolio/api/app/endpoints/ai/tools/tool.types';
 import { OrderModule } from '@ghostfolio/api/app/order/order.module';
@@ -14,6 +15,7 @@ import { CurrentRateService } from '@ghostfolio/api/app/portfolio/current-rate.s
 import { PortfolioService } from '@ghostfolio/api/app/portfolio/portfolio.service';
 import { RulesService } from '@ghostfolio/api/app/portfolio/rules.service';
 import { RedisCacheModule } from '@ghostfolio/api/app/redis-cache/redis-cache.module';
+import { SymbolModule } from '@ghostfolio/api/app/symbol/symbol.module';
 import { UserModule } from '@ghostfolio/api/app/user/user.module';
 import { ApiModule } from '@ghostfolio/api/services/api/api.module';
 import { BenchmarkModule } from '@ghostfolio/api/services/benchmark/benchmark.module';
@@ -51,6 +53,7 @@ import { ResponseVerifierService } from './verification/response-verifier.servic
     PrismaModule,
     PropertyModule,
     RedisCacheModule,
+    SymbolModule,
     SymbolProfileModule,
     UserModule
   ],
@@ -67,6 +70,7 @@ import { ResponseVerifierService } from './verification/response-verifier.servic
     AnalyzeRiskTool,
     GetPortfolioSummaryTool,
     GetTransactionHistoryTool,
+    MarketDataLookupTool,
     ToolRegistry,
     PortfolioService,
     RulesService,
@@ -74,18 +78,21 @@ import { ResponseVerifierService } from './verification/response-verifier.servic
       inject: [
         AnalyzeRiskTool,
         GetPortfolioSummaryTool,
-        GetTransactionHistoryTool
+        GetTransactionHistoryTool,
+        MarketDataLookupTool
       ],
       provide: AI_TOOL_DEFINITIONS_TOKEN,
       useFactory: (
         analyzeRiskTool,
         getPortfolioSummaryTool,
-        getTransactionHistoryTool
+        getTransactionHistoryTool,
+        marketDataLookupTool
       ) => {
         return [
           getPortfolioSummaryTool,
           getTransactionHistoryTool,
-          analyzeRiskTool
+          analyzeRiskTool,
+          marketDataLookupTool
         ];
       }
     },
