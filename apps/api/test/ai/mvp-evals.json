@@ -1,0 +1,115 @@
+[
+  {
+    "id": "rich-holdings-summary",
+    "profile": "rich",
+    "request": {
+      "message": "Can you summarize my holdings and total portfolio value?",
+      "toolNames": ["get_portfolio_summary"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredSources": ["get_portfolio_summary"],
+      "mustIncludeAny": ["holding", "portfolio", "value"],
+      "mustNotIncludeAny": [
+        "technical issue",
+        "unable to access",
+        "temporarily unavailable"
+      ]
+    }
+  },
+  {
+    "id": "rich-transaction-history",
+    "profile": "rich",
+    "request": {
+      "message": "Show my most recent transactions and briefly summarize activity.",
+      "toolNames": ["get_transaction_history"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredSources": ["get_transaction_history"],
+      "mustIncludeAny": ["transaction", "buy", "activity"],
+      "mustNotIncludeAny": [
+        "technical issue",
+        "unable to access",
+        "temporarily unavailable"
+      ]
+    }
+  },
+  {
+    "id": "rich-risk-analysis",
+    "profile": "rich",
+    "request": {
+      "message": "What are the main portfolio risk flags right now?",
+      "toolNames": ["analyze_risk"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredSources": ["analyze_risk"],
+      "mustIncludeAny": ["risk", "volatility", "concentration"],
+      "mustNotIncludeAny": [
+        "technical issue",
+        "unable to access",
+        "temporarily unavailable"
+      ]
+    }
+  },
+  {
+    "id": "empty-portfolio-summary",
+    "profile": "empty",
+    "request": {
+      "message": "Do I currently have any holdings?",
+      "toolNames": ["get_portfolio_summary"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredSources": ["get_portfolio_summary"],
+      "mustIncludeAny": [
+        "no holdings",
+        "do not have any holdings",
+        "don't have any holdings",
+        "no investments"
+      ],
+      "mustNotIncludeAny": [
+        "technical issue",
+        "unable to access",
+        "temporarily unavailable"
+      ]
+    }
+  },
+  {
+    "id": "rich-multi-tool-health-check",
+    "profile": "rich",
+    "request": {
+      "message": "Give me a concise portfolio health check covering holdings, transaction activity, and risk.",
+      "toolNames": [
+        "get_portfolio_summary",
+        "get_transaction_history",
+        "analyze_risk"
+      ]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 2,
+      "requiredSources": [
+        "get_portfolio_summary",
+        "get_transaction_history",
+        "analyze_risk"
+      ],
+      "mustIncludeAny": ["holding", "transaction", "risk"],
+      "mustNotIncludeAny": [
+        "technical issue",
+        "unable to access",
+        "temporarily unavailable"
+      ]
+    }
+  }
+]

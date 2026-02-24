@@ -20,6 +20,7 @@ Commands:
   status    Show API process and health status
   test      Run focused AI test suite
   coverage  Run focused AI test suite with coverage report
+  eval      Run MVP eval pack (requires RUN_MVP_EVALS=1)
 
 Environment overrides:
   HOST=<host> PORT=<port>
@@ -115,6 +116,21 @@ run_ai_coverage() {
     --coverageReporters=html
 }
 
+run_mvp_evals() {
+  if [[ "${RUN_MVP_EVALS:-0}" != "1" ]]; then
+    echo "[dev] RUN_MVP_EVALS=1 is required to run evals."
+    echo "[dev] Example: RUN_MVP_EVALS=1 ./dev.sh eval"
+    exit 1
+  fi
+
+  echo "[dev] Running MVP eval suite against ${DEFAULT_HOST}:${DEFAULT_PORT}..."
+  npx jest \
+    apps/api/test/ai/mvp-evals.spec.ts \
+    --config apps/api/jest.config.ts \
+    --runInBand \
+    --testTimeout=240000
+}
+
 show_status() {
   if [[ -f "$API_PID_FILE" ]]; then
     local pid
@@ -157,6 +173,9 @@ case "$command" in
     ;;
   coverage)
     run_ai_coverage
+    ;;
+  eval)
+    run_mvp_evals
     ;;
   help|-h|--help)
     print_usage
