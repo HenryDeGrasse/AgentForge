@@ -123,6 +123,8 @@ run_mvp_evals() {
     exit 1
   fi
 
+  # HOST/PORT env vars are inherited by the Jest subprocess, where
+  # resolveMvpEvalBaseUrl() reads them to build the target URL.
   echo "[dev] Running MVP eval suite against ${DEFAULT_HOST}:${DEFAULT_PORT}..."
   npx jest \
     apps/api/test/ai/mvp-evals.spec.ts \

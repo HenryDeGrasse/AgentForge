@@ -75,7 +75,12 @@
         "no holdings",
         "do not have any holdings",
         "don't have any holdings",
-        "no investments"
+        "don't currently have",
+        "do not currently have",
+        "no investments",
+        "no assets",
+        "empty",
+        "0 holdings"
       ],
       "mustNotIncludeAny": [
         "technical issue",
