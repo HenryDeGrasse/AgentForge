@@ -4,6 +4,7 @@ import { ReactAgentService } from '@ghostfolio/api/app/endpoints/ai/agent/react-
 import { LLM_CLIENT_TOKEN } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
 import { OpenAiClientService } from '@ghostfolio/api/app/endpoints/ai/llm/openai-client.service';
 import { AnalyzeRiskTool } from '@ghostfolio/api/app/endpoints/ai/tools/analyze-risk.tool';
+import { ComplianceCheckTool } from '@ghostfolio/api/app/endpoints/ai/tools/compliance-check.tool';
 import { GetPortfolioSummaryTool } from '@ghostfolio/api/app/endpoints/ai/tools/get-portfolio-summary.tool';
 import { GetTransactionHistoryTool } from '@ghostfolio/api/app/endpoints/ai/tools/get-transaction-history.tool';
 import { MarketDataLookupTool } from '@ghostfolio/api/app/endpoints/ai/tools/market-data-lookup.tool';
@@ -70,6 +71,7 @@ import { ResponseVerifierService } from './verification/response-verifier.servic
     ReactAgentService,
     ResponseVerifierService,
     AnalyzeRiskTool,
+    ComplianceCheckTool,
     GetPortfolioSummaryTool,
     GetTransactionHistoryTool,
     MarketDataLookupTool,
@@ -81,6 +83,7 @@ import { ResponseVerifierService } from './verification/response-verifier.servic
     {
       inject: [
         AnalyzeRiskTool,
+        ComplianceCheckTool,
         GetPortfolioSummaryTool,
         GetTransactionHistoryTool,
         MarketDataLookupTool,
@@ -90,6 +93,7 @@ import { ResponseVerifierService } from './verification/response-verifier.servic
       provide: AI_TOOL_DEFINITIONS_TOKEN,
       useFactory: (
         analyzeRiskTool,
+        complianceCheckTool,
         getPortfolioSummaryTool,
         getTransactionHistoryTool,
         marketDataLookupTool,
@@ -102,7 +106,8 @@ import { ResponseVerifierService } from './verification/response-verifier.servic
           analyzeRiskTool,
           marketDataLookupTool,
           performanceCompareTool,
-          taxEstimateTool
+          taxEstimateTool,
+          complianceCheckTool
         ];
       }
     },
