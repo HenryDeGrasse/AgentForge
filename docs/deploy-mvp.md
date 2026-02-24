@@ -51,23 +51,28 @@ Three Railway services:
 
 1. Click the app service (the GitHub-linked one)
 2. Go to **Settings** tab:
-   - **Root Directory**: set to `ghostfolio`
+   - **Branch**: `main`
+   - **Root Directory**: leave empty (Dockerfile is at repo root)
    - **Build Command**: leave empty (Dockerfile handles it)
    - **Watch Paths**: leave default
 3. Go to **Variables** tab and add all variables listed below
 
 ## Step 4: Environment Variables
 
+All variables are set in the app service → **Variables** tab → **New Variable**.
+
 ### Auto-wired from Railway plugins
 
-| Variable         | Value                        |
-| ---------------- | ---------------------------- |
-| `DATABASE_URL`   | `${{Postgres.DATABASE_URL}}` |
-| `REDIS_HOST`     | `${{Redis.REDISHOST}}`       |
-| `REDIS_PORT`     | `${{Redis.REDISPORT}}`       |
-| `REDIS_PASSWORD` | `${{Redis.REDISPASSWORD}}`   |
+| Variable       | Value (use Railway reference syntax) |
+| -------------- | ------------------------------------ |
+| `DATABASE_URL` | `${{Postgres.DATABASE_URL}}`         |
+| `REDIS_URL`    | `${{Redis.REDIS_URL}}`               |
 
-### Manual secrets (generate random strings for salts)
+> The entrypoint script automatically parses `REDIS_URL` into `REDIS_HOST`,
+> `REDIS_PORT`, and `REDIS_PASSWORD` at container start — no need to set
+> them individually or use public networking.
+
+### Manual secrets
 
 | Variable            | Value                      |
 | ------------------- | -------------------------- |
@@ -77,6 +82,8 @@ Three Railway services:
 | `OPENAI_API_KEY`    | `sk-...` (your key)        |
 | `OPENAI_MODEL`      | `gpt-4.1-mini`             |
 
+> **Tip:** Generate random strings with: `openssl rand -hex 32`
+
 ### Optional
 
 | Variable                        | Default | Description                                                                 |
@@ -84,12 +91,10 @@ Three Railway services:
 | `OPENAI_COST_PER_1K_TOKENS_USD` | `0.002` | Cost tracking accuracy                                                      |
 | `ROOT_URL`                      | —       | Set to `https://<app>.up.railway.app` after first deploy for OIDC/callbacks |
 
-> **Tip:** Generate random strings with: `openssl rand -hex 32`
-
 ## Step 5: Deploy
 
-1. Set the branch to `MVP` in service settings
-2. Click **Deploy** or push to the MVP branch
+1. Ensure branch is set to `main` in service settings
+2. Click **Deploy** (or it auto-triggers on push to main)
 3. Watch the build logs — expect ~5-10 minutes for first build
 4. Railway runs the healthcheck at `/api/v1/health` automatically
 5. Once healthy, Railway provides a public URL
