@@ -1,0 +1,11 @@
+<button class="fab-btn" type="button" (click)="onToggle()">
+  @if (isLoading$ | async) {
+    <span class="fab-loading">
+      <span class="dot"></span>
+      <span class="dot"></span>
+      <span class="dot"></span>
+    </span>
+  } @else {
+    <span class="fab-label">✦ AI Advisor</span>
+  }
+</button>

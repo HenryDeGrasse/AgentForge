@@ -20,6 +20,7 @@ Commands:
   status    Show API process and health status
   test      Run focused AI test suite
   coverage  Run focused AI test suite with coverage report
+  eval      Run MVP eval pack (requires RUN_MVP_EVALS=1)
 
 Environment overrides:
   HOST=<host> PORT=<port>
@@ -33,6 +34,11 @@ ensure_dev_dir() {
 start_infra() {
   echo "[dev] Starting PostgreSQL + Redis..."
   docker compose -f docker/docker-compose.dev.yml up -d
+}
+
+build_client() {
+  echo "[dev] Building Angular client..."
+  npx nx run client:build >/dev/null
 }
 
 build_api() {
@@ -110,6 +116,23 @@ run_ai_coverage() {
     --coverageReporters=html
 }
 
+run_mvp_evals() {
+  if [[ "${RUN_MVP_EVALS:-0}" != "1" ]]; then
+    echo "[dev] RUN_MVP_EVALS=1 is required to run evals."
+    echo "[dev] Example: RUN_MVP_EVALS=1 ./dev.sh eval"
+    exit 1
+  fi
+
+  # HOST/PORT env vars are inherited by the Jest subprocess, where
+  # resolveMvpEvalBaseUrl() reads them to build the target URL.
+  echo "[dev] Running MVP eval suite against ${DEFAULT_HOST}:${DEFAULT_PORT}..."
+  npx jest \
+    apps/api/test/ai/mvp-evals.spec.ts \
+    --config apps/api/jest.config.ts \
+    --runInBand \
+    --testTimeout=240000
+}
+
 show_status() {
   if [[ -f "$API_PID_FILE" ]]; then
     local pid
@@ -133,6 +156,7 @@ command="${1:-up}"
 case "$command" in
   up|restart)
     start_infra
+    build_client
     build_api
     stop_api
     start_api
@@ -151,6 +175,9 @@ case "$command" in
     ;;
   coverage)
     run_ai_coverage
+    ;;
+  eval)
+    run_mvp_evals
     ;;
   help|-h|--help)
     print_usage

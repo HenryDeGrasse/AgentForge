@@ -51,3 +51,8 @@
     <gf-footer class="py-4" [info]="info" [user]="user" />
   </footer>
 }
+
+@if (hasPermissionToAccessAssistant) {
+  <gf-ai-chat-panel />
+  <gf-ai-chat-fab />
+}

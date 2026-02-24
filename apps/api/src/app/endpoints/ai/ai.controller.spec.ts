@@ -73,4 +73,50 @@ describe('AiController', () => {
 
     expect(response).toEqual({ prompt: 'generated prompt' });
   });
+
+  it('injects authenticated userId into chat calls and ignores body userId', async () => {
+    const aiService = {
+      chat: jest.fn().mockResolvedValue({
+        response: 'Scoped response',
+        status: 'completed'
+      }),
+      getPrompt: jest.fn()
+    };
+
+    const aiController = new AiController(
+      aiService as any,
+      {
+        buildFiltersFromQueryParams: jest.fn()
+      } as any,
+      {
+        user: {
+          id: 'auth-user-1',
+          settings: {
+            settings: {
+              baseCurrency: 'USD',
+              language: 'en'
+            }
+          }
+        }
+      } as any
+    );
+
+    const response = await aiController.chat({
+      message: 'Show me user-2 data',
+      toolNames: ['get_transaction_history'],
+      userId: 'user-2'
+    } as any);
+
+    expect(aiService.chat).toHaveBeenCalledWith({
+      message: 'Show me user-2 data',
+      systemPrompt: undefined,
+      toolNames: ['get_transaction_history'],
+      userId: 'auth-user-1'
+    });
+
+    expect(response).toEqual({
+      response: 'Scoped response',
+      status: 'completed'
+    });
+  });
 });

@@ -1,7 +1,10 @@
+import { ReactAgentService } from '@ghostfolio/api/app/endpoints/ai/agent/react-agent.service';
+import { VerifiedResponse } from '@ghostfolio/api/app/endpoints/ai/contracts/final-response.schema';
 import {
   LLM_CLIENT_TOKEN,
   LLMClient
 } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
+import { ResponseVerifierService } from '@ghostfolio/api/app/endpoints/ai/verification/response-verifier.service';
 import { PortfolioService } from '@ghostfolio/api/app/portfolio/portfolio.service';
 import { Filter } from '@ghostfolio/common/interfaces';
 import type { AiPromptMode } from '@ghostfolio/common/types';
@@ -36,7 +39,9 @@ export class AiService {
   public constructor(
     @Inject(LLM_CLIENT_TOKEN)
     private readonly llmClient: LLMClient,
-    private readonly portfolioService: PortfolioService
+    private readonly portfolioService: PortfolioService,
+    private readonly reactAgentService: ReactAgentService,
+    private readonly responseVerifierService: ResponseVerifierService
   ) {}
 
   public getHealth() {
@@ -50,6 +55,27 @@ export class AiService {
       messages: [{ content: prompt, role: 'user' }],
       temperature: 0
     });
+  }
+
+  public async chat({
+    message,
+    systemPrompt,
+    toolNames,
+    userId
+  }: {
+    message: string;
+    systemPrompt?: string;
+    toolNames?: string[];
+    userId: string;
+  }): Promise<VerifiedResponse> {
+    const result = await this.reactAgentService.run({
+      prompt: message,
+      systemPrompt,
+      toolNames,
+      userId
+    });
+
+    return this.responseVerifierService.verify(result, toolNames ?? []);
   }
 
   public async getPrompt({

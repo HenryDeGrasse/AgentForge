@@ -3,6 +3,9 @@ import { AccountService } from '@ghostfolio/api/app/account/account.service';
 import { ReactAgentService } from '@ghostfolio/api/app/endpoints/ai/agent/react-agent.service';
 import { LLM_CLIENT_TOKEN } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
 import { OpenAiClientService } from '@ghostfolio/api/app/endpoints/ai/llm/openai-client.service';
+import { AnalyzeRiskTool } from '@ghostfolio/api/app/endpoints/ai/tools/analyze-risk.tool';
+import { GetPortfolioSummaryTool } from '@ghostfolio/api/app/endpoints/ai/tools/get-portfolio-summary.tool';
+import { GetTransactionHistoryTool } from '@ghostfolio/api/app/endpoints/ai/tools/get-transaction-history.tool';
 import { ToolRegistry } from '@ghostfolio/api/app/endpoints/ai/tools/tool.registry';
 import { AI_TOOL_DEFINITIONS_TOKEN } from '@ghostfolio/api/app/endpoints/ai/tools/tool.types';
 import { OrderModule } from '@ghostfolio/api/app/order/order.module';
@@ -30,6 +33,7 @@ import { Module } from '@nestjs/common';
 
 import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
+import { ResponseVerifierService } from './verification/response-verifier.service';
 
 @Module({
   controllers: [AiController],
@@ -59,12 +63,31 @@ import { AiService } from './ai.service';
     OpenAiClientService,
     PortfolioCalculatorFactory,
     ReactAgentService,
+    ResponseVerifierService,
+    AnalyzeRiskTool,
+    GetPortfolioSummaryTool,
+    GetTransactionHistoryTool,
     ToolRegistry,
     PortfolioService,
     RulesService,
     {
+      inject: [
+        AnalyzeRiskTool,
+        GetPortfolioSummaryTool,
+        GetTransactionHistoryTool
+      ],
       provide: AI_TOOL_DEFINITIONS_TOKEN,
-      useValue: []
+      useFactory: (
+        analyzeRiskTool,
+        getPortfolioSummaryTool,
+        getTransactionHistoryTool
+      ) => {
+        return [
+          getPortfolioSummaryTool,
+          getTransactionHistoryTool,
+          analyzeRiskTool
+        ];
+      }
     },
     {
       provide: LLM_CLIENT_TOKEN,

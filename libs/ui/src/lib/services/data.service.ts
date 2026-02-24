@@ -25,6 +25,7 @@ import {
   AccountsResponse,
   ActivitiesResponse,
   ActivityResponse,
+  AiChatResponse,
   AiPromptResponse,
   ApiKeyResponse,
   AssetProfileIdentifier,
@@ -864,6 +865,19 @@ export class DataService {
       `/api/v1/user/${aUserId}/access-token`,
       {}
     );
+  }
+
+  public postAiChat({
+    message,
+    toolNames
+  }: {
+    message: string;
+    toolNames?: string[];
+  }) {
+    return this.http.post<AiChatResponse>('/api/v1/ai/chat', {
+      message,
+      ...(toolNames?.length ? { toolNames } : {})
+    });
   }
 
   public updateInfo() {

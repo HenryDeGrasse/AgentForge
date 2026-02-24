@@ -16,7 +16,7 @@ import {
 } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
 import { ToolRegistry } from '@ghostfolio/api/app/endpoints/ai/tools/tool.registry';
 
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 
 class AgentTimeoutError extends Error {}
 
@@ -176,9 +176,11 @@ export class ReactAgentService {
         if (completion.toolCalls.length > 0) {
           toolCallsCount += completion.toolCalls.length;
 
-          if (completion.text) {
-            messages.push({ content: completion.text, role: 'assistant' });
-          }
+          messages.push({
+            content: completion.text ?? '',
+            role: 'assistant',
+            toolCalls: completion.toolCalls
+          });
 
           for (const toolCall of completion.toolCalls) {
             const toolMessage = await this.executeToolCall({
@@ -230,6 +232,12 @@ export class ReactAgentService {
           toolCalls: toolCallsCount
         });
       }
+
+      Logger.error(
+        `ReactAgentService run failed: ${error instanceof Error ? error.message : error}`,
+        error instanceof Error ? error.stack : undefined,
+        'ReactAgentService'
+      );
 
       this.recordFailure(guardrails, Date.now());
 
