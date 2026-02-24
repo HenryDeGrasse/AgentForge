@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { resolveMvpEvalBaseUrl } from './mvp-evals.config';
+
 type ConfidenceLevel = 'high' | 'low' | 'medium';
 type EvalProfile = 'empty' | 'rich';
 type VerifiedStatus = 'completed' | 'failed' | 'partial';
@@ -40,8 +42,7 @@ interface UserCreateResponse {
   authToken: string;
 }
 
-const BASE_URL =
-  process.env.MVP_EVAL_BASE_URL ?? 'http://127.0.0.1:3333/api/v1';
+const BASE_URL = resolveMvpEvalBaseUrl();
 const RUN_MVP_EVALS = process.env.RUN_MVP_EVALS === '1';
 
 const describeIfEnabled = RUN_MVP_EVALS ? describe : describe.skip;
