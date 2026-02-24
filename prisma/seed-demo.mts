@@ -824,7 +824,15 @@ async function main() {
     console.log(`✅ Benchmark configured: VOO (${vooProfile.id})`);
   }
 
-  // 7. Print summary
+  // 7. Register as Ghostfolio's demo account (enables "Live Demo" button on landing page)
+  await prisma.property.upsert({
+    where: { key: 'DEMO_USER_ID' },
+    update: { value: DEMO_USER_ID },
+    create: { key: 'DEMO_USER_ID', value: DEMO_USER_ID }
+  });
+  console.log('✅ Demo account registered (enables "Live Demo" button in UI)');
+
+  // 8. Print summary
   const orderCount = await prisma.order.count({
     where: { userId: DEMO_USER_ID }
   });
