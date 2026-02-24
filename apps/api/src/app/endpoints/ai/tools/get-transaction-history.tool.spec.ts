@@ -197,6 +197,85 @@ describe('GetTransactionHistoryTool', () => {
     expect(result.page.pageSize).toBe(100);
   });
 
+  // ─── Regression: activity.date returned as string from Prisma ───────────
+  // orderService.getOrders() can return activity.date as an ISO string in
+  // cached/serialised code paths. Calling .toISOString() on a string throws
+  // "toISOString is not a function", silently converting to a tool error
+  // envelope that causes the LLM to report a "technical issue".
+
+  it('does not throw when activity.date is an ISO string (regression)', async () => {
+    const tool = new GetTransactionHistoryTool(
+      {
+        getOrders: jest.fn().mockResolvedValue({
+          activities: [
+            {
+              account: { name: 'Brokerage' },
+              accountId: 'acc-1',
+              currency: 'USD',
+              date: '2025-03-10T00:00:00.000Z', // ← string, not Date
+              fee: 0,
+              feeInBaseCurrency: 0,
+              id: 'tx-string',
+              quantity: 1,
+              SymbolProfile: { dataSource: 'YAHOO', symbol: 'AAPL' },
+              type: 'BUY',
+              unitPrice: 200,
+              value: 200,
+              valueInBaseCurrency: 200
+            }
+          ],
+          count: 1
+        })
+      } as any,
+      {
+        user: jest.fn().mockResolvedValue({
+          settings: { settings: { baseCurrency: 'USD' } }
+        })
+      } as any
+    );
+
+    const result = await tool.execute({}, { userId: 'u1' });
+
+    expect(result.transactions[0].date).toBe('2025-03-10T00:00:00.000Z');
+    expect(result.page.returnedCount).toBe(1);
+  });
+
+  it('does not throw when activity.date is a Date object (original contract)', async () => {
+    const tool = new GetTransactionHistoryTool(
+      {
+        getOrders: jest.fn().mockResolvedValue({
+          activities: [
+            {
+              account: { name: 'ISA' },
+              accountId: 'acc-2',
+              currency: 'USD',
+              date: new Date('2025-04-01T00:00:00.000Z'), // ← Date object
+              fee: 0,
+              feeInBaseCurrency: 0,
+              id: 'tx-date',
+              quantity: 3,
+              SymbolProfile: { dataSource: 'YAHOO', symbol: 'VOO' },
+              type: 'BUY',
+              unitPrice: 500,
+              value: 1500,
+              valueInBaseCurrency: 1500
+            }
+          ],
+          count: 1
+        })
+      } as any,
+      {
+        user: jest.fn().mockResolvedValue({
+          settings: { settings: { baseCurrency: 'USD' } }
+        })
+      } as any
+    );
+
+    const result = await tool.execute({}, { userId: 'u1' });
+
+    expect(result.transactions[0].date).toBe('2025-04-01T00:00:00.000Z');
+  });
+
   it('returns warnings when no transactions are found', async () => {
     const getTransactionHistoryTool = new GetTransactionHistoryTool(
       {

@@ -314,7 +314,7 @@ export class GetTransactionHistoryTool implements ToolDefinition<
           accountName: activity.account?.name ?? '',
           currency: activity.currency ?? activity.SymbolProfile.currency,
           dataSource: activity.SymbolProfile.dataSource,
-          date: activity.date.toISOString(),
+          date: new Date(activity.date).toISOString(),
           fee: activity.fee,
           feeInBaseCurrency: activity.feeInBaseCurrency,
           id: activity.id,
