@@ -26,7 +26,7 @@ interface PerformanceCompareOutput {
     name: string;
     performances: {
       allTimeHigh: {
-        date: string | null;
+        date: string;
         performancePercent: number;
       };
     };
@@ -46,7 +46,7 @@ interface PerformanceCompareOutput {
   portfolio: {
     currentNetWorth: number;
     currentValueInBaseCurrency: number;
-    firstOrderDate: string | null;
+    firstOrderDate: string;
     hasErrors: boolean;
     netPerformance: number;
     netPerformancePercentage: number;
@@ -347,7 +347,7 @@ export class PerformanceCompareTool implements ToolDefinition<
           name: benchmark.name ?? benchmark.symbol,
           performances: {
             allTimeHigh: {
-              date: this.toIsoStringOrNull(
+              date: this.toIsoStringOrEmpty(
                 benchmark.performances?.allTimeHigh?.date
               ),
               performancePercent:
@@ -372,7 +372,7 @@ export class PerformanceCompareTool implements ToolDefinition<
       currentNetWorth: portfolioResponse.performance.currentNetWorth ?? 0,
       currentValueInBaseCurrency:
         portfolioResponse.performance.currentValueInBaseCurrency ?? 0,
-      firstOrderDate: this.toIsoStringOrNull(portfolioResponse.firstOrderDate),
+      firstOrderDate: this.toIsoStringOrEmpty(portfolioResponse.firstOrderDate),
       hasErrors: !!portfolioResponse.hasErrors,
       netPerformance: portfolioResponse.performance.netPerformance ?? 0,
       netPerformancePercentage:
@@ -454,15 +454,15 @@ export class PerformanceCompareTool implements ToolDefinition<
     return DEFAULT_DATE_RANGE;
   }
 
-  private toIsoStringOrNull(value?: Date | string | null) {
+  private toIsoStringOrEmpty(value?: Date | string | null): string {
     if (!value) {
-      return null;
+      return '';
     }
 
     const parsedDate = new Date(value);
 
     if (Number.isNaN(parsedDate.getTime())) {
-      return null;
+      return '';
     }
 
     return parsedDate.toISOString();

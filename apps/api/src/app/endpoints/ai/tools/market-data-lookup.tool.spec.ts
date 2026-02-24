@@ -60,7 +60,11 @@ describe('MarketDataLookupTool', () => {
       symbol: 'AAPL'
     });
 
-    expect(result.priceChange).toBeNull();
+    expect(result.priceChange).toEqual({
+      absoluteChange: 0,
+      percentChange: 0,
+      periodDays: 0
+    });
     expect(result.historicalData).toEqual([]);
     expect(result.warnings).toEqual([]);
   });
@@ -223,6 +227,11 @@ describe('MarketDataLookupTool', () => {
     expect(result.assetSubClass).toBe('');
     expect(result.sectors).toEqual([]);
     expect(result.countries).toEqual([]);
+    expect(result.priceChange).toEqual({
+      absoluteChange: 0,
+      percentChange: 0,
+      periodDays: 0
+    });
     expect(result.warnings).toEqual([
       {
         code: 'missing_symbol_profile',

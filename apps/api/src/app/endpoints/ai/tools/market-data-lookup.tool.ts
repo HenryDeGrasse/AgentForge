@@ -35,7 +35,7 @@ interface MarketDataLookupOutput {
     absoluteChange: number;
     percentChange: number;
     periodDays: number;
-  } | null;
+  };
   priceUpdatedAt: string;
   sectors: {
     name: string;
@@ -284,7 +284,11 @@ export class MarketDataLookupTool implements ToolDefinition<
         historicalData: [],
         marketPrice: 0,
         name: symbol,
-        priceChange: null,
+        priceChange: {
+          absoluteChange: 0,
+          percentChange: 0,
+          periodDays: includeHistory ? historyDays : 0
+        },
         priceUpdatedAt: '',
         sectors: [],
         symbol,
@@ -329,7 +333,11 @@ export class MarketDataLookupTool implements ToolDefinition<
           })
       : [];
 
-    let priceChange: MarketDataLookupOutput['priceChange'] = null;
+    const priceChange: MarketDataLookupOutput['priceChange'] = {
+      absoluteChange: 0,
+      percentChange: 0,
+      periodDays: includeHistory ? historyDays : 0
+    };
 
     if (includeHistory) {
       if (historicalData.length < 2) {
@@ -344,11 +352,9 @@ export class MarketDataLookupTool implements ToolDefinition<
         if (firstPoint.marketPrice > 0) {
           const absoluteChange = lastPoint.marketPrice - firstPoint.marketPrice;
 
-          priceChange = {
-            absoluteChange,
-            percentChange: absoluteChange / firstPoint.marketPrice,
-            periodDays: historyDays
-          };
+          priceChange.absoluteChange = absoluteChange;
+          priceChange.percentChange = absoluteChange / firstPoint.marketPrice;
+          priceChange.periodDays = historyDays;
         }
       }
     }

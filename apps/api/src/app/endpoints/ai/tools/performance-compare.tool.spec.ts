@@ -119,6 +119,58 @@ describe('PerformanceCompareTool', () => {
     expect(result.warnings).toEqual([]);
   });
 
+  it('normalizes nullable dates to empty strings for schema-safe output', async () => {
+    const performanceCompareTool = new PerformanceCompareTool(
+      {
+        getPerformance: jest.fn().mockResolvedValue({
+          firstOrderDate: null,
+          hasErrors: false,
+          performance: {
+            currentNetWorth: 1000,
+            currentValueInBaseCurrency: 1000,
+            netPerformance: 10,
+            netPerformancePercentage: 0.01,
+            netPerformancePercentageWithCurrencyEffect: 0.01,
+            netPerformanceWithCurrencyEffect: 10,
+            totalInvestment: 990
+          }
+        })
+      } as any,
+      {
+        getBenchmarkTrends: jest.fn().mockResolvedValue({
+          trend200d: 'UP',
+          trend50d: 'UP'
+        }),
+        getBenchmarks: jest.fn().mockResolvedValue([
+          {
+            dataSource: 'YAHOO',
+            marketCondition: 'NEUTRAL_MARKET',
+            name: 'SPY',
+            performances: {
+              allTimeHigh: {
+                date: null,
+                performancePercent: -0.02
+              }
+            },
+            symbol: 'SPY',
+            trend200d: 'UP',
+            trend50d: 'UP'
+          }
+        ])
+      } as any,
+      {
+        user: jest.fn().mockResolvedValue({
+          settings: { settings: { baseCurrency: 'USD' } }
+        })
+      } as any
+    );
+
+    const result = await performanceCompareTool.execute({}, { userId: 'u1' });
+
+    expect(result.portfolio.firstOrderDate).toBe('');
+    expect(result.benchmarks[0].performances.allTimeHigh.date).toBe('');
+  });
+
   it('warns when benchmark list is empty', async () => {
     const performanceCompareTool = new PerformanceCompareTool(
       {
@@ -150,6 +202,7 @@ describe('PerformanceCompareTool', () => {
     const result = await performanceCompareTool.execute({}, { userId: 'u1' });
 
     expect(result.benchmarks).toEqual([]);
+    expect(result.portfolio.firstOrderDate).toBe('');
     expect(result.warnings).toEqual([
       {
         code: 'no_benchmark_data',
