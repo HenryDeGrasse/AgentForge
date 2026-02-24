@@ -9,6 +9,7 @@ import { GetPortfolioSummaryTool } from '@ghostfolio/api/app/endpoints/ai/tools/
 import { GetTransactionHistoryTool } from '@ghostfolio/api/app/endpoints/ai/tools/get-transaction-history.tool';
 import { MarketDataLookupTool } from '@ghostfolio/api/app/endpoints/ai/tools/market-data-lookup.tool';
 import { PerformanceCompareTool } from '@ghostfolio/api/app/endpoints/ai/tools/performance-compare.tool';
+import { RebalanceSuggestTool } from '@ghostfolio/api/app/endpoints/ai/tools/rebalance-suggest.tool';
 import { TaxEstimateTool } from '@ghostfolio/api/app/endpoints/ai/tools/tax-estimate.tool';
 import { ToolRegistry } from '@ghostfolio/api/app/endpoints/ai/tools/tool.registry';
 import { AI_TOOL_DEFINITIONS_TOKEN } from '@ghostfolio/api/app/endpoints/ai/tools/tool.types';
@@ -76,6 +77,7 @@ import { ResponseVerifierService } from './verification/response-verifier.servic
     GetTransactionHistoryTool,
     MarketDataLookupTool,
     PerformanceCompareTool,
+    RebalanceSuggestTool,
     TaxEstimateTool,
     ToolRegistry,
     PortfolioService,
@@ -88,6 +90,7 @@ import { ResponseVerifierService } from './verification/response-verifier.servic
         GetTransactionHistoryTool,
         MarketDataLookupTool,
         PerformanceCompareTool,
+        RebalanceSuggestTool,
         TaxEstimateTool
       ],
       provide: AI_TOOL_DEFINITIONS_TOKEN,
@@ -98,6 +101,7 @@ import { ResponseVerifierService } from './verification/response-verifier.servic
         getTransactionHistoryTool,
         marketDataLookupTool,
         performanceCompareTool,
+        rebalanceSuggestTool,
         taxEstimateTool
       ) => {
         return [
@@ -107,7 +111,8 @@ import { ResponseVerifierService } from './verification/response-verifier.servic
           marketDataLookupTool,
           performanceCompareTool,
           taxEstimateTool,
-          complianceCheckTool
+          complianceCheckTool,
+          rebalanceSuggestTool
         ];
       }
     },
