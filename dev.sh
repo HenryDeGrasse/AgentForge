@@ -21,6 +21,7 @@ Commands:
   test      Run focused AI test suite
   coverage  Run focused AI test suite with coverage report
   eval      Run MVP eval pack (requires RUN_MVP_EVALS=1)
+  seed      Seed database with rich demo portfolio (idempotent)
 
 Environment overrides:
   HOST=<host> PORT=<port>
@@ -116,6 +117,11 @@ run_ai_coverage() {
     --coverageReporters=html
 }
 
+run_seed_demo() {
+  echo "[dev] Seeding demo portfolio..."
+  npx tsx prisma/seed-demo.mts
+}
+
 run_mvp_evals() {
   if [[ "${RUN_MVP_EVALS:-0}" != "1" ]]; then
     echo "[dev] RUN_MVP_EVALS=1 is required to run evals."
@@ -178,6 +184,9 @@ case "$command" in
     ;;
   eval)
     run_mvp_evals
+    ;;
+  seed)
+    run_seed_demo
     ;;
   help|-h|--help)
     print_usage

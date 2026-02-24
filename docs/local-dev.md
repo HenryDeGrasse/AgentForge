@@ -92,42 +92,29 @@ curl http://localhost:3333/api/v1/health
 # → {"status":"OK"}
 ```
 
-### 8. Create the first user (ADMIN)
+### 8. Seed the demo portfolio
 
 ```bash
-curl -X POST http://localhost:3333/api/v1/user
+./dev.sh seed
 ```
 
-Save the returned `authToken` — you'll need it for authenticated requests.
+This runs `prisma/seed-demo.mts` which creates:
 
-### 9. Import sample portfolio data
+- **1 demo user** (ADMIN) with 2 accounts (Brokerage + Retirement IRA)
+- **10 symbol profiles** with sectors, countries, and asset class metadata:
+  - Equities: AAPL, MSFT, NVDA, AMZN, JPM
+  - ETFs: VOO (S&P 500), BND (bonds), VNQ (real estate), VEA (international)
+  - Crypto: BTC-USD
+- **35+ transactions** spanning 2023–2025 (BUY, SELL, DIVIDEND)
+- **Benchmark**: VOO configured as S&P 500 benchmark
 
-```bash
-AUTH_TOKEN="<paste authToken from step 8>"
+The seed is **idempotent** — safe to re-run.
 
-curl -X POST http://localhost:3333/api/v1/import \
-  -H "Authorization: Bearer $AUTH_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "activities": [
-      {"currency":"USD","dataSource":"YAHOO","date":"2023-01-15T00:00:00.000Z","fee":0,"quantity":10,"symbol":"AAPL","type":"BUY","unitPrice":150.00},
-      {"currency":"USD","dataSource":"YAHOO","date":"2023-02-20T00:00:00.000Z","fee":0,"quantity":5,"symbol":"MSFT","type":"BUY","unitPrice":260.00},
-      {"currency":"USD","dataSource":"YAHOO","date":"2023-03-10T00:00:00.000Z","fee":0,"quantity":20,"symbol":"VOO","type":"BUY","unitPrice":370.00},
-      {"currency":"USD","dataSource":"YAHOO","date":"2023-06-01T00:00:00.000Z","fee":0,"quantity":3,"symbol":"MSFT","type":"BUY","unitPrice":335.00},
-      {"currency":"USD","dataSource":"YAHOO","date":"2023-09-15T00:00:00.000Z","fee":0,"quantity":15,"symbol":"VOO","type":"BUY","unitPrice":400.00},
-      {"currency":"USD","dataSource":"YAHOO","date":"2024-01-10T00:00:00.000Z","fee":0,"quantity":8,"symbol":"AAPL","type":"BUY","unitPrice":185.00},
-      {"currency":"USD","dataSource":"YAHOO","date":"2024-03-01T00:00:00.000Z","fee":4.95,"quantity":2,"symbol":"AAPL","type":"SELL","unitPrice":178.00}
-    ]
-  }'
-```
+> **Manual alternative:** If you prefer to create a user via the API instead,
+> use `curl -X POST http://localhost:3333/api/v1/user` and save the returned
+> `authToken` for authenticated requests.
 
-This creates a portfolio with:
-
-- **AAPL** — 16 shares bought, 2 sold (net 16 shares across 3 txns)
-- **MSFT** — 8 shares (2 buys)
-- **VOO** — 35 shares (2 buys)
-
-### 10. (Optional) Start the Angular client
+### 9. (Optional) Start the Angular client
 
 ```bash
 npm run start:client
