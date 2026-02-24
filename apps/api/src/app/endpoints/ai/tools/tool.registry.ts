@@ -10,7 +10,7 @@ import {
   validateToolOutput
 } from '@ghostfolio/api/app/endpoints/ai/tools/validators';
 
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 
 @Injectable()
 export class ToolRegistry {
@@ -149,6 +149,12 @@ export class ToolRegistry {
         }
       };
     } catch (error) {
+      Logger.error(
+        `Tool "${tool.name}" threw an exception: ${error instanceof Error ? error.message : error}`,
+        error instanceof Error ? error.stack : undefined,
+        'ToolRegistry'
+      );
+
       return this.getErrorResult({
         code: 'tool_execution_failed',
         durationMs: Date.now() - startedAt,

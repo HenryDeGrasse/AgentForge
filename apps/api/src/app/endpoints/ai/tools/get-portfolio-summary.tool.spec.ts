@@ -1,5 +1,43 @@
 import { GetPortfolioSummaryTool } from './get-portfolio-summary.tool';
 
+// ─── helpers ─────────────────────────────────────────────────────────────────
+
+function buildTool({
+  createdAt = new Date('2025-01-01T00:00:00.000Z') as Date | string,
+  holdings = {} as Record<string, unknown>,
+  activityDate = null as Date | string | null,
+  activityCount = 0,
+  totalValueInBaseCurrency = 0,
+  cash = 0
+} = {}) {
+  return new GetPortfolioSummaryTool(
+    {
+      getDetails: jest.fn().mockResolvedValue({
+        createdAt,
+        holdings,
+        summary: {
+          activityCount,
+          cash,
+          totalValueInBaseCurrency
+        }
+      })
+    } as any,
+    {
+      order: {
+        aggregate: jest.fn().mockResolvedValue({
+          _count: { _all: activityCount },
+          _max: { date: activityDate }
+        })
+      }
+    } as any,
+    {
+      user: jest.fn().mockResolvedValue({
+        settings: { settings: { baseCurrency: 'USD' } }
+      })
+    } as any
+  );
+}
+
 describe('GetPortfolioSummaryTool', () => {
   it('returns deterministic totals and top holdings sorted by value', async () => {
     const portfolioService = {
@@ -252,5 +290,100 @@ describe('GetPortfolioSummaryTool', () => {
         }
       ])
     );
+  });
+
+  // ─── Regression: createdAt / date fields returned as strings ─────────────
+  // The portfolioCalculator.getSnapshot() returns createdAt as a string in
+  // many code paths (cached snapshots, serialized DB rows). Calling
+  // .toISOString() on a string throws "toISOString is not a function", which
+  // causes the ToolRegistry to return an error envelope and the AI to reply
+  // "I cannot access your portfolio summary due to a technical issue."
+
+  it('does not throw when createdAt is already an ISO string (regression)', async () => {
+    const tool = buildTool({
+      createdAt: '2025-06-01T12:00:00.000Z',
+      activityDate: '2025-05-31T00:00:00.000Z',
+      activityCount: 3,
+      totalValueInBaseCurrency: 1000
+    });
+
+    await expect(tool.execute({}, { userId: 'u1' })).resolves.toMatchObject({
+      snapshotCreatedAt: '2025-06-01T12:00:00.000Z',
+      latestActivityDate: '2025-05-31T00:00:00.000Z'
+    });
+  });
+
+  it('does not throw when createdAt is a Date object (original contract)', async () => {
+    const tool = buildTool({
+      createdAt: new Date('2025-06-01T12:00:00.000Z'),
+      activityDate: new Date('2025-05-31T00:00:00.000Z'),
+      activityCount: 2,
+      totalValueInBaseCurrency: 500
+    });
+
+    await expect(tool.execute({}, { userId: 'u1' })).resolves.toMatchObject({
+      snapshotCreatedAt: '2025-06-01T12:00:00.000Z',
+      latestActivityDate: '2025-05-31T00:00:00.000Z'
+    });
+  });
+
+  it('returns empty strings for dates when createdAt is null/falsy', async () => {
+    // Pass null explicitly — undefined hits the default param, but the real
+    // runtime can produce null from the DB layer.
+    const tool = new GetPortfolioSummaryTool(
+      {
+        getDetails: jest.fn().mockResolvedValue({
+          createdAt: null,
+          holdings: {},
+          summary: { activityCount: 0, cash: 0, totalValueInBaseCurrency: 0 }
+        })
+      } as any,
+      {
+        order: {
+          aggregate: jest.fn().mockResolvedValue({
+            _count: { _all: 0 },
+            _max: { date: null }
+          })
+        }
+      } as any,
+      {
+        user: jest.fn().mockResolvedValue({
+          settings: { settings: { baseCurrency: 'USD' } }
+        })
+      } as any
+    );
+
+    const result = await tool.execute({}, { userId: 'u1' });
+
+    expect(result.snapshotCreatedAt).toBe('');
+    expect(result.latestActivityDate).toBe('');
+  });
+
+  it('returns holdings summary correctly when createdAt is a string', async () => {
+    const tool = buildTool({
+      createdAt: '2025-01-01T00:00:00.000Z',
+      holdings: {
+        AAPL: {
+          assetClass: 'EQUITY',
+          currency: 'USD',
+          dataSource: 'YAHOO',
+          marketPrice: 200,
+          name: 'Apple',
+          quantity: 5,
+          symbol: 'AAPL',
+          valueInBaseCurrency: 1000
+        }
+      },
+      activityCount: 5,
+      totalValueInBaseCurrency: 1000,
+      activityDate: '2025-01-15T00:00:00.000Z'
+    });
+
+    const result = await tool.execute({ topN: 5 }, { userId: 'u1' });
+
+    expect(result.totals.holdingsCount).toBe(1);
+    expect(result.totals.holdingsValueInBaseCurrency).toBe(1000);
+    expect(result.topHoldings[0].symbol).toBe('AAPL');
+    expect(result.warnings).toEqual([]);
   });
 });

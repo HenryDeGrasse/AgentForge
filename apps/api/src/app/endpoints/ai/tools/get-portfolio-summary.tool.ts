@@ -317,10 +317,10 @@ export class GetPortfolioSummaryTool implements ToolDefinition<
         user?.settings?.settings?.baseCurrency?.toString() ?? DEFAULT_CURRENCY,
       generatedAt: new Date().toISOString(),
       latestActivityDate: activityStats._max.date
-        ? activityStats._max.date.toISOString()
+        ? new Date(activityStats._max.date).toISOString()
         : '',
       snapshotCreatedAt: portfolioDetails.createdAt
-        ? portfolioDetails.createdAt.toISOString()
+        ? new Date(portfolioDetails.createdAt).toISOString()
         : '',
       topHoldings,
       totals: {
