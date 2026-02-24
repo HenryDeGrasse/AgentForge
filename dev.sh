@@ -22,6 +22,7 @@ Commands:
   coverage  Run focused AI test suite with coverage report
   eval      Run MVP eval pack (requires RUN_MVP_EVALS=1)
   seed      Seed database with rich demo portfolio (idempotent)
+  token     Print a fresh JWT for the demo user
 
 Environment overrides:
   HOST=<host> PORT=<port>
@@ -131,6 +132,58 @@ run_seed_demo() {
   npx tsx prisma/seed-demo.mts
 }
 
+get_demo_token() {
+  # Look up the demo user's access token from the database, exchange for JWT
+  local access_token
+  access_token=$(
+    docker exec gf-postgres-dev psql -U ghostfolio -d ghostfolio -t -A -c \
+      "SELECT \"accessToken\" FROM \"User\" WHERE id = 'd6e4f1a0-b8c3-4e7f-9a2d-1c5e8f3b7d40'" 2>/dev/null
+  )
+
+  if [[ -z "$access_token" ]]; then
+    echo "[dev] Demo user not found. Run ./dev.sh seed first."
+    exit 1
+  fi
+
+  # The DB stores the HASHED token. We need the plaintext token to auth.
+  # If DEMO_ACCESS_TOKEN env var is set (fixed token mode), use it directly.
+  if [[ -f .env ]]; then
+    set -a
+    # shellcheck disable=SC1091
+    source .env
+    set +a
+  fi
+
+  if [[ -n "${DEMO_ACCESS_TOKEN:-}" ]]; then
+    local jwt
+    jwt=$(curl -s "http://${DEFAULT_HOST}:${DEFAULT_PORT}/api/v1/auth/anonymous/${DEMO_ACCESS_TOKEN}" | jq -r '.authToken // empty')
+
+    if [[ -z "$jwt" ]]; then
+      echo "[dev] Failed to exchange token. Is the API running? Try ./dev.sh up first."
+      exit 1
+    fi
+
+    echo ""
+    echo "🔑 JWT (copy this):"
+    echo ""
+    echo "   $jwt"
+    echo ""
+    echo "📋 Usage:"
+    echo ""
+    echo "   export JWT=\"$jwt\""
+    echo ""
+    echo "   curl -s http://${DEFAULT_HOST}:${DEFAULT_PORT}/api/v1/ai/chat \\"
+    echo "     -H \"Authorization: Bearer \$JWT\" \\"
+    echo "     -H \"Content-Type: application/json\" \\"
+    echo "     -d '{\"prompt\": \"What is my portfolio allocation?\"}' | jq ."
+    echo ""
+  else
+    echo "[dev] No DEMO_ACCESS_TOKEN in .env."
+    echo "[dev] Re-run ./dev.sh seed to generate a token, or set DEMO_ACCESS_TOKEN in .env for a stable token."
+    exit 1
+  fi
+}
+
 run_mvp_evals() {
   if [[ "${RUN_MVP_EVALS:-0}" != "1" ]]; then
     echo "[dev] RUN_MVP_EVALS=1 is required to run evals."
@@ -196,6 +249,9 @@ case "$command" in
     ;;
   seed)
     run_seed_demo
+    ;;
+  token)
+    get_demo_token
     ;;
   help|-h|--help)
     print_usage

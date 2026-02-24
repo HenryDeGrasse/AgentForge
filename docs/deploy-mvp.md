@@ -84,6 +84,23 @@ All variables are set in the app service → **Variables** tab → **New Variabl
 
 > **Tip:** Generate random strings with: `openssl rand -hex 32`
 
+### Demo account (recommended)
+
+| Variable            | Value                      |
+| ------------------- | -------------------------- |
+| `DEMO_ACCESS_TOKEN` | `<random 32+ char string>` |
+
+> When set, the entrypoint auto-seeds a demo portfolio (10 symbols, 35+ transactions)
+> and creates a demo admin user whose access token is stable across deploys.
+>
+> **To log in:** Exchange the token for a JWT:
+>
+> ```
+> curl https://<app>.up.railway.app/api/v1/auth/anonymous/<DEMO_ACCESS_TOKEN>
+> ```
+>
+> Use the returned `authToken` as `Authorization: Bearer <jwt>` for all API calls.
+
 ### Optional
 
 | Variable                        | Default | Description                                                                 |

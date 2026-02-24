@@ -28,6 +28,15 @@ function hmacSha512(password: string, salt: string): string {
 }
 
 function generateAccessToken(userId: string, accessTokenSalt: string) {
+  // If DEMO_ACCESS_TOKEN is set, use it as a fixed token (stable across deploys).
+  // Otherwise generate a random one (local dev behavior).
+  const fixedToken = process.env.DEMO_ACCESS_TOKEN;
+
+  if (fixedToken) {
+    const hashedAccessToken = hmacSha512(fixedToken, accessTokenSalt);
+    return { accessToken: fixedToken, hashedAccessToken };
+  }
+
   // Mirror Ghostfolio's UserService.generateAccessToken():
   // 1. accessToken = HMAC(userId, randomSalt)
   // 2. hashedAccessToken = HMAC(accessToken, ACCESS_TOKEN_SALT)

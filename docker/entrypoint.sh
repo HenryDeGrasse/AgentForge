@@ -18,5 +18,13 @@ npx prisma migrate deploy
 echo "Seeding the database"
 npx prisma db seed
 
+# Seed demo portfolio if DEMO_ACCESS_TOKEN is configured
+if [ -n "$DEMO_ACCESS_TOKEN" ]; then
+  echo "Seeding demo portfolio..."
+  npx tsx prisma/seed-demo.mts
+else
+  echo "Skipping demo seed (DEMO_ACCESS_TOKEN not set)"
+fi
+
 echo "Starting the server"
 exec node main

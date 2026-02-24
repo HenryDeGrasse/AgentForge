@@ -42,6 +42,8 @@ COPY ./package-lock.json /ghostfolio/dist/apps/api/
 RUN npm install
 COPY .config /ghostfolio/dist/apps/api/.config/
 COPY prisma /ghostfolio/dist/apps/api/prisma/
+# tsx is needed for the demo seed script at runtime
+RUN npm install --no-save tsx
 
 # Overwrite the generated package.json with the original one to ensure having
 # all the scripts
