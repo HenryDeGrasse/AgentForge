@@ -119,6 +119,15 @@ run_ai_coverage() {
 
 run_seed_demo() {
   echo "[dev] Seeding demo portfolio..."
+
+  # Load .env so the seed script can read ACCESS_TOKEN_SALT
+  if [[ -f .env ]]; then
+    set -a
+    # shellcheck disable=SC1091
+    source .env
+    set +a
+  fi
+
   npx tsx prisma/seed-demo.mts
 }
 

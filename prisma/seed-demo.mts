@@ -11,12 +11,31 @@
  * and skips duplicate activities.
  */
 import { PrismaClient } from '@prisma/client';
+import { createHmac, randomBytes } from 'node:crypto';
 
 const prisma = new PrismaClient();
 
 // ─── Fixed IDs (must match seed-demo-data.ts) ────────────────────────────────
 
 const DEMO_USER_ID = 'd6e4f1a0-b8c3-4e7f-9a2d-1c5e8f3b7d40';
+
+// ─── Auth helpers ────────────────────────────────────────────────────────────
+
+function hmacSha512(password: string, salt: string): string {
+  const hash = createHmac('sha512', salt);
+  hash.update(password);
+  return hash.digest('hex');
+}
+
+function generateAccessToken(userId: string, accessTokenSalt: string) {
+  // Mirror Ghostfolio's UserService.generateAccessToken():
+  // 1. accessToken = HMAC(userId, randomSalt)
+  // 2. hashedAccessToken = HMAC(accessToken, ACCESS_TOKEN_SALT)
+  const randomSalt = randomBytes(10).toString('hex');
+  const accessToken = hmacSha512(userId, randomSalt);
+  const hashedAccessToken = hmacSha512(accessToken, accessTokenSalt);
+  return { accessToken, hashedAccessToken };
+}
 
 const DEMO_ACCOUNTS = [
   {
@@ -603,12 +622,30 @@ const DEMO_ACTIVITIES: Activity[] = [
 async function main() {
   console.log('🌱 AgentForge demo seed starting...\n');
 
-  // 1. Create or find demo user
+  // 0. Read ACCESS_TOKEN_SALT from environment
+  const accessTokenSalt = process.env.ACCESS_TOKEN_SALT;
+  if (!accessTokenSalt) {
+    console.error(
+      '❌ ACCESS_TOKEN_SALT is not set. Source your .env file or export it.'
+    );
+    console.error(
+      '   Example: export $(grep -v "^#" .env | xargs) && npx tsx prisma/seed-demo.mts'
+    );
+    process.exit(1);
+  }
+
+  // 1. Create or find demo user (with access token for auth)
+  const { accessToken, hashedAccessToken } = generateAccessToken(
+    DEMO_USER_ID,
+    accessTokenSalt
+  );
+
   const user = await prisma.user.upsert({
     where: { id: DEMO_USER_ID },
-    update: {},
+    update: { accessToken: hashedAccessToken },
     create: {
       id: DEMO_USER_ID,
+      accessToken: hashedAccessToken,
       provider: 'ANONYMOUS',
       role: 'ADMIN'
     }
@@ -793,11 +830,24 @@ async function main() {
   console.log(`   Activities:      ${orderCount}`);
   console.log(`   Benchmark:       VOO (S&P 500)`);
   console.log('────────────────────────────────────────');
-  console.log('\n🎉 Demo seed complete! Start the API and try:');
-  console.log('   curl http://localhost:3333/api/v1/ai/chat \\');
-  console.log('     -H "Authorization: Bearer <token>" \\');
+  console.log('');
+  console.log('🔑 Access Token (save this!):');
+  console.log(`   ${accessToken}`);
+  console.log('');
+  console.log('📋 Quick start — get a JWT then talk to the AI:');
+  console.log('');
+  console.log('   # 1. Exchange access token for JWT');
+  console.log(
+    `   JWT=$(curl -s http://localhost:3333/api/v1/auth/anonymous/${accessToken} | jq -r '.authToken')`
+  );
+  console.log('');
+  console.log('   # 2. Chat with the AI advisor');
+  console.log('   curl -s http://localhost:3333/api/v1/ai/chat \\');
+  console.log('     -H "Authorization: Bearer $JWT" \\');
   console.log('     -H "Content-Type: application/json" \\');
-  console.log('     -d \'{"prompt": "What is my portfolio allocation?"}\'');
+  console.log(
+    '     -d \'{"prompt": "What is my portfolio allocation?"}\' | jq .'
+  );
   console.log('');
 }
 
