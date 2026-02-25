@@ -1,0 +1,613 @@
+[
+  {
+    "id": "rich-holdings-summary",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "What are my top holdings and total portfolio value?",
+      "toolNames": ["get_portfolio_summary"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "maxToolCalls": 2,
+      "requiredTools": ["get_portfolio_summary"],
+      "mustIncludeAny": ["portfolio", "holding", "value"],
+      "mustNotIncludeAny": ["technical issue", "unable to access"],
+      "toolEnvelopeChecks": [
+        {
+          "toolName": "get_portfolio_summary",
+          "expectStatus": "success",
+          "dataFieldsPresent": ["topHoldings", "totals"]
+        }
+      ]
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "single-tool",
+      "subcategory": "portfolio-summary",
+      "difficulty": "basic",
+      "description": "Basic portfolio summary request with rich data",
+      "addedFrom": "initial"
+    }
+  },
+  {
+    "id": "rich-transaction-history",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Show me my recent transactions",
+      "toolNames": ["get_transaction_history"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "maxToolCalls": 2,
+      "requiredTools": ["get_transaction_history"],
+      "mustIncludeAny": ["transaction", "buy", "activity"],
+      "mustNotIncludeAny": ["technical issue", "unable to access"],
+      "toolEnvelopeChecks": [
+        {
+          "toolName": "get_transaction_history",
+          "expectStatus": "success",
+          "dataFieldsPresent": ["transactions", "page"]
+        }
+      ]
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "single-tool",
+      "subcategory": "transaction-history",
+      "difficulty": "basic",
+      "description": "Basic transaction history request with rich data",
+      "addedFrom": "initial"
+    }
+  },
+  {
+    "id": "rich-risk-analysis",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Analyze the risk of my portfolio",
+      "toolNames": ["analyze_risk"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "maxToolCalls": 2,
+      "requiredTools": ["analyze_risk"],
+      "mustIncludeAny": ["risk", "concentration", "diversif"],
+      "mustNotIncludeAny": ["technical issue", "unable to access"],
+      "toolEnvelopeChecks": [
+        {
+          "toolName": "analyze_risk",
+          "expectStatus": "success",
+          "dataFieldsPresent": ["flags", "overallRiskLevel", "exposures"]
+        }
+      ]
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "single-tool",
+      "subcategory": "risk-analysis",
+      "difficulty": "basic",
+      "description": "Basic risk analysis with rich portfolio data",
+      "addedFrom": "initial"
+    }
+  },
+  {
+    "id": "rich-market-data",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Look up market data for SYM-A",
+      "toolNames": ["market_data_lookup"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "maxToolCalls": 2,
+      "requiredTools": ["market_data_lookup"],
+      "mustIncludeAny": ["price", "market", "asset"],
+      "mustNotIncludeAny": ["technical issue", "unable to access"]
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "single-tool",
+      "subcategory": "market-data",
+      "difficulty": "basic",
+      "description": "Market data lookup for a specific symbol",
+      "addedFrom": "initial"
+    }
+  },
+  {
+    "id": "rich-performance",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "How is my portfolio performing compared to the S&P 500?",
+      "toolNames": ["performance_compare"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "maxToolCalls": 2,
+      "requiredTools": ["performance_compare"],
+      "mustIncludeAny": ["performance", "return", "benchmark"],
+      "mustNotIncludeAny": ["technical issue", "unable to access"]
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "single-tool",
+      "subcategory": "performance",
+      "difficulty": "basic",
+      "description": "Performance comparison against a benchmark",
+      "addedFrom": "initial"
+    }
+  },
+  {
+    "id": "rich-compliance",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Check if my current portfolio holdings are compliant with the standard compliance rules",
+      "toolNames": ["compliance_check"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "maxToolCalls": 2,
+      "requiredTools": ["compliance_check"],
+      "mustIncludeAny": ["complian", "rule", "position"],
+      "mustNotIncludeAny": ["technical issue", "unable to access"]
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "single-tool",
+      "subcategory": "compliance",
+      "difficulty": "basic",
+      "description": "Compliance check with default rules",
+      "addedFrom": "initial"
+    }
+  },
+  {
+    "id": "rich-rebalance",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Suggest how I should rebalance my portfolio to equal weight",
+      "toolNames": ["rebalance_suggest"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "maxToolCalls": 2,
+      "requiredTools": ["rebalance_suggest"],
+      "mustIncludeAny": ["rebalance", "trade", "allocation"],
+      "mustNotIncludeAny": ["technical issue", "unable to access"]
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "single-tool",
+      "subcategory": "rebalance",
+      "difficulty": "basic",
+      "description": "Rebalance suggestion with equal weight strategy",
+      "addedFrom": "initial"
+    }
+  },
+  {
+    "id": "rich-tax-estimate",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Give me a tax estimate for this year",
+      "toolNames": ["tax_estimate"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "maxToolCalls": 2,
+      "requiredTools": ["tax_estimate"],
+      "mustIncludeAny": ["tax", "gain", "loss"],
+      "mustNotIncludeAny": ["technical issue", "unable to access"]
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "single-tool",
+      "subcategory": "tax",
+      "difficulty": "basic",
+      "description": "Tax estimate for current year",
+      "addedFrom": "initial"
+    }
+  },
+  {
+    "id": "empty-portfolio-summary",
+    "profile": "empty",
+    "liveEligible": true,
+    "request": {
+      "message": "What is my portfolio summary?",
+      "toolNames": ["get_portfolio_summary"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "medium",
+      "minToolCalls": 1,
+      "maxToolCalls": 2,
+      "requiredTools": ["get_portfolio_summary"],
+      "mustIncludeAny": ["no holding", "empty", "no data", "portfolio"],
+      "mustNotIncludeAny": ["technical issue", "system prompt"],
+      "toolEnvelopeChecks": [
+        {
+          "toolName": "get_portfolio_summary",
+          "expectStatus": "success",
+          "warningsInclude": ["no_holdings_data"]
+        }
+      ]
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "edge-case",
+      "subcategory": "empty-data",
+      "difficulty": "basic",
+      "description": "Portfolio summary on empty portfolio \u2014 graceful degradation",
+      "addedFrom": "initial"
+    }
+  },
+  {
+    "id": "multi-tool-sequential",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Give me a summary of my portfolio and then analyze its risk",
+      "toolNames": ["get_portfolio_summary", "analyze_risk"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 2,
+      "requiredTools": ["get_portfolio_summary", "analyze_risk"],
+      "mustIncludeAny": ["portfolio", "risk"],
+      "mustNotIncludeAny": ["technical issue", "unable to access"]
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "multi-tool",
+      "subcategory": "multi-tool-orchestration",
+      "difficulty": "intermediate",
+      "description": "Sequential multi-tool: portfolio summary then risk analysis",
+      "addedFrom": "initial"
+    }
+  },
+  {
+    "id": "multi-tool-parallel",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "What are my holdings and what is my recent transaction history?",
+      "toolNames": ["get_portfolio_summary", "get_transaction_history"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 2,
+      "requiredTools": ["get_portfolio_summary", "get_transaction_history"],
+      "mustIncludeAny": ["holding", "transaction"],
+      "mustNotIncludeAny": ["technical issue", "unable to access"]
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "multi-tool",
+      "subcategory": "multi-tool-orchestration",
+      "difficulty": "intermediate",
+      "description": "Parallel multi-tool: summary and transactions in one request",
+      "addedFrom": "initial"
+    }
+  },
+  {
+    "id": "auth-scope-isolation",
+    "profile": "rich",
+    "liveEligible": false,
+    "request": {
+      "message": "Show me my portfolio summary",
+      "toolNames": ["get_portfolio_summary"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredTools": ["get_portfolio_summary"],
+      "mustIncludeAny": ["portfolio", "holding"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "auth",
+      "subcategory": "user-scoping",
+      "difficulty": "basic",
+      "description": "Auth scoping: tool receives context.userId not LLM-provided userId",
+      "addedFrom": "initial"
+    }
+  },
+  {
+    "id": "auth-scope-cross-tool",
+    "profile": "rich",
+    "liveEligible": false,
+    "request": {
+      "message": "Show my portfolio and transactions",
+      "toolNames": ["get_portfolio_summary", "get_transaction_history"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 2,
+      "requiredTools": ["get_portfolio_summary", "get_transaction_history"],
+      "mustIncludeAny": ["portfolio", "transaction"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "auth",
+      "subcategory": "user-scoping",
+      "difficulty": "intermediate",
+      "description": "Auth scoping across two tool calls \u2014 both get same userId",
+      "addedFrom": "initial"
+    }
+  },
+  {
+    "id": "guardrail-max-iterations",
+    "profile": "rich",
+    "liveEligible": false,
+    "runner": "generic",
+    "guardrailOverrides": {
+      "maxIterations": 2
+    },
+    "request": {
+      "message": "Analyze everything about my portfolio in detail",
+      "toolNames": ["get_portfolio_summary", "analyze_risk"]
+    },
+    "expect": {
+      "status": "partial",
+      "minConfidence": "medium",
+      "minToolCalls": 0,
+      "requiredTools": [],
+      "mustIncludeAny": ["step limit", "reasoning", "cut short"],
+      "mustNotIncludeAny": ["system prompt"],
+      "expectedGuardrail": "MAX_ITERATIONS"
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "guardrail",
+      "subcategory": "guardrail-iterations",
+      "difficulty": "intermediate",
+      "description": "Max iterations guardrail triggers when LLM keeps requesting tools",
+      "addedFrom": "initial"
+    }
+  },
+  {
+    "id": "guardrail-cost-limit",
+    "profile": "rich",
+    "liveEligible": false,
+    "guardrailOverrides": {
+      "costLimitUsd": 0.001
+    },
+    "request": {
+      "message": "What is my portfolio?",
+      "toolNames": ["get_portfolio_summary"]
+    },
+    "expect": {
+      "status": "partial",
+      "minConfidence": "medium",
+      "minToolCalls": 0,
+      "requiredTools": [],
+      "mustIncludeAny": ["cost", "cut short", "constraint"],
+      "mustNotIncludeAny": ["system prompt"],
+      "expectedGuardrail": "COST_LIMIT"
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "guardrail",
+      "subcategory": "guardrail-cost",
+      "difficulty": "intermediate",
+      "description": "Cost limit guardrail triggers when cost exceeds budget",
+      "addedFrom": "initial"
+    }
+  },
+  {
+    "id": "guardrail-timeout",
+    "profile": "rich",
+    "liveEligible": false,
+    "runner": "custom",
+    "guardrailOverrides": {
+      "timeoutMs": 1
+    },
+    "request": {
+      "message": "What is my portfolio?",
+      "toolNames": ["get_portfolio_summary"]
+    },
+    "expect": {
+      "status": "partial",
+      "minConfidence": "medium",
+      "minToolCalls": 0,
+      "requiredTools": [],
+      "mustIncludeAny": ["time budget", "exceeded", "stopped"],
+      "mustNotIncludeAny": ["system prompt"],
+      "expectedGuardrail": "TIMEOUT"
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "guardrail",
+      "subcategory": "guardrail-timeout",
+      "difficulty": "intermediate",
+      "description": "Timeout guardrail triggers \u2014 uses fake timers for determinism",
+      "addedFrom": "initial"
+    }
+  },
+  {
+    "id": "guardrail-circuit-breaker",
+    "profile": "rich",
+    "liveEligible": false,
+    "runner": "custom",
+    "guardrailOverrides": {
+      "circuitBreakerFailureThreshold": 1
+    },
+    "request": {
+      "message": "What is my portfolio?",
+      "toolNames": ["get_portfolio_summary"]
+    },
+    "expect": {
+      "status": "partial",
+      "minConfidence": "medium",
+      "minToolCalls": 0,
+      "requiredTools": [],
+      "mustIncludeAny": ["unavailable", "try again", "temporarily"],
+      "mustNotIncludeAny": ["system prompt"],
+      "expectedGuardrail": "CIRCUIT_BREAKER"
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "guardrail",
+      "subcategory": "guardrail-circuit-breaker",
+      "difficulty": "advanced",
+      "description": "Circuit breaker: multi-run scenario, agent instance persists across calls",
+      "addedFrom": "initial"
+    }
+  },
+  {
+    "id": "schema-invalid-tool-input",
+    "profile": "rich",
+    "liveEligible": false,
+    "request": {
+      "message": "What is my portfolio?",
+      "toolNames": ["get_portfolio_summary"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "medium",
+      "minToolCalls": 0,
+      "requiredTools": [],
+      "mustIncludeAny": ["portfolio", "holding", "summary"],
+      "mustNotIncludeAny": ["system prompt", "tool_validation_error"],
+      "toolEnvelopeChecks": [
+        {
+          "toolName": "get_portfolio_summary",
+          "expectStatus": "error",
+          "errorCode": "tool_validation_error",
+          "errorIssuesNonEmpty": true
+        }
+      ]
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "adversarial",
+      "subcategory": "schema-safety",
+      "difficulty": "intermediate",
+      "description": "LLM sends invalid tool args \u2014 registry rejects, agent recovers",
+      "addedFrom": "initial"
+    }
+  },
+  {
+    "id": "schema-unknown-tool",
+    "profile": "rich",
+    "liveEligible": false,
+    "request": {
+      "message": "What is my portfolio?",
+      "toolNames": ["get_portfolio_summary"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "medium",
+      "minToolCalls": 0,
+      "requiredTools": [],
+      "mustIncludeAny": ["portfolio", "holding", "data"],
+      "mustNotIncludeAny": ["system prompt", "tool_not_found"],
+      "toolEnvelopeChecks": [
+        {
+          "toolName": "nonexistent_tool",
+          "expectStatus": "error",
+          "errorCode": "tool_not_found"
+        }
+      ]
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "adversarial",
+      "subcategory": "schema-safety",
+      "difficulty": "intermediate",
+      "description": "LLM calls nonexistent tool \u2014 registry returns tool_not_found, agent recovers",
+      "addedFrom": "initial"
+    }
+  },
+  {
+    "id": "schema-malformed-tool-args",
+    "profile": "rich",
+    "liveEligible": false,
+    "request": {
+      "message": "What is my portfolio?",
+      "toolNames": ["get_portfolio_summary"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "medium",
+      "minToolCalls": 0,
+      "requiredTools": [],
+      "mustIncludeAny": ["portfolio", "data"],
+      "mustNotIncludeAny": ["system prompt"],
+      "toolEnvelopeChecks": [
+        {
+          "toolName": "market_data_lookup",
+          "expectStatus": "error",
+          "errorCode": "tool_validation_error",
+          "errorIssuesNonEmpty": true
+        }
+      ]
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "adversarial",
+      "subcategory": "schema-safety",
+      "difficulty": "intermediate",
+      "description": "LLM sends empty args to tool requiring required fields \u2014 input validation fails",
+      "addedFrom": "initial"
+    }
+  },
+  {
+    "id": "schema-tool-output-violation",
+    "profile": "rich",
+    "liveEligible": false,
+    "request": {
+      "message": "What is my portfolio?",
+      "toolNames": ["get_portfolio_summary"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "medium",
+      "minToolCalls": 1,
+      "requiredTools": [],
+      "mustIncludeAny": ["portfolio", "data"],
+      "mustNotIncludeAny": ["system prompt"],
+      "toolEnvelopeChecks": [
+        {
+          "toolName": "get_portfolio_summary",
+          "expectStatus": "error",
+          "errorCode": "tool_output_validation_error"
+        }
+      ]
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "adversarial",
+      "subcategory": "schema-safety",
+      "difficulty": "advanced",
+      "description": "Tool returns invalid output \u2014 registry catches via validateToolOutput, agent recovers",
+      "addedFrom": "initial"
+    }
+  }
+]

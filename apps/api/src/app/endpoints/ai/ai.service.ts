@@ -1,17 +1,29 @@
+import {
+  AGENT_ALLOWED_TOOL_NAMES,
+  AGENT_DEFAULT_SYSTEM_PROMPT,
+  AGENT_MAX_HISTORY_PAIRS
+} from '@ghostfolio/api/app/endpoints/ai/agent/agent.constants';
 import { ReactAgentService } from '@ghostfolio/api/app/endpoints/ai/agent/react-agent.service';
+import { toToolNameArray } from '@ghostfolio/api/app/endpoints/ai/chat-conversation.service';
 import { VerifiedResponse } from '@ghostfolio/api/app/endpoints/ai/contracts/final-response.schema';
 import {
   LLM_CLIENT_TOKEN,
-  LLMClient
+  LLMClient,
+  LLMMessage
 } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
 import { ResponseVerifierService } from '@ghostfolio/api/app/endpoints/ai/verification/response-verifier.service';
 import { PortfolioService } from '@ghostfolio/api/app/portfolio/portfolio.service';
+import { PrismaService } from '@ghostfolio/api/services/prisma/prisma.service';
 import { Filter } from '@ghostfolio/common/interfaces';
 import type { AiPromptMode } from '@ghostfolio/common/types';
 
-import { Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { StatusCodes, getReasonPhrase } from 'http-status-codes';
 import type { ColumnDescriptor } from 'tablemark';
+
+export interface ChatResponse extends VerifiedResponse {
+  conversationId: string;
+}
 
 @Injectable()
 export class AiService {
@@ -40,6 +52,7 @@ export class AiService {
     @Inject(LLM_CLIENT_TOKEN)
     private readonly llmClient: LLMClient,
     private readonly portfolioService: PortfolioService,
+    private readonly prismaService: PrismaService,
     private readonly reactAgentService: ReactAgentService,
     private readonly responseVerifierService: ResponseVerifierService
   ) {}
@@ -58,24 +71,135 @@ export class AiService {
   }
 
   public async chat({
+    conversationId,
     message,
     systemPrompt,
     toolNames,
     userId
   }: {
+    conversationId?: string;
     message: string;
     systemPrompt?: string;
     toolNames?: string[];
     userId: string;
-  }): Promise<VerifiedResponse> {
+  }): Promise<ChatResponse> {
+    // 1. Validate toolNames against allowlist
+    const sanitizedToolNames = this.sanitizeToolNames(toolNames);
+
+    // 2. Resolve prior context and effective system prompt
+    let priorMessages: LLMMessage[] = [];
+    let effectiveSystemPrompt: string;
+    let resolvedConversationId: string | undefined = conversationId;
+
+    if (conversationId) {
+      // Continuing an existing conversation
+      if (systemPrompt) {
+        throw new BadRequestException(
+          'Cannot change the system prompt of an existing conversation'
+        );
+      }
+
+      // Load stored system prompt (ownership enforced — throws 404 if wrong user)
+      const conversation = await this.prismaService.chatConversation.findFirst({
+        select: { systemPrompt: true },
+        where: { id: conversationId, userId }
+      });
+
+      if (!conversation) {
+        throw new BadRequestException(
+          `Conversation not found: ${conversationId}`
+        );
+      }
+
+      effectiveSystemPrompt = conversation.systemPrompt;
+
+      // Load last N messages (constant DB IO — do not load all then slice)
+      const recentMessages = await this.prismaService.chatMessage.findMany({
+        orderBy: { seq: 'desc' },
+        select: { content: true, role: true, seq: true },
+        take: AGENT_MAX_HISTORY_PAIRS * 2,
+        where: { conversationId }
+      });
+
+      // Restore chronological order
+      recentMessages.reverse();
+      priorMessages = recentMessages.map((m) => ({
+        content: m.content,
+        role: m.role as LLMMessage['role']
+      }));
+    } else {
+      // New conversation — resolve and freeze the effective system prompt
+      effectiveSystemPrompt = systemPrompt ?? AGENT_DEFAULT_SYSTEM_PROMPT;
+    }
+
+    // 3. Run the agent (outside any transaction — failure = no DB writes)
     const result = await this.reactAgentService.run({
       prompt: message,
-      systemPrompt,
-      toolNames,
+      priorMessages,
+      systemPrompt: effectiveSystemPrompt,
+      toolNames: sanitizedToolNames,
       userId
     });
 
-    return this.responseVerifierService.verify(result, toolNames ?? []);
+    // 4. Verify response
+    const verified = this.responseVerifierService.verify(
+      result,
+      sanitizedToolNames ?? []
+    );
+
+    // 5. Normalise title (collapse whitespace, truncate)
+    const title = message.replace(/\s+/g, ' ').trim().slice(0, 60);
+
+    // 6. Persist atomically: two explicit sequential creates so seq ordering is guaranteed
+    resolvedConversationId = await this.prismaService.$transaction(
+      async (tx) => {
+        let convId = conversationId;
+
+        if (!convId) {
+          const conv = await tx.chatConversation.create({
+            data: {
+              systemPrompt: effectiveSystemPrompt,
+              title,
+              userId
+            },
+            select: { id: true }
+          });
+
+          convId = conv.id;
+        } else {
+          // Explicitly touch updatedAt (belt-and-suspenders for @updatedAt on nested writes)
+          await tx.chatConversation.update({
+            data: { updatedAt: new Date() },
+            where: { id: convId }
+          });
+        }
+
+        // User message first — seq ordering guaranteed by insertion order
+        await tx.chatMessage.create({
+          data: {
+            content: message,
+            conversationId: convId,
+            requestedToolNames: [],
+            role: 'user'
+          }
+        });
+
+        // Assistant message second
+        await tx.chatMessage.create({
+          data: {
+            content: verified.response,
+            conversationId: convId,
+            estimatedCostUsd: verified.estimatedCostUsd,
+            requestedToolNames: toToolNameArray(verified.sources),
+            role: 'assistant'
+          }
+        });
+
+        return convId;
+      }
+    );
+
+    return { ...verified, conversationId: resolvedConversationId };
   }
 
   public async getPrompt({
@@ -169,7 +293,7 @@ export class AiService {
       `You are a neutral financial assistant. Please analyze the following investment portfolio (base currency being ${userCurrency}) in simple words.`,
       holdingsTableString,
       'Structure your answer with these sections:',
-      'Overview: Briefly summarize the portfolio’s composition and allocation rationale.',
+      "Overview: Briefly summarize the portfolio's composition and allocation rationale.",
       'Risk Assessment: Identify potential risks, including market volatility, concentration, and sectoral imbalances.',
       'Advantages: Highlight strengths, focusing on growth potential, diversification, or other benefits.',
       'Disadvantages: Point out weaknesses, such as overexposure or lack of defensive assets.',
@@ -178,6 +302,35 @@ export class AiService {
       'Conclusion: Provide a concise summary highlighting key insights.',
       `Provide your answer in the following language: ${languageCode}.`
     ].join('\n');
+  }
+
+  /**
+   * Validates toolNames against the allowlist. Returns undefined if input is
+   * undefined (agent uses all tools). Throws 400 for unknown tool names.
+   */
+  private sanitizeToolNames(
+    toolNames: string[] | undefined
+  ): string[] | undefined {
+    if (!toolNames) {
+      return undefined;
+    }
+
+    // Trim + de-dupe
+    const normalized = [
+      ...new Set(toolNames.map((n) => n.trim()).filter(Boolean))
+    ];
+
+    const unknown = normalized.filter(
+      (n) => !(AGENT_ALLOWED_TOOL_NAMES as readonly string[]).includes(n)
+    );
+
+    if (unknown.length > 0) {
+      throw new BadRequestException(
+        `Unknown tool name(s): ${unknown.join(', ')}`
+      );
+    }
+
+    return normalized;
   }
 
   private escapeMarkdownCell(value: unknown) {

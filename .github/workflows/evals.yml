@@ -1,0 +1,97 @@
+name: AI Evals
+
+on:
+  pull_request:
+    paths:
+      - 'apps/api/src/app/endpoints/ai/**'
+      - 'apps/api/test/ai/**'
+      - 'apps/api/src/app/order/**'
+      - 'apps/api/src/app/portfolio/**'
+      - 'apps/api/src/app/symbol/**'
+      - 'apps/api/src/app/user/**'
+      - 'apps/api/src/services/benchmark/**'
+      - 'apps/api/src/services/market-data/**'
+      - 'apps/api/src/services/prisma/**'
+      - 'apps/api/src/services/symbol-profile/**'
+      - 'libs/common/**'
+  merge_group:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * *' # nightly at 6 AM UTC
+
+concurrency:
+  group: ai-evals-live-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fast-evals:
+    name: 'Golden Sets (fast, mocked LLM)'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+      - run: npm ci
+      - run: npx nx test api --testPathPattern='golden-sets-fast'
+
+  pre-merge-evals:
+    name: 'Golden Sets (live LLM)'
+    if: >-
+      github.event_name == 'merge_group' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false)
+    needs: fast-evals
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      RUN_GOLDEN_EVALS: '1'
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY_EVAL }}
+      MVP_EVAL_BASE_URL: ${{ secrets.EVAL_API_URL }}
+    steps:
+      - name: Check required secrets
+        run: |
+          if [ -z "$MVP_EVAL_BASE_URL" ]; then
+            echo "::error::EVAL_API_URL secret is not set — cannot reach live API"
+            exit 1
+          fi
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "::error::OPENAI_API_KEY_EVAL secret is not set"
+            exit 1
+          fi
+      - name: Pre-flight API health check
+        run: |
+          echo "Checking API at $MVP_EVAL_BASE_URL ..."
+          curl --fail --silent --max-time 10 \
+            "${MVP_EVAL_BASE_URL%/api/v1}/api/v1/info" \
+            || (echo "::error::API not reachable at $MVP_EVAL_BASE_URL" && exit 1)
+          echo "API is healthy ✓"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+      - run: npm ci
+      - run: npx nx test api --testPathPattern='golden-sets.spec' --runInBand
+
+  nightly-evals:
+    name: 'Labeled Scenarios (coverage)'
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RUN_LABELED_EVALS: '1'
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY_EVAL }}
+      MVP_EVAL_BASE_URL: ${{ secrets.EVAL_API_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+      - run: npm ci
+      - run: npx nx test api --testPathPattern='labeled-scenarios' --runInBand
+      - run: npx ts-node -P apps/api/tsconfig.spec.json apps/api/test/ai/coverage-matrix.ts --output=markdown > coverage-matrix.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: eval-coverage-matrix
+          path: coverage-matrix.md

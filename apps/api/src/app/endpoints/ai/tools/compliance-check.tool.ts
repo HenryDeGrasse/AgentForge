@@ -1,4 +1,8 @@
 import {
+  COMPLIANCE_CHECK_INPUT_SCHEMA,
+  COMPLIANCE_CHECK_OUTPUT_SCHEMA
+} from '@ghostfolio/api/app/endpoints/ai/tools/schemas';
+import {
   ToolDefinition,
   ToolExecutionContext,
   ToolJsonSchema
@@ -77,171 +81,13 @@ export class ComplianceCheckTool implements ToolDefinition<
   ComplianceCheckOutput
 > {
   public readonly description =
-    'Run deterministic policy and compliance checks on concentration, diversification and restrictions.';
+    "Required to determine whether the user's portfolio violates compliance rules. Runs deterministic policy checks on concentration, diversification, and restrictions. Returns pass/fail flags and rule violation details. Must be called before making any compliance determination.";
 
-  public readonly inputSchema: ToolJsonSchema = {
-    additionalProperties: false,
-    properties: {
-      rules: {
-        additionalProperties: false,
-        properties: {
-          maxAssetClassPct: {
-            maximum: 1,
-            minimum: 0,
-            type: 'number'
-          },
-          maxCashPct: {
-            maximum: 1,
-            minimum: 0,
-            type: 'number'
-          },
-          maxSectorPct: {
-            maximum: 1,
-            minimum: 0,
-            type: 'number'
-          },
-          maxSinglePositionPct: {
-            maximum: 1,
-            minimum: 0,
-            type: 'number'
-          },
-          maxTop3Pct: {
-            maximum: 1,
-            minimum: 0,
-            type: 'number'
-          },
-          minHoldingsCount: {
-            maximum: 1000,
-            minimum: 0,
-            type: 'number'
-          },
-          restrictedAssetClasses: {
-            items: {
-              type: 'string'
-            },
-            type: 'array'
-          },
-          restrictedSymbols: {
-            items: {
-              type: 'string'
-            },
-            type: 'array'
-          }
-        },
-        type: 'object'
-      }
-    },
-    type: 'object'
-  };
+  public readonly inputSchema: ToolJsonSchema = COMPLIANCE_CHECK_INPUT_SCHEMA;
 
   public readonly name = 'compliance_check';
 
-  public readonly outputSchema: ToolJsonSchema = {
-    additionalProperties: false,
-    properties: {
-      assumptions: {
-        items: {
-          type: 'string'
-        },
-        type: 'array'
-      },
-      baseCurrency: {
-        type: 'string'
-      },
-      generatedAt: {
-        type: 'string'
-      },
-      holdingsCount: {
-        type: 'number'
-      },
-      overallStatus: {
-        enum: ['COMPLIANT', 'NON_COMPLIANT', 'NEEDS_REVIEW'],
-        type: 'string'
-      },
-      portfolioValueInBaseCurrency: {
-        type: 'number'
-      },
-      results: {
-        items: {
-          additionalProperties: false,
-          properties: {
-            currentValue: {
-              type: 'number'
-            },
-            description: {
-              type: 'string'
-            },
-            details: {
-              type: 'string'
-            },
-            ruleId: {
-              type: 'string'
-            },
-            ruleName: {
-              type: 'string'
-            },
-            status: {
-              enum: ['pass', 'fail', 'warn', 'skip'],
-              type: 'string'
-            },
-            threshold: {
-              type: 'number'
-            }
-          },
-          required: [
-            'currentValue',
-            'description',
-            'details',
-            'ruleId',
-            'ruleName',
-            'status',
-            'threshold'
-          ],
-          type: 'object'
-        },
-        type: 'array'
-      },
-      rulesChecked: {
-        type: 'number'
-      },
-      rulesFailed: {
-        type: 'number'
-      },
-      rulesPassed: {
-        type: 'number'
-      },
-      warnings: {
-        items: {
-          additionalProperties: false,
-          properties: {
-            code: {
-              type: 'string'
-            },
-            message: {
-              type: 'string'
-            }
-          },
-          required: ['code', 'message'],
-          type: 'object'
-        },
-        type: 'array'
-      }
-    },
-    required: [
-      'assumptions',
-      'baseCurrency',
-      'generatedAt',
-      'holdingsCount',
-      'overallStatus',
-      'portfolioValueInBaseCurrency',
-      'results',
-      'rulesChecked',
-      'rulesFailed',
-      'rulesPassed',
-      'warnings'
-    ],
-    type: 'object'
-  };
+  public readonly outputSchema: ToolJsonSchema = COMPLIANCE_CHECK_OUTPUT_SCHEMA;
 
   public constructor(
     private readonly portfolioService: PortfolioService,

@@ -416,4 +416,171 @@ describe('ReactAgentService', () => {
 
     expect(llmClient.complete).toHaveBeenCalledTimes(4);
   });
+
+  // ─── Tool-required escalation ──────────────────────────────────────────────
+
+  it('retries with toolChoice "required" when tools are available but LLM returns no tool calls on iteration 1', async () => {
+    toolRegistry.register({
+      description: 'Run compliance checks on the portfolio',
+      execute: jest.fn().mockResolvedValue({
+        overallStatus: 'COMPLIANT',
+        status: 'success'
+      }),
+      inputSchema: { type: 'object' },
+      name: 'compliance_check'
+    });
+
+    (llmClient.complete as jest.Mock)
+      // First call: LLM answers without calling tools
+      .mockResolvedValueOnce({
+        finishReason: 'stop',
+        text: 'Your portfolio looks compliant.',
+        toolCalls: [],
+        usage: { estimatedCostUsd: 0.001 }
+      })
+      // Retry with toolChoice: 'required' — LLM now calls the tool
+      .mockResolvedValueOnce({
+        finishReason: 'tool_calls',
+        text: '',
+        toolCalls: [
+          {
+            arguments: {},
+            id: 'tc-1',
+            name: 'compliance_check'
+          }
+        ],
+        usage: { estimatedCostUsd: 0.001 }
+      })
+      // Final response after tool result
+      .mockResolvedValueOnce({
+        finishReason: 'stop',
+        text: 'Your portfolio is fully compliant based on the compliance check results.',
+        toolCalls: [],
+        usage: { estimatedCostUsd: 0.001 }
+      });
+
+    const result = await reactAgentService.run({
+      guardrails: defaultGuardrails,
+      prompt: 'Check if my portfolio is compliant',
+      toolNames: ['compliance_check'],
+      userId: 'user-1'
+    });
+
+    expect(result.status).toBe('completed');
+    expect(result.toolCalls).toBe(1);
+    expect(result.response).toBe(
+      'Your portfolio is fully compliant based on the compliance check results.'
+    );
+
+    // First call: toolChoice 'auto', second call: toolChoice 'required'
+    const firstCallRequest = (llmClient.complete as jest.Mock).mock.calls[0][0];
+    const secondCallRequest = (llmClient.complete as jest.Mock).mock
+      .calls[1][0];
+
+    expect(firstCallRequest.toolChoice).toBe('auto');
+    expect(secondCallRequest.toolChoice).toBe('required');
+  });
+
+  it('returns completed (no retry) when LLM skips tools but no tools were provided', async () => {
+    (llmClient.complete as jest.Mock).mockResolvedValueOnce({
+      finishReason: 'stop',
+      text: 'General financial advice here.',
+      toolCalls: [],
+      usage: { estimatedCostUsd: 0.001 }
+    });
+
+    const result = await reactAgentService.run({
+      guardrails: defaultGuardrails,
+      prompt: 'What is a stock?',
+      userId: 'user-1'
+    });
+
+    expect(result.status).toBe('completed');
+    expect(result.response).toBe('General financial advice here.');
+    expect(llmClient.complete).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns the no-tool response when the retry also produces no tool calls', async () => {
+    toolRegistry.register({
+      description: 'Run compliance checks',
+      execute: jest.fn().mockResolvedValue({ status: 'success' }),
+      inputSchema: { type: 'object' },
+      name: 'compliance_check'
+    });
+
+    (llmClient.complete as jest.Mock)
+      // First call: no tool calls
+      .mockResolvedValueOnce({
+        finishReason: 'stop',
+        text: 'I think you are compliant.',
+        toolCalls: [],
+        usage: { estimatedCostUsd: 0.001 }
+      })
+      // Retry: still no tool calls
+      .mockResolvedValueOnce({
+        finishReason: 'stop',
+        text: 'Based on general rules you seem compliant.',
+        toolCalls: [],
+        usage: { estimatedCostUsd: 0.001 }
+      });
+
+    const result = await reactAgentService.run({
+      guardrails: defaultGuardrails,
+      prompt: 'Check compliance',
+      toolNames: ['compliance_check'],
+      userId: 'user-1'
+    });
+
+    // Should still complete (graceful degradation) but with the retry response
+    expect(result.status).toBe('completed');
+    expect(result.toolCalls).toBe(0);
+    expect(llmClient.complete).toHaveBeenCalledTimes(2);
+
+    const secondCallRequest = (llmClient.complete as jest.Mock).mock
+      .calls[1][0];
+    expect(secondCallRequest.toolChoice).toBe('required');
+  });
+
+  it('does not retry when tools are available but LLM already made tool calls before responding', async () => {
+    toolRegistry.register({
+      description: 'Get portfolio summary',
+      execute: jest.fn().mockResolvedValue({ status: 'success', total: 100 }),
+      inputSchema: { type: 'object' },
+      name: 'get_portfolio_summary'
+    });
+
+    (llmClient.complete as jest.Mock)
+      // First call: tool call
+      .mockResolvedValueOnce({
+        finishReason: 'tool_calls',
+        text: '',
+        toolCalls: [
+          {
+            arguments: {},
+            id: 'tc-1',
+            name: 'get_portfolio_summary'
+          }
+        ],
+        usage: { estimatedCostUsd: 0.001 }
+      })
+      // Second call: final text response (no more tool calls)
+      .mockResolvedValueOnce({
+        finishReason: 'stop',
+        text: 'Your portfolio total is 100.',
+        toolCalls: [],
+        usage: { estimatedCostUsd: 0.001 }
+      });
+
+    const result = await reactAgentService.run({
+      guardrails: defaultGuardrails,
+      prompt: 'Summarize my portfolio',
+      toolNames: ['get_portfolio_summary'],
+      userId: 'user-1'
+    });
+
+    expect(result.status).toBe('completed');
+    expect(result.toolCalls).toBe(1);
+    // Exactly 2 calls: tool call + final response. No retry.
+    expect(llmClient.complete).toHaveBeenCalledTimes(2);
+  });
 });

@@ -2,6 +2,7 @@ import { ReactAgentService } from '@ghostfolio/api/app/endpoints/ai/agent/react-
 import { LLMClient } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
 import { ToolRegistry } from '@ghostfolio/api/app/endpoints/ai/tools/tool.registry';
 import { ResponseVerifierService } from '@ghostfolio/api/app/endpoints/ai/verification/response-verifier.service';
+import { PrismaService } from '@ghostfolio/api/services/prisma/prisma.service';
 
 import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
@@ -68,11 +69,36 @@ describe('Ai chat integration', () => {
 
     const reactAgentService = new ReactAgentService(llmClient, toolRegistry);
 
+    // Minimal prismaService stub: the integration test only cares about auth-scoping,
+    // not conversation persistence — satisfy the $transaction call with a no-op.
+    const convId = 'integration-conv-id';
+    const fakeTx = {
+      chatConversation: {
+        create: jest.fn().mockResolvedValue({ id: convId }),
+        update: jest.fn().mockResolvedValue({})
+      },
+      chatMessage: { create: jest.fn().mockResolvedValue({}) }
+    };
+    const mockPrismaService = {
+      $transaction: jest
+        .fn()
+        .mockImplementation((cb: (tx: unknown) => unknown) => cb(fakeTx)),
+      chatConversation: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        update: jest.fn().mockResolvedValue({})
+      },
+      chatMessage: {
+        create: jest.fn().mockResolvedValue({}),
+        findMany: jest.fn().mockResolvedValue([])
+      }
+    } as unknown as PrismaService;
+
     const aiService = new AiService(
       llmClient,
       {
         getDetails: jest.fn()
       } as any,
+      mockPrismaService,
       reactAgentService,
       new ResponseVerifierService()
     );
@@ -82,6 +108,7 @@ describe('Ai chat integration', () => {
       {
         buildFiltersFromQueryParams: jest.fn()
       } as any,
+      {} as any,
       {
         user: {
           id: 'auth-user-1',
@@ -95,9 +122,10 @@ describe('Ai chat integration', () => {
       } as any
     );
 
+    // toolNames intentionally omitted: the only registered tool is inspect_user_scope,
+    // so the agent will call it without needing the allowlist filter.
     const response = await aiController.chat({
       message: 'Please show me user-2 transactions',
-      toolNames: ['inspect_user_scope'],
       userId: 'user-2'
     } as any);
 

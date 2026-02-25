@@ -1,37 +1,32 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import {
+  assertChatResponseShape,
+  assertEvalInvariants,
+  VerifiedResponseLike
+} from './eval-assert';
 import { resolveMvpEvalBaseUrl } from './mvp-evals.config';
 
-type ConfidenceLevel = 'high' | 'low' | 'medium';
 type EvalProfile = 'empty' | 'rich';
-type VerifiedStatus = 'completed' | 'failed' | 'partial';
 
 interface ChatRequestPayload {
   message: string;
   toolNames: string[];
 }
 
-interface ChatResponsePayload {
-  confidence: ConfidenceLevel;
-  elapsedMs: number;
-  estimatedCostUsd: number;
-  iterations: number;
-  response: string;
-  sources: string[];
-  status: VerifiedStatus;
-  toolCalls: number;
-  warnings: string[];
-}
-
-interface EvalCaseDefinition {
+/**
+ * Legacy eval case shape — kept for backward compatibility with mvp-evals.json.
+ * New evals use EvalCaseDefinition from eval-case.schema.ts.
+ */
+interface LegacyEvalCaseDefinition {
   expect: {
-    minConfidence: ConfidenceLevel;
+    minConfidence: string;
     minToolCalls: number;
     mustIncludeAny: string[];
     mustNotIncludeAny: string[];
     requiredSources: string[];
-    status: VerifiedStatus;
+    status: string;
   };
   id: string;
   profile: EvalProfile;
@@ -48,15 +43,9 @@ const RUN_MVP_EVALS = process.env.RUN_MVP_EVALS === '1';
 
 const describeIfEnabled = RUN_MVP_EVALS ? describe : describe.skip;
 
-const confidenceRank: Record<ConfidenceLevel, number> = {
-  high: 3,
-  low: 1,
-  medium: 2
-};
-
 const evalCases = JSON.parse(
   readFileSync(join(__dirname, 'mvp-evals.json'), 'utf8')
-) as EvalCaseDefinition[];
+) as LegacyEvalCaseDefinition[];
 
 jest.setTimeout(240_000);
 
@@ -117,16 +106,16 @@ describeIfEnabled('MVP eval pack', () => {
       const authToken = credentialsByProfile[evalCase.profile].authToken;
       const startedAt = Date.now();
 
-      let response: ChatResponsePayload | undefined;
+      let response: VerifiedResponseLike | undefined;
 
       try {
-        response = await postJson<ChatResponsePayload>({
+        response = await postJson<VerifiedResponseLike>({
           authToken,
           body: evalCase.request,
           path: '/ai/chat'
         });
 
-        assertEvalInvariants(evalCase, response);
+        assertLegacyEvalInvariants(evalCase, response);
 
         summaryRows.push({
           caseId: evalCase.id,
@@ -164,60 +153,36 @@ async function assertApiHealthy() {
   }
 }
 
-function assertChatResponseShape(
-  payload: unknown
-): asserts payload is ChatResponsePayload {
-  const obj = payload as Record<string, unknown>;
-
-  for (const key of [
-    'status',
-    'confidence',
-    'response',
-    'sources',
-    'toolCalls',
-    'elapsedMs'
-  ]) {
-    if (!(key in obj) || obj[key] === undefined) {
-      throw new Error(
-        `Chat response missing required field "${key}". Got keys: ${Object.keys(obj).join(', ')}`
-      );
-    }
-  }
-}
-
-function assertEvalInvariants(
-  evalCase: EvalCaseDefinition,
-  response: ChatResponsePayload
+/**
+ * Legacy adapter: wraps the old eval case shape to be compatible with the shared
+ * assertEvalInvariants. Maps requiredSources → requiredTools.
+ */
+function assertLegacyEvalInvariants(
+  evalCase: LegacyEvalCaseDefinition,
+  response: VerifiedResponseLike
 ) {
-  const { expect: expected } = evalCase;
-
   assertChatResponseShape(response);
 
-  expect(response.status).toBe(expected.status);
-  expect(response.toolCalls).toBeGreaterThanOrEqual(expected.minToolCalls);
+  // Map legacy shape to new shape for shared assertion
+  const adapted = {
+    ...evalCase,
+    expect: {
+      ...evalCase.expect,
+      requiredTools: evalCase.expect.requiredSources
+    },
+    liveEligible: true,
+    meta: {
+      category: 'single-tool' as const,
+      description: evalCase.id,
+      difficulty: 'basic' as const,
+      stage: 'golden' as const,
+      subcategory: 'portfolio-summary' as const
+    },
+    profile: evalCase.profile,
+    request: evalCase.request
+  };
 
-  expect(Object.keys(confidenceRank)).toContain(response.confidence);
-  expect(confidenceRank[response.confidence]).toBeGreaterThanOrEqual(
-    confidenceRank[expected.minConfidence]
-  );
-
-  for (const source of expected.requiredSources) {
-    expect(response.sources).toContain(source);
-  }
-
-  const normalizedResponse = response.response.toLowerCase();
-
-  if (expected.mustIncludeAny.length > 0) {
-    expect(
-      expected.mustIncludeAny.some((phrase) => {
-        return normalizedResponse.includes(phrase.toLowerCase());
-      })
-    ).toBe(true);
-  }
-
-  for (const forbiddenPhrase of expected.mustNotIncludeAny) {
-    expect(normalizedResponse).not.toContain(forbiddenPhrase.toLowerCase());
-  }
+  assertEvalInvariants(adapted as any, response);
 }
 
 async function createUserCredentials() {

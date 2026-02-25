@@ -6,13 +6,44 @@ import {
 } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
 import { ResponseVerifierService } from '@ghostfolio/api/app/endpoints/ai/verification/response-verifier.service';
 import { PortfolioService } from '@ghostfolio/api/app/portfolio/portfolio.service';
+import { PrismaService } from '@ghostfolio/api/services/prisma/prisma.service';
 
 import { Test } from '@nestjs/testing';
 import { StatusCodes, getReasonPhrase } from 'http-status-codes';
 
 import { AiService } from './ai.service';
 
-/** Creates a minimal AiService with lightweight stubs for all 4 deps. */
+/** Builds a minimal prismaService stub that records calls and satisfies the chat() transaction. */
+function buildPrismaStub(convId = 'test-conv-id') {
+  const txCreate = jest
+    .fn()
+    .mockResolvedValueOnce({ id: convId }) // chatConversation.create
+    .mockResolvedValue({}); // chatMessage.create (×2)
+
+  const txStub = {
+    chatConversation: {
+      create: txCreate,
+      update: jest.fn().mockResolvedValue({})
+    },
+    chatMessage: { create: txCreate }
+  };
+
+  return {
+    $transaction: jest
+      .fn()
+      .mockImplementation((cb: (tx: unknown) => unknown) => cb(txStub)),
+    chatConversation: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      update: jest.fn().mockResolvedValue({})
+    },
+    chatMessage: {
+      create: jest.fn().mockResolvedValue({}),
+      findMany: jest.fn().mockResolvedValue([])
+    }
+  };
+}
+
+/** Creates a minimal AiService with lightweight stubs for all deps. */
 function buildService({
   llmComplete = jest.fn(),
   agentRun = jest.fn().mockResolvedValue({
@@ -29,11 +60,13 @@ function buildService({
     warnings: [],
     sources: []
   })),
-  portfolioGetDetails = jest.fn()
+  portfolioGetDetails = jest.fn(),
+  prismaService = buildPrismaStub()
 } = {}) {
   return new AiService(
     { complete: llmComplete } as LLMClient,
     { getDetails: portfolioGetDetails } as any as PortfolioService,
+    prismaService as any as PrismaService,
     { run: agentRun } as any as ReactAgentService,
     { verify: verifierVerify } as any as ResponseVerifierService
   );
@@ -58,6 +91,7 @@ describe('AiService', () => {
         AiService,
         { provide: LLM_CLIENT_TOKEN, useValue: llmClient },
         { provide: PortfolioService, useValue: { getDetails: jest.fn() } },
+        { provide: PrismaService, useValue: buildPrismaStub() },
         { provide: ReactAgentService, useValue: { run: jest.fn() } },
         { provide: ResponseVerifierService, useValue: verifier }
       ]
@@ -121,6 +155,7 @@ describe('AiService', () => {
     });
 
     expect(run).toHaveBeenCalledWith({
+      priorMessages: [],
       prompt: 'What changed this week?',
       systemPrompt: 'be concise',
       toolNames: ['get_portfolio_summary'],
@@ -128,7 +163,10 @@ describe('AiService', () => {
     });
 
     expect(verify).toHaveBeenCalledWith(rawResult, ['get_portfolio_summary']);
-    expect(response).toEqual(verifiedResult);
+    expect(response).toEqual({
+      ...verifiedResult,
+      conversationId: expect.any(String)
+    });
   });
 
   it('passes empty toolNames array to verifier when none provided', async () => {
