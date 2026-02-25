@@ -140,6 +140,19 @@ describe('AiChatStateService (success mock)', () => {
     expect(loading).toBe(false);
   });
 
+  it('emits messageSent$ on successful send', (done) => {
+    service.messageSent$.subscribe(() => done());
+    service.sendMessage('Hello');
+  });
+
+  it('emits messageSent$ once per send on success', () => {
+    let emitCount = 0;
+    service.messageSent$.subscribe(() => emitCount++);
+    service.sendMessage('Hello');
+    service.sendMessage('World');
+    expect(emitCount).toBe(2);
+  });
+
   it('accumulates multiple turns', () => {
     service.sendMessage('Hello');
     service.sendMessage('Tell me more');
@@ -198,5 +211,12 @@ describe('AiChatStateService (error mock)', () => {
     let msgs: any[] = [];
     service.messages$.subscribe((m) => (msgs = m));
     expect(msgs.length).toBe(1);
+  });
+
+  it('does not emit messageSent$ on error', () => {
+    let emitted = false;
+    service.messageSent$.subscribe(() => (emitted = true));
+    service.sendMessage('Hello');
+    expect(emitted).toBe(false);
   });
 });

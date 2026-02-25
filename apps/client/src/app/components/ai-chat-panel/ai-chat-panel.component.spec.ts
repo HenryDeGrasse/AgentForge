@@ -1,10 +1,19 @@
-import { ChatMessage } from '@ghostfolio/common/interfaces';
+import {
+  ChatMessage,
+  ConversationSummary
+} from '@ghostfolio/common/interfaces';
 import { DataService } from '@ghostfolio/ui/services';
 
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import {
+  ComponentFixture,
+  fakeAsync,
+  TestBed,
+  tick
+} from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { BehaviorSubject } from 'rxjs';
+import { provideMarkdown } from 'ngx-markdown';
+import { BehaviorSubject, of, Subject } from 'rxjs';
 
 import { AiChatStateService } from '../../services/ai-chat-state.service';
 import { AiChatPanelComponent } from './ai-chat-panel.component';
@@ -37,13 +46,27 @@ function buildStateService(
     isOpen$: new BehaviorSubject<boolean>(isOpen),
     isLoading$: new BehaviorSubject<boolean>(isLoading),
     error$: new BehaviorSubject<string | null>(error),
+    conversationId$: new BehaviorSubject<string | null>(null),
+    messageSent$: new Subject<void>(),
     close: jest.fn(),
     sendMessage: jest.fn(),
     clearConversation: jest.fn(),
+    newConversation: jest.fn(),
+    loadConversation: jest.fn(),
     toggle: jest.fn(),
     open: jest.fn()
   };
 }
+
+const MOCK_CONVERSATIONS: ConversationSummary[] = [
+  {
+    createdAt: '2026-02-25T10:00:00Z',
+    id: 'conv-1',
+    messageCount: 2,
+    title: 'Summarize my holdings',
+    updatedAt: '2026-02-25T10:01:00Z'
+  }
+];
 
 describe('AiChatPanelComponent', () => {
   let fixture: ComponentFixture<AiChatPanelComponent>;
@@ -55,8 +78,18 @@ describe('AiChatPanelComponent', () => {
     TestBed.configureTestingModule({
       imports: [AiChatPanelComponent, NoopAnimationsModule],
       providers: [
+        provideMarkdown(),
         { provide: AiChatStateService, useValue: stateService },
-        { provide: DataService, useValue: { postAiChat: jest.fn() } }
+        {
+          provide: DataService,
+          useValue: {
+            postAiChat: jest.fn(),
+            fetchAiConversations: jest
+              .fn()
+              .mockReturnValue(of(MOCK_CONVERSATIONS)),
+            deleteAiConversation: jest.fn().mockReturnValue(of(null))
+          }
+        }
       ]
     });
     fixture = TestBed.createComponent(AiChatPanelComponent);
@@ -97,14 +130,16 @@ describe('AiChatPanelComponent', () => {
     expect(bubbles[0].nativeElement.textContent).toContain('Hello');
   });
 
-  it('renders assistant messages', () => {
+  it('renders assistant messages', fakeAsync(() => {
     setup({ messages: [ASSISTANT_MSG] });
+    tick();
+    fixture.detectChanges();
     const bubbles = fixture.debugElement.queryAll(By.css('.message-assistant'));
     expect(bubbles.length).toBe(1);
     expect(bubbles[0].nativeElement.textContent).toContain(
       'Your portfolio is healthy.'
     );
-  });
+  }));
 
   it('renders both roles in a conversation', () => {
     setup({ messages: [USER_MSG, ASSISTANT_MSG] });
@@ -190,5 +225,28 @@ describe('AiChatPanelComponent', () => {
     const clearBtn = fixture.debugElement.query(By.css('.btn-clear'));
     clearBtn.triggerEventHandler('click', null);
     expect(stateService.clearConversation).toHaveBeenCalled();
+  });
+
+  // ─── drawer refresh after sendMessage ──────────────────────────────────────
+
+  it('refreshes conversation list when messageSent$ fires and drawer is open', () => {
+    setup();
+    const dataService = TestBed.inject(DataService) as jest.Mocked<DataService>;
+    dataService.fetchAiConversations.mockReturnValue(of(MOCK_CONVERSATIONS));
+
+    component.showHistory = true;
+    stateService.messageSent$.next();
+
+    expect(dataService.fetchAiConversations).toHaveBeenCalled();
+  });
+
+  it('does not refresh conversation list when messageSent$ fires and drawer is closed', () => {
+    setup();
+    const dataService = TestBed.inject(DataService) as jest.Mocked<DataService>;
+
+    component.showHistory = false;
+    stateService.messageSent$.next();
+
+    expect(dataService.fetchAiConversations).not.toHaveBeenCalled();
   });
 });

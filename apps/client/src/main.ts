@@ -11,7 +11,8 @@ import {
 import {
   enableProdMode,
   importProvidersFrom,
-  provideZoneChangeDetection
+  provideZoneChangeDetection,
+  SecurityContext
 } from '@angular/core';
 import {
   DateAdapter,
@@ -26,7 +27,12 @@ import { provideAnimations } from '@angular/platform-browser/animations';
 import { RouterModule, TitleStrategy } from '@angular/router';
 import { ServiceWorkerModule } from '@angular/service-worker';
 import { provideIonicAngular } from '@ionic/angular/standalone';
-import { provideMarkdown } from 'ngx-markdown';
+import {
+  MARKED_OPTIONS,
+  MarkedRenderer,
+  provideMarkdown,
+  SANITIZE
+} from 'ngx-markdown';
 import { provideNgxSkeletonLoader } from 'ngx-skeleton-loader';
 
 import { CustomDateAdapter } from './app/adapter/custom-date-adapter';
@@ -82,7 +88,36 @@ import { environment } from './environments/environment';
       provideAnimations(),
       provideHttpClient(withInterceptorsFromDi()),
       provideIonicAngular(),
-      provideMarkdown(),
+      provideMarkdown({
+        sanitize: {
+          provide: SANITIZE,
+          useValue: SecurityContext.HTML
+        },
+        markedOptions: {
+          provide: MARKED_OPTIONS,
+          useFactory: () => {
+            const renderer = new MarkedRenderer();
+
+            // Block images (tracking pixels)
+            renderer.image = () => '';
+
+            // Sanitize links: only allow http(s), add security attrs
+            renderer.link = ({ href, title, tokens }: any) => {
+              if (href && !/^https?:\/\//i.test(href)) {
+                return tokens?.map((t: any) => t.raw ?? '').join('') ?? '';
+              }
+
+              const titleAttr = title ? ` title="${title}"` : '';
+              const text =
+                tokens?.map((t: any) => t.raw ?? '').join('') ?? href;
+
+              return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`;
+            };
+
+            return { renderer };
+          }
+        }
+      }),
       provideNgxSkeletonLoader(),
       provideZoneChangeDetection(),
       {

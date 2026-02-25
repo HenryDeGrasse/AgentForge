@@ -2,11 +2,20 @@
   <!-- Header -->
   <div class="panel-header">
     <div class="panel-title">
-      <span class="panel-icon">✦</span>
+      <span class="panel-icon">&#x2726;</span>
       <span>AI Advisor</span>
     </div>
 
     <div class="panel-actions">
+      <button
+        class="btn-history btn-icon"
+        title="Conversation history"
+        type="button"
+        (click)="toggleHistory()"
+      >
+        &#x2630;
+      </button>
+
       @if ((messages$ | async)?.length) {
         <button
           class="btn-clear btn-icon"
@@ -14,7 +23,7 @@
           type="button"
           (click)="stateService.clearConversation()"
         >
-          ↺
+          &#x21BA;
         </button>
       }
 
@@ -24,20 +33,76 @@
         type="button"
         (click)="stateService.close()"
       >
-        ✕
+        &#x2715;
       </button>
     </div>
   </div>
+
+  <!-- History drawer -->
+  @if (showHistory) {
+    <div class="history-drawer">
+      <button
+        class="btn-new-conversation"
+        type="button"
+        (click)="onNewConversation()"
+      >
+        + New Conversation
+      </button>
+
+      @if ((conversations$ | async)?.length) {
+        <div class="history-list">
+          @for (conv of conversations$ | async; track conv.id) {
+            <div
+              class="history-item"
+              [class.active]="
+                conv.id === (stateService.conversationId$ | async)
+              "
+              (click)="onSelectConversation(conv.id)"
+            >
+              <div class="history-item-info">
+                <span class="history-title">{{ conv.title }}</span>
+                <span class="history-meta">
+                  {{ conv.messageCount }} msgs &middot;
+                  {{ getRelativeTime(conv.updatedAt) }}
+                </span>
+              </div>
+              <button
+                class="btn-delete btn-icon"
+                title="Delete"
+                type="button"
+                (click)="onDeleteConversation($event, conv.id)"
+              >
+                &#x2715;
+              </button>
+            </div>
+          }
+        </div>
+      } @else {
+        <p class="history-empty">No conversations yet</p>
+      }
+    </div>
+  }
 
   <!-- Message list -->
   <div #messageList class="message-list">
     @if (!(messages$ | async)?.length) {
       <div class="empty-state">
+        <div class="empty-icon">&#x2726;</div>
         <p class="empty-title">Ask anything about your portfolio</p>
         <p class="empty-hint">
-          I can summarise holdings, analyse risk, and review transaction
-          history.
+          I can summarise holdings, analyse risk, check compliance, and more.
         </p>
+        <div class="suggestion-chips">
+          @for (chip of SUGGESTION_CHIPS; track chip) {
+            <button
+              class="suggestion-chip"
+              type="button"
+              (click)="onSuggestionClick(chip)"
+            >
+              {{ chip }}
+            </button>
+          }
+        </div>
       </div>
     }
 
@@ -49,11 +114,17 @@
       } @else {
         <div class="message-assistant">
           <div class="bubble">
-            <p class="message-text">{{ msg.text }}</p>
+            <markdown class="message-text" [data]="msg.text"></markdown>
+
+            @if (msg.chartData?.length) {
+              @for (chart of msg.chartData; track $index) {
+                <gf-ai-chat-chart [chartItem]="chart" />
+              }
+            }
 
             @if (hasWarnings(msg)) {
               <details class="warnings-panel">
-                <summary>⚠ {{ msg.warnings.length }} notice(s)</summary>
+                <summary>&#x26A0; {{ msg.warnings.length }} notice(s)</summary>
                 <ul>
                   @for (w of msg.warnings; track w) {
                     <li>{{ w }}</li>
@@ -65,7 +136,7 @@
             @if (msg.sources?.length) {
               <div class="sources">
                 @for (s of msg.sources; track s) {
-                  <span class="source-tag">{{ s }}</span>
+                  <span class="source-tag" [attr.data-tool]="s">{{ s }}</span>
                 }
               </div>
             }
@@ -96,7 +167,7 @@
   <div class="input-area">
     <textarea
       class="message-input"
-      placeholder="Ask about your portfolio…"
+      placeholder="Ask about your portfolio..."
       rows="1"
       [formControl]="inputControl"
       (keydown)="onKeydown($event)"
@@ -108,7 +179,7 @@
       [disabled]="(isLoading$ | async) || !inputControl.value.trim()"
       (click)="onSend()"
     >
-      ↑
+      &#x2191;
     </button>
   </div>
 </div>

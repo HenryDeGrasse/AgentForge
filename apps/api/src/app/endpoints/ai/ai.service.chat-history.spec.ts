@@ -24,6 +24,7 @@ import { AiService } from './ai.service';
 const STUB_AGENT_RESULT = {
   elapsedMs: 100,
   estimatedCostUsd: 0.001,
+  executedTools: [],
   iterations: 1,
   response: 'Agent reply',
   sources: ['get_portfolio_summary'],
@@ -33,6 +34,7 @@ const STUB_AGENT_RESULT = {
 
 const STUB_VERIFIED: VerifiedResponse = {
   ...STUB_AGENT_RESULT,
+  chartData: [],
   confidence: 'high',
   warnings: []
 };
@@ -98,6 +100,7 @@ function buildService(
   verifierVerify = buildVerifier()
 ) {
   return new AiService(
+    { extract: jest.fn().mockReturnValue([]) } as any,
     { complete: jest.fn() } as LLMClient,
     { getDetails: jest.fn() } as any as PortfolioService,
     prismaService,
@@ -496,15 +499,24 @@ describe('AiService.chat() — toolNames validation', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
-  it('accepts undefined toolNames (no filter — agent uses all tools)', async () => {
+  it('accepts undefined toolNames (defaults to full curated allowlist)', async () => {
     const { prismaService } = buildPrisma();
     const agentRun = buildAgentRun();
     const service = buildService(prismaService, agentRun);
 
     await service.chat({ message: 'Hello', userId: 'user-1' });
 
-    // toolNames: undefined means agent decides which tools to use
-    expect(agentRun.mock.calls[0][0].toolNames).toBeUndefined();
+    // toolNames: undefined now defaults to all 8 curated tools
+    expect(agentRun.mock.calls[0][0].toolNames).toEqual([
+      'analyze_risk',
+      'compliance_check',
+      'get_portfolio_summary',
+      'get_transaction_history',
+      'market_data_lookup',
+      'performance_compare',
+      'rebalance_suggest',
+      'tax_estimate'
+    ]);
   });
 
   it('deduplicates and trims tool names', async () => {

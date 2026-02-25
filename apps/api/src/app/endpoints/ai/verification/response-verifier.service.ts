@@ -15,22 +15,25 @@ export class ResponseVerifierService {
    * Verify and enrich a raw agent result before it reaches the frontend.
    *
    * @param result  - Raw output from ReactAgentService.run()
-   * @param toolNames - Tool names that were requested for this run
+   * @param invokedToolNames - Tool names that were actually invoked (derived from executedTools)
    * @returns A fully-populated VerifiedResponse — never throws
    */
   public verify(
     result: ReactAgentRunResult,
-    toolNames: string[]
+    invokedToolNames: string[]
   ): VerifiedResponse {
     const confidence = this.computeConfidence(result);
     const warnings = this.collectWarnings(result);
     const sources =
-      result.toolCalls > 0 && toolNames.length > 0 ? toolNames : [];
+      result.toolCalls > 0 && invokedToolNames.length > 0
+        ? invokedToolNames
+        : [];
     const response = result.response?.trim()
       ? result.response
       : SAFE_FALLBACK_RESPONSE;
 
     return {
+      chartData: [],
       confidence,
       elapsedMs: result.elapsedMs,
       estimatedCostUsd: result.estimatedCostUsd,

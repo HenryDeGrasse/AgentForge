@@ -13,7 +13,11 @@ import type {
   AiChatConfidence,
   AiChatResponse,
   AiChatStatus,
-  ChatMessage
+  ChartDataItem,
+  ChartType,
+  ChatMessage,
+  ConversationDetail,
+  ConversationSummary
 } from './ai-chat-response.interface';
 import type { AssetClassSelectorOption } from './asset-class-selector-option.interface';
 import type { AssetProfileIdentifier } from './asset-profile-identifier.interface';
@@ -117,7 +121,11 @@ export {
   AiChatConfidence,
   AiChatResponse,
   AiChatStatus,
+  ChartDataItem,
+  ChartType,
   ChatMessage,
+  ConversationDetail,
+  ConversationSummary,
   AdminData,
   AdminJobs,
   AdminMarketData,

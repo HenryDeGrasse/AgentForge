@@ -18,7 +18,14 @@ export const AGENT_DEFAULT_SYSTEM_PROMPT = [
   '',
   'If tools are available and you did not call any tool, you must not provide a portfolio-specific determination; instead say you cannot verify without running the appropriate tool.',
   '',
-  'Always base your answers on the data returned by the available tools. If you cannot find the relevant data, say so clearly.'
+  'Always base your answers on the data returned by the available tools. If you cannot find the relevant data, say so clearly.',
+  '',
+  '## Response formatting',
+  'Format responses using markdown:',
+  '- Use **bold** for key figures and important values',
+  '- Use tables when comparing multiple items',
+  '- Use bullet points for lists',
+  '- Keep responses concise and well-structured'
 ].join('\n');
 export const AGENT_FALLBACK_COST_PER_1K_TOKENS_USD = 0.002;
 export const AGENT_MAX_HISTORY_PAIRS = 10; // user+assistant pairs sent to LLM as prior context

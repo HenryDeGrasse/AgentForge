@@ -49,6 +49,7 @@ function buildService({
   agentRun = jest.fn().mockResolvedValue({
     elapsedMs: 100,
     estimatedCostUsd: 0,
+    executedTools: [],
     iterations: 1,
     response: 'ok',
     status: 'completed',
@@ -56,6 +57,7 @@ function buildService({
   }),
   verifierVerify = jest.fn().mockImplementation((r) => ({
     ...r,
+    chartData: [],
     confidence: 'high',
     warnings: [],
     sources: []
@@ -64,6 +66,7 @@ function buildService({
   prismaService = buildPrismaStub()
 } = {}) {
   return new AiService(
+    { extract: jest.fn().mockReturnValue([]) } as any,
     { complete: llmComplete } as LLMClient,
     { getDetails: portfolioGetDetails } as any as PortfolioService,
     prismaService as any as PrismaService,
@@ -86,9 +89,13 @@ describe('AiService', () => {
 
     const verifier = { verify: jest.fn().mockImplementation((r) => r) };
 
+    const { ChartDataExtractorService } =
+      await import('@ghostfolio/api/app/endpoints/ai/chart-data-extractor.service');
+
     const module = await Test.createTestingModule({
       providers: [
         AiService,
+        ChartDataExtractorService,
         { provide: LLM_CLIENT_TOKEN, useValue: llmClient },
         { provide: PortfolioService, useValue: { getDetails: jest.fn() } },
         { provide: PrismaService, useValue: buildPrismaStub() },
@@ -130,6 +137,12 @@ describe('AiService', () => {
     const rawResult = {
       elapsedMs: 500,
       estimatedCostUsd: 0.001,
+      executedTools: [
+        {
+          toolName: 'get_portfolio_summary',
+          envelope: { status: 'success', data: {} }
+        }
+      ],
       iterations: 2,
       response: 'Scoped response',
       status: 'completed' as const,
@@ -138,6 +151,7 @@ describe('AiService', () => {
 
     const verifiedResult: VerifiedResponse = {
       ...rawResult,
+      chartData: [],
       confidence: 'high',
       sources: ['get_portfolio_summary'],
       warnings: []
@@ -171,6 +185,7 @@ describe('AiService', () => {
 
   it('passes empty toolNames array to verifier when none provided', async () => {
     const verify = jest.fn().mockReturnValue({
+      chartData: [],
       confidence: 'medium',
       sources: [],
       warnings: [
@@ -187,6 +202,7 @@ describe('AiService', () => {
 
   it('returns verified response with confidence and warnings from verifier', async () => {
     const verify = jest.fn().mockReturnValue({
+      chartData: [],
       confidence: 'low',
       elapsedMs: 200,
       estimatedCostUsd: 0,
@@ -202,6 +218,7 @@ describe('AiService', () => {
       agentRun: jest.fn().mockResolvedValue({
         elapsedMs: 200,
         estimatedCostUsd: 0,
+        executedTools: [],
         iterations: 1,
         response: '',
         status: 'failed',
@@ -276,6 +293,7 @@ describe('AiService', () => {
     const run = jest.fn().mockResolvedValue({
       elapsedMs: 100,
       estimatedCostUsd: 0,
+      executedTools: [],
       iterations: 1,
       response: 'Your portfolio looks great.',
       status: 'completed',
@@ -297,6 +315,7 @@ describe('AiService', () => {
     const run = jest.fn().mockResolvedValue({
       elapsedMs: 100,
       estimatedCostUsd: 0,
+      executedTools: [],
       iterations: 1,
       response: 'Compliance check complete.',
       status: 'completed',
@@ -349,6 +368,7 @@ describe('AiService', () => {
     const run = jest.fn().mockResolvedValue({
       elapsedMs: 100,
       estimatedCostUsd: 0,
+      executedTools: [],
       iterations: 1,
       response: 'How can I help with your portfolio?',
       status: 'completed',

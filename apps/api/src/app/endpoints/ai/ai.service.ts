@@ -4,6 +4,7 @@ import {
   AGENT_MAX_HISTORY_PAIRS
 } from '@ghostfolio/api/app/endpoints/ai/agent/agent.constants';
 import { ReactAgentService } from '@ghostfolio/api/app/endpoints/ai/agent/react-agent.service';
+import { ChartDataExtractorService } from '@ghostfolio/api/app/endpoints/ai/chart-data-extractor.service';
 import { toToolNameArray } from '@ghostfolio/api/app/endpoints/ai/chat-conversation.service';
 import { VerifiedResponse } from '@ghostfolio/api/app/endpoints/ai/contracts/final-response.schema';
 import {
@@ -49,6 +50,7 @@ export class AiService {
   ];
 
   public constructor(
+    private readonly chartDataExtractorService: ChartDataExtractorService,
     @Inject(LLM_CLIENT_TOKEN)
     private readonly llmClient: LLMClient,
     private readonly portfolioService: PortfolioService,
@@ -187,10 +189,21 @@ export class AiService {
     });
 
     // 4. Verify response
+    // Derive invoked tools from agent result (not requested list)
+    const invokedToolNames = [
+      ...new Set((result.executedTools ?? []).map((t) => t.toolName))
+    ];
+
     const verified = this.responseVerifierService.verify(
       result,
-      sanitizedToolNames ?? []
+      invokedToolNames
     );
+
+    // 4b. Extract chart data from tool results
+    const chartData = this.chartDataExtractorService.extract(
+      result.executedTools ?? []
+    );
+    verified.chartData = chartData;
 
     // 5. Normalise title (collapse whitespace, truncate)
     const title = message.replace(/\s+/g, ' ').trim().slice(0, 60);
@@ -232,6 +245,7 @@ export class AiService {
         // Assistant message second
         await tx.chatMessage.create({
           data: {
+            chartData: verified.chartData as any,
             content: verified.response,
             conversationId: convId,
             estimatedCostUsd: verified.estimatedCostUsd,
@@ -569,6 +583,7 @@ export class AiService {
     userId: string;
   }): Promise<ChatResponse> {
     const verified: VerifiedResponse = {
+      chartData: [],
       confidence: 'high',
       elapsedMs: 0,
       estimatedCostUsd: 0,
@@ -630,11 +645,9 @@ export class AiService {
    * Validates toolNames against the allowlist. Returns undefined if input is
    * undefined (agent uses all tools). Throws 400 for unknown tool names.
    */
-  private sanitizeToolNames(
-    toolNames: string[] | undefined
-  ): string[] | undefined {
+  private sanitizeToolNames(toolNames: string[] | undefined): string[] {
     if (!toolNames) {
-      return undefined;
+      return [...AGENT_ALLOWED_TOOL_NAMES];
     }
 
     // Trim + de-dupe
@@ -652,7 +665,7 @@ export class AiService {
       );
     }
 
-    return normalized;
+    return normalized.length > 0 ? normalized : [...AGENT_ALLOWED_TOOL_NAMES];
   }
 
   private escapeMarkdownCell(value: unknown) {

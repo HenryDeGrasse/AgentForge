@@ -27,6 +27,8 @@ import {
   ActivityResponse,
   AiChatResponse,
   AiPromptResponse,
+  ConversationDetail,
+  ConversationSummary,
   ApiKeyResponse,
   AssetProfileIdentifier,
   AssetResponse,
@@ -868,16 +870,31 @@ export class DataService {
   }
 
   public postAiChat({
+    conversationId,
     message,
     toolNames
   }: {
+    conversationId?: string;
     message: string;
     toolNames?: string[];
   }) {
     return this.http.post<AiChatResponse>('/api/v1/ai/chat', {
       message,
+      ...(conversationId ? { conversationId } : {}),
       ...(toolNames?.length ? { toolNames } : {})
     });
+  }
+
+  public fetchAiConversations() {
+    return this.http.get<ConversationSummary[]>('/api/v1/ai/conversations');
+  }
+
+  public fetchAiConversation(id: string) {
+    return this.http.get<ConversationDetail>(`/api/v1/ai/conversations/${id}`);
+  }
+
+  public deleteAiConversation(id: string) {
+    return this.http.delete<void>(`/api/v1/ai/conversations/${id}`);
   }
 
   public updateInfo() {

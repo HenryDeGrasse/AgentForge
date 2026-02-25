@@ -1,4 +1,5 @@
 import { AgentGuardrailType } from '@ghostfolio/api/app/endpoints/ai/agent/react-agent.service';
+import type { ChartDataItem } from '@ghostfolio/common/interfaces';
 
 export type ConfidenceLevel = 'high' | 'low' | 'medium';
 
@@ -9,6 +10,8 @@ export type ResponseStatus = 'completed' | 'failed' | 'partial';
  * Every field is required so the frontend never sees undefined.
  */
 export interface VerifiedResponse {
+  /** Extracted chart data for inline rendering. */
+  chartData: ChartDataItem[];
   /** Calibrated confidence based on status and tool usage. */
   confidence: ConfidenceLevel;
   /** Wall-clock time from agent start to verification complete. */

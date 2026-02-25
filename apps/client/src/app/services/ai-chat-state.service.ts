@@ -1,15 +1,13 @@
-import { AiChatResponse, ChatMessage } from '@ghostfolio/common/interfaces';
+import {
+  AiChatResponse,
+  ChatMessage,
+  ConversationDetail
+} from '@ghostfolio/common/interfaces';
 import { DataService } from '@ghostfolio/ui/services';
 
 import { Injectable, OnDestroy } from '@angular/core';
-import { BehaviorSubject, Subject } from 'rxjs';
+import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-
-const DEFAULT_TOOL_NAMES = [
-  'get_portfolio_summary',
-  'get_transaction_history',
-  'analyze_risk'
-];
 
 @Injectable({ providedIn: 'root' })
 export class AiChatStateService implements OnDestroy {
@@ -17,6 +15,11 @@ export class AiChatStateService implements OnDestroy {
   public readonly isOpen$ = new BehaviorSubject<boolean>(false);
   public readonly isLoading$ = new BehaviorSubject<boolean>(false);
   public readonly error$ = new BehaviorSubject<string | null>(null);
+  public readonly conversationId$ = new BehaviorSubject<string | null>(null);
+
+  private readonly messageSentSubject = new Subject<void>();
+  public readonly messageSent$: Observable<void> =
+    this.messageSentSubject.asObservable();
 
   private unsubscribeSubject = new Subject<void>();
 
@@ -50,8 +53,13 @@ export class AiChatStateService implements OnDestroy {
     this.error$.next(null);
     this.isLoading$.next(true);
 
+    const conversationId = this.conversationId$.getValue();
+
     this.dataService
-      .postAiChat({ message: trimmed, toolNames: DEFAULT_TOOL_NAMES })
+      .postAiChat({
+        message: trimmed,
+        ...(conversationId ? { conversationId } : {})
+      })
       .pipe(takeUntil(this.unsubscribeSubject))
       .subscribe({
         error: () => {
@@ -59,9 +67,15 @@ export class AiChatStateService implements OnDestroy {
           this.isLoading$.next(false);
         },
         next: (response: AiChatResponse) => {
+          // Store conversationId from first response
+          if (response.conversationId) {
+            this.conversationId$.next(response.conversationId);
+          }
+
           this.messages$.next([
             ...this.messages$.getValue(),
             {
+              chartData: response.chartData,
               confidence: response.confidence,
               role: 'assistant',
               sources: response.sources,
@@ -70,12 +84,49 @@ export class AiChatStateService implements OnDestroy {
             }
           ]);
           this.isLoading$.next(false);
+          this.messageSentSubject.next();
         }
       });
   }
 
+  public loadConversation(id: string): void {
+    this.isLoading$.next(true);
+    this.error$.next(null);
+
+    this.dataService
+      .fetchAiConversation(id)
+      .pipe(takeUntil(this.unsubscribeSubject))
+      .subscribe({
+        error: () => {
+          this.error$.next('Failed to load conversation.');
+          this.isLoading$.next(false);
+        },
+        next: (detail: ConversationDetail) => {
+          this.conversationId$.next(detail.id);
+          this.messages$.next(
+            detail.messages.map((m) => ({
+              chartData: m.chartData,
+              confidence: undefined,
+              role: m.role,
+              sources:
+                m.role === 'assistant' ? m.requestedToolNames : undefined,
+              text: m.content
+            }))
+          );
+          this.isLoading$.next(false);
+        }
+      });
+  }
+
+  public newConversation(): void {
+    this.messages$.next([]);
+    this.conversationId$.next(null);
+    this.error$.next(null);
+  }
+
   public clearConversation(): void {
     this.messages$.next([]);
+    this.conversationId$.next(null);
     this.error$.next(null);
   }
 

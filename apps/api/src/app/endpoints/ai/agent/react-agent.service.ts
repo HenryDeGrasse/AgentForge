@@ -15,6 +15,7 @@ import {
   LLMToolDefinition
 } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
 import { ToolRegistry } from '@ghostfolio/api/app/endpoints/ai/tools/tool.registry';
+import { ToolResultEnvelope } from '@ghostfolio/api/app/endpoints/ai/tools/tool.types';
 
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 
@@ -44,9 +45,15 @@ export interface ReactAgentRunInput {
   userId: string;
 }
 
+export interface ExecutedToolEntry {
+  envelope: ToolResultEnvelope;
+  toolName: string;
+}
+
 export interface ReactAgentRunResult {
   elapsedMs: number;
   estimatedCostUsd: number;
+  executedTools: ExecutedToolEntry[];
   guardrail?: AgentGuardrailType;
   iterations: number;
   response: string;
@@ -82,6 +89,7 @@ export class ReactAgentService {
     if (this.isCircuitBreakerOpen(guardrails, startedAt)) {
       return this.buildGuardrailResult({
         estimatedCostUsd: 0,
+        executedTools: [],
         guardrail: 'CIRCUIT_BREAKER',
         iterations: 0,
         startedAt,
@@ -113,6 +121,7 @@ export class ReactAgentService {
         };
       }
     );
+    const executedToolResults: ExecutedToolEntry[] = [];
     let estimatedCostUsd = 0;
     let escalationAttempted = false;
     let escalationPending = false;
@@ -132,6 +141,7 @@ export class ReactAgentService {
 
           return this.buildGuardrailResult({
             estimatedCostUsd,
+            executedTools: executedToolResults,
             guardrail: 'TIMEOUT',
             iterations: iterationCount,
             startedAt,
@@ -144,6 +154,7 @@ export class ReactAgentService {
 
           return this.buildGuardrailResult({
             estimatedCostUsd,
+            executedTools: executedToolResults,
             guardrail: 'COST_LIMIT',
             iterations: iterationCount,
             startedAt,
@@ -179,6 +190,7 @@ export class ReactAgentService {
 
           return this.buildGuardrailResult({
             estimatedCostUsd,
+            executedTools: executedToolResults,
             guardrail: 'COST_LIMIT',
             iterations: iterationCount,
             startedAt,
@@ -196,15 +208,20 @@ export class ReactAgentService {
           });
 
           for (const toolCall of completion.toolCalls) {
-            const toolMessage = await this.executeToolCall({
-              startedAt,
-              timeoutMs: guardrails.timeoutMs,
-              toolCall,
-              toolRegistry,
-              userId: input.userId
-            });
+            const { envelope, message: toolMessage } =
+              await this.executeToolCall({
+                startedAt,
+                timeoutMs: guardrails.timeoutMs,
+                toolCall,
+                toolRegistry,
+                userId: input.userId
+              });
 
             messages.push(toolMessage);
+            executedToolResults.push({
+              envelope,
+              toolName: toolCall.name
+            });
           }
 
           continue;
@@ -261,6 +278,7 @@ export class ReactAgentService {
           return {
             elapsedMs: Date.now() - startedAt,
             estimatedCostUsd: this.roundCost(estimatedCostUsd),
+            executedTools: executedToolResults,
             iterations: iterationCount,
             response: completion.text.trim(),
             status: 'completed',
@@ -273,6 +291,7 @@ export class ReactAgentService {
 
       return this.buildGuardrailResult({
         estimatedCostUsd,
+        executedTools: executedToolResults,
         guardrail: 'MAX_ITERATIONS',
         iterations: guardrails.maxIterations,
         startedAt,
@@ -284,6 +303,7 @@ export class ReactAgentService {
 
         return this.buildGuardrailResult({
           estimatedCostUsd,
+          executedTools: executedToolResults,
           guardrail: 'TIMEOUT',
           iterations: iterationCount,
           startedAt,
@@ -302,6 +322,7 @@ export class ReactAgentService {
       return {
         elapsedMs: Date.now() - startedAt,
         estimatedCostUsd: this.roundCost(estimatedCostUsd),
+        executedTools: executedToolResults,
         iterations: iterationCount,
         response:
           'The AI assistant is temporarily unavailable. Please try again shortly.',
@@ -313,12 +334,14 @@ export class ReactAgentService {
 
   private buildGuardrailResult({
     estimatedCostUsd,
+    executedTools,
     guardrail,
     iterations,
     startedAt,
     toolCalls
   }: {
     estimatedCostUsd: number;
+    executedTools: ExecutedToolEntry[];
     guardrail: AgentGuardrailType;
     iterations: number;
     startedAt: number;
@@ -338,6 +361,7 @@ export class ReactAgentService {
     return {
       elapsedMs: Date.now() - startedAt,
       estimatedCostUsd: this.roundCost(estimatedCostUsd),
+      executedTools,
       guardrail,
       iterations,
       response: responseByGuardrail[guardrail],
@@ -358,7 +382,7 @@ export class ReactAgentService {
     toolCall: LLMToolCall;
     toolRegistry: ToolRegistry;
     userId: string;
-  }): Promise<LLMMessage> {
+  }): Promise<{ envelope: ToolResultEnvelope; message: LLMMessage }> {
     try {
       const toolResponse = await this.withTimeout(
         toolRegistry.execute({
@@ -371,28 +395,47 @@ export class ReactAgentService {
         this.getRemainingTime(startedAt, timeoutMs)
       );
 
+      // Normalise to ToolResultEnvelope
+      const envelope: ToolResultEnvelope =
+        typeof toolResponse === 'object' &&
+        toolResponse !== null &&
+        'status' in toolResponse
+          ? (toolResponse as unknown as ToolResultEnvelope)
+          : {
+              data: toolResponse as unknown as Record<string, unknown>,
+              status: 'success'
+            };
+
       return {
-        content: JSON.stringify(toolResponse),
-        name: toolCall.name,
-        role: 'tool',
-        toolCallId: toolCall.id
+        envelope,
+        message: {
+          content: JSON.stringify(toolResponse),
+          name: toolCall.name,
+          role: 'tool',
+          toolCallId: toolCall.id
+        }
       };
     } catch (error) {
       if (error instanceof AgentTimeoutError) {
         throw error;
       }
 
+      const errorEnvelope: ToolResultEnvelope = {
+        error: {
+          code: 'tool_registry_failure',
+          message: this.getErrorMessage(error)
+        },
+        status: 'error'
+      };
+
       return {
-        content: JSON.stringify({
-          error: {
-            code: 'tool_registry_failure',
-            message: this.getErrorMessage(error)
-          },
-          status: 'error'
-        }),
-        name: toolCall.name,
-        role: 'tool',
-        toolCallId: toolCall.id
+        envelope: errorEnvelope,
+        message: {
+          content: JSON.stringify(errorEnvelope),
+          name: toolCall.name,
+          role: 'tool',
+          toolCallId: toolCall.id
+        }
       };
     }
   }

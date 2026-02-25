@@ -1,4 +1,5 @@
 import { PrismaService } from '@ghostfolio/api/services/prisma/prisma.service';
+import type { ChartDataItem } from '@ghostfolio/common/interfaces';
 
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ChatConversation, ChatMessage, ChatRole } from '@prisma/client';
@@ -24,6 +25,7 @@ export interface ConversationDetail {
   createdAt: Date;
   id: string;
   messages: {
+    chartData?: ChartDataItem[];
     content: string;
     createdAt: Date;
     id: string;
@@ -81,6 +83,7 @@ export class ChatConversationService {
         messages: {
           orderBy: { seq: 'asc' },
           select: {
+            chartData: true,
             content: true,
             createdAt: true,
             id: true,
@@ -102,6 +105,9 @@ export class ChatConversationService {
       createdAt: conversation.createdAt,
       id: conversation.id,
       messages: conversation.messages.map((m) => ({
+        chartData: Array.isArray(m.chartData)
+          ? (m.chartData as unknown as ChartDataItem[])
+          : undefined,
         content: m.content,
         createdAt: m.createdAt,
         id: m.id,

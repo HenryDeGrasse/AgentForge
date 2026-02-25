@@ -302,6 +302,7 @@ model ChatConversation {
 }
 
 model ChatMessage {
+  chartData          Json?
   content            String
   conversation       ChatConversation @relation(fields: [conversationId], onDelete: Cascade, references: [id])
   conversationId     String

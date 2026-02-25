@@ -93,7 +93,10 @@ describe('Ai chat integration', () => {
       }
     } as unknown as PrismaService;
 
+    const { ChartDataExtractorService: ChartExtractor } =
+      await import('@ghostfolio/api/app/endpoints/ai/chart-data-extractor.service');
     const aiService = new AiService(
+      new ChartExtractor(),
       llmClient,
       {
         getDetails: jest.fn()

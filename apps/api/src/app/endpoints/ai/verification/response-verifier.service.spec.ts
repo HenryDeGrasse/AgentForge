@@ -11,6 +11,7 @@ import { ResponseVerifierService } from './response-verifier.service';
 const BASE_RESULT: ReactAgentRunResult = {
   elapsedMs: 1200,
   estimatedCostUsd: 0.001,
+  executedTools: [],
   iterations: 2,
   response: 'Your portfolio looks diversified.',
   status: 'completed',
