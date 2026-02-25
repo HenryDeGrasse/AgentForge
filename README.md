@@ -170,6 +170,10 @@ docker compose -f docker/docker-compose.build.yml up -d
 
 Ghostfolio is available for various home server systems, including [CasaOS](https://github.com/bigbeartechworld/big-bear-casaos), [Home Assistant](https://github.com/lildude/ha-addon-ghostfolio), [Runtipi](https://www.runtipi.io/docs/apps-available), [TrueCharts](https://truecharts.org/charts/stable/ghostfolio), [Umbrel](https://apps.umbrel.com/app/ghostfolio), and [Unraid](https://unraid.net/community/apps?q=ghostfolio).
 
+## AI Agent Eval Results
+
+For detailed AI agent evaluation results, test coverage, and how to run evals locally, see [docs/AI_EVAL_RESULTS.md](./docs/AI_EVAL_RESULTS.md).
+
 ## Development
 
 For detailed information on the environment setup and development process, please refer to [DEVELOPMENT.md](./DEVELOPMENT.md).
