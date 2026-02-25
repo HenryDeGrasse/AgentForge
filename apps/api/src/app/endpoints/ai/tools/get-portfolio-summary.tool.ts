@@ -1,4 +1,8 @@
 import {
+  PORTFOLIO_SUMMARY_INPUT_SCHEMA,
+  PORTFOLIO_SUMMARY_OUTPUT_SCHEMA
+} from '@ghostfolio/api/app/endpoints/ai/tools/schemas';
+import {
   ToolDefinition,
   ToolExecutionContext,
   ToolJsonSchema
@@ -56,142 +60,11 @@ export class GetPortfolioSummaryTool implements ToolDefinition<
   public readonly description =
     'Return deterministic portfolio totals, allocation percentages and top holdings for the authenticated user.';
 
-  public readonly inputSchema: ToolJsonSchema = {
-    additionalProperties: false,
-    properties: {
-      topN: {
-        maximum: MAX_TOP_N,
-        minimum: MIN_TOP_N,
-        type: 'number'
-      }
-    },
-    type: 'object'
-  };
+  public readonly inputSchema: ToolJsonSchema = PORTFOLIO_SUMMARY_INPUT_SCHEMA;
 
   public readonly name = 'get_portfolio_summary';
 
-  public readonly outputSchema: ToolJsonSchema = {
-    additionalProperties: false,
-    properties: {
-      baseCurrency: {
-        type: 'string'
-      },
-      generatedAt: {
-        type: 'string'
-      },
-      latestActivityDate: {
-        type: 'string'
-      },
-      snapshotCreatedAt: {
-        type: 'string'
-      },
-      topHoldings: {
-        items: {
-          additionalProperties: false,
-          properties: {
-            allocationInHoldings: {
-              type: 'number'
-            },
-            allocationInPortfolio: {
-              type: 'number'
-            },
-            assetClass: {
-              type: 'string'
-            },
-            currency: {
-              type: 'string'
-            },
-            dataSource: {
-              type: 'string'
-            },
-            marketPrice: {
-              type: 'number'
-            },
-            name: {
-              type: 'string'
-            },
-            quantity: {
-              type: 'number'
-            },
-            symbol: {
-              type: 'string'
-            },
-            valueInBaseCurrency: {
-              type: 'number'
-            }
-          },
-          required: [
-            'allocationInHoldings',
-            'allocationInPortfolio',
-            'assetClass',
-            'currency',
-            'dataSource',
-            'marketPrice',
-            'name',
-            'quantity',
-            'symbol',
-            'valueInBaseCurrency'
-          ],
-          type: 'object'
-        },
-        type: 'array'
-      },
-      totals: {
-        additionalProperties: false,
-        properties: {
-          activityCount: {
-            type: 'number'
-          },
-          cashInBaseCurrency: {
-            type: 'number'
-          },
-          holdingsCount: {
-            type: 'number'
-          },
-          holdingsValueInBaseCurrency: {
-            type: 'number'
-          },
-          totalPortfolioValueInBaseCurrency: {
-            type: 'number'
-          }
-        },
-        required: [
-          'activityCount',
-          'cashInBaseCurrency',
-          'holdingsCount',
-          'holdingsValueInBaseCurrency',
-          'totalPortfolioValueInBaseCurrency'
-        ],
-        type: 'object'
-      },
-      warnings: {
-        items: {
-          additionalProperties: false,
-          properties: {
-            code: {
-              type: 'string'
-            },
-            message: {
-              type: 'string'
-            }
-          },
-          required: ['code', 'message'],
-          type: 'object'
-        },
-        type: 'array'
-      }
-    },
-    required: [
-      'baseCurrency',
-      'generatedAt',
-      'latestActivityDate',
-      'snapshotCreatedAt',
-      'topHoldings',
-      'totals',
-      'warnings'
-    ],
-    type: 'object'
-  };
+  public readonly outputSchema: ToolJsonSchema = PORTFOLIO_SUMMARY_OUTPUT_SCHEMA;
 
   public constructor(
     private readonly portfolioService: PortfolioService,

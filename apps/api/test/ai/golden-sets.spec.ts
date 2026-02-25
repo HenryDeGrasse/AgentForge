@@ -1,55 +1,53 @@
+/**
+ * Golden Sets — Live Tier (real LLM)
+ *
+ * Pre-merge runner: gated by RUN_GOLDEN_EVALS=1.
+ * Only runs liveEligible cases against the live API.
+ * Budget: <5min wall clock, ~$0.10 per run.
+ *
+ * Cases are loaded at MODULE SCOPE.
+ */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
   assertChatResponseShape,
   assertEvalInvariants,
-  VerifiedResponseLike
+  assertLiveSources,
+  type VerifiedResponseLike
 } from './eval-assert';
+import { validateEvalSuite } from './eval-case.schema';
 import { resolveMvpEvalBaseUrl } from './mvp-evals.config';
 
+// ─── Configuration ─────────────────────────────────────────────────────────────
+
+const BASE_URL = resolveMvpEvalBaseUrl();
+const RUN_GOLDEN_EVALS = process.env.RUN_GOLDEN_EVALS === '1';
+
+const describeIfEnabled = RUN_GOLDEN_EVALS ? describe : describe.skip;
+
+// ─── Module-scope case loading ─────────────────────────────────────────────────
+
+const allCases = validateEvalSuite(
+  JSON.parse(readFileSync(join(__dirname, 'golden-sets.json'), 'utf8'))
+);
+
+const liveCases = allCases.filter((c) => c.liveEligible);
+
+// ─── Types ─────────────────────────────────────────────────────────────────────
+
 type EvalProfile = 'empty' | 'rich';
-
-interface ChatRequestPayload {
-  message: string;
-  toolNames: string[];
-}
-
-/**
- * Legacy eval case shape — kept for backward compatibility with mvp-evals.json.
- * New evals use EvalCaseDefinition from eval-case.schema.ts.
- */
-interface LegacyEvalCaseDefinition {
-  expect: {
-    minConfidence: string;
-    minToolCalls: number;
-    mustIncludeAny: string[];
-    mustNotIncludeAny: string[];
-    requiredSources: string[];
-    status: string;
-  };
-  id: string;
-  profile: EvalProfile;
-  request: ChatRequestPayload;
-}
 
 interface UserCreateResponse {
   accessToken: string;
   authToken: string;
 }
 
-const BASE_URL = resolveMvpEvalBaseUrl();
-const RUN_MVP_EVALS = process.env.RUN_MVP_EVALS === '1';
+// ─── Suite ─────────────────────────────────────────────────────────────────────
 
-const describeIfEnabled = RUN_MVP_EVALS ? describe : describe.skip;
+jest.setTimeout(120_000);
 
-const evalCases = JSON.parse(
-  readFileSync(join(__dirname, 'mvp-evals.json'), 'utf8')
-) as LegacyEvalCaseDefinition[];
-
-jest.setTimeout(240_000);
-
-describeIfEnabled('MVP eval pack', () => {
+describeIfEnabled('Golden Sets (live)', () => {
   const credentialsByProfile: Record<
     EvalProfile,
     { accessToken: string; authToken: string }
@@ -67,6 +65,8 @@ describeIfEnabled('MVP eval pack', () => {
     toolCalls: number;
   }[] = [];
 
+  let totalCostUsd = 0;
+
   beforeAll(async () => {
     await assertApiHealthy();
 
@@ -80,8 +80,19 @@ describeIfEnabled('MVP eval pack', () => {
     if (summaryRows.length) {
       // eslint-disable-next-line no-console
       console.table(summaryRows);
+
+      // eslint-disable-next-line no-console
+      console.log(`Total cost: $${totalCostUsd.toFixed(4)}`);
     }
 
+    // Cost budget guard
+    if (totalCostUsd > 0.25) {
+      throw new Error(
+        `Golden Sets live suite exceeded cost budget: $${totalCostUsd.toFixed(4)} > $0.25`
+      );
+    }
+
+    // Cleanup users
     for (const profile of Object.keys(credentialsByProfile) as EvalProfile[]) {
       const { accessToken, authToken } = credentialsByProfile[profile];
 
@@ -96,12 +107,12 @@ describeIfEnabled('MVP eval pack', () => {
           path: '/user'
         });
       } catch {
-        // Best-effort cleanup; do not fail the suite on teardown errors
+        // Best-effort cleanup
       }
     }
   });
 
-  for (const evalCase of evalCases) {
+  for (const evalCase of liveCases) {
     it(evalCase.id, async () => {
       const authToken = credentialsByProfile[evalCase.profile].authToken;
       const startedAt = Date.now();
@@ -115,7 +126,11 @@ describeIfEnabled('MVP eval pack', () => {
           path: '/ai/chat'
         });
 
-        assertLegacyEvalInvariants(evalCase, response);
+        assertChatResponseShape(response);
+        assertEvalInvariants(evalCase, response);
+        assertLiveSources(response, evalCase);
+
+        totalCostUsd += response.estimatedCostUsd;
 
         summaryRows.push({
           caseId: evalCase.id,
@@ -126,6 +141,8 @@ describeIfEnabled('MVP eval pack', () => {
           toolCalls: response.toolCalls
         });
       } catch (error) {
+        totalCostUsd += response?.estimatedCostUsd ?? 0;
+
         summaryRows.push({
           caseId: evalCase.id,
           elapsedMs: response?.elapsedMs ?? Date.now() - startedAt,
@@ -141,48 +158,16 @@ describeIfEnabled('MVP eval pack', () => {
   }
 });
 
+// ─── HTTP Helpers ──────────────────────────────────────────────────────────────
+
 async function assertApiHealthy() {
-  const response = await fetch(`${BASE_URL}/health`, {
-    method: 'GET'
-  });
+  const response = await fetch(`${BASE_URL}/health`, { method: 'GET' });
 
   if (!response.ok) {
     throw new Error(
-      `MVP evals require a healthy API at ${BASE_URL}. Received ${response.status}.`
+      `Golden Sets evals require a healthy API at ${BASE_URL}. Received ${response.status}.`
     );
   }
-}
-
-/**
- * Legacy adapter: wraps the old eval case shape to be compatible with the shared
- * assertEvalInvariants. Maps requiredSources → requiredTools.
- */
-function assertLegacyEvalInvariants(
-  evalCase: LegacyEvalCaseDefinition,
-  response: VerifiedResponseLike
-) {
-  assertChatResponseShape(response);
-
-  // Map legacy shape to new shape for shared assertion
-  const adapted = {
-    ...evalCase,
-    expect: {
-      ...evalCase.expect,
-      requiredTools: evalCase.expect.requiredSources
-    },
-    liveEligible: true,
-    meta: {
-      category: 'single-tool' as const,
-      description: evalCase.id,
-      difficulty: 'basic' as const,
-      stage: 'golden' as const,
-      subcategory: 'portfolio-summary' as const
-    },
-    profile: evalCase.profile,
-    request: evalCase.request
-  };
-
-  assertEvalInvariants(adapted as any, response);
 }
 
 async function createUserCredentials() {
@@ -193,7 +178,7 @@ async function createUserCredentials() {
 
   if (!response.authToken || !response.accessToken) {
     throw new Error(
-      'Expected /user to return authToken and accessToken for MVP eval setup.'
+      'Expected /user to return authToken and accessToken for eval setup.'
     );
   }
 
@@ -201,7 +186,6 @@ async function createUserCredentials() {
 }
 
 async function seedRichPortfolio(authToken: string) {
-  // MANUAL data source auto-creates asset profiles for arbitrary symbols
   const symbols = [
     '11111111-1111-4111-8111-111111111111',
     '22222222-2222-4222-8222-222222222222',
@@ -209,24 +193,20 @@ async function seedRichPortfolio(authToken: string) {
     '44444444-4444-4444-8444-444444444444'
   ];
 
-  const activities = Array.from({ length: 30 }, (_, index) => {
-    return {
-      currency: 'USD',
-      dataSource: 'MANUAL',
-      date: new Date(Date.UTC(2025, 0, index + 1)).toISOString(),
-      fee: 0,
-      quantity: (index % 3) + 1,
-      symbol: symbols[index % symbols.length],
-      type: 'BUY',
-      unitPrice: 100 + (index % 5) * 15
-    };
-  });
+  const activities = Array.from({ length: 30 }, (_, index) => ({
+    currency: 'USD',
+    dataSource: 'MANUAL',
+    date: new Date(Date.UTC(2025, 0, index + 1)).toISOString(),
+    fee: 0,
+    quantity: (index % 3) + 1,
+    symbol: symbols[index % symbols.length],
+    type: 'BUY',
+    unitPrice: 100 + (index % 5) * 15
+  }));
 
   await postJson({
     authToken,
-    body: {
-      activities
-    },
+    body: { activities },
     path: '/import'
   });
 }
@@ -273,7 +253,6 @@ async function postJson<T>({
   });
 
   const rawBody = await response.text();
-
   let payload: unknown = {};
 
   try {
