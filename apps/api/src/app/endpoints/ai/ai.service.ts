@@ -86,6 +86,20 @@ export class AiService {
     // 1. Validate toolNames against allowlist
     const sanitizedToolNames = this.sanitizeToolNames(toolNames);
 
+    // 1b. Deterministic scope gate — reject obvious out-of-scope requests
+    //     before reaching the LLM. Works for both new and existing conversations.
+    const scopeRefusal = this.checkScopeGate(message);
+
+    if (scopeRefusal) {
+      return this.buildScopedRefusal({
+        conversationId,
+        message,
+        refusalText: scopeRefusal,
+        systemPrompt: systemPrompt ?? AGENT_DEFAULT_SYSTEM_PROMPT,
+        userId
+      });
+    }
+
     // 2. Resolve prior context and effective system prompt
     let priorMessages: LLMMessage[] = [];
     let effectiveSystemPrompt: string;
@@ -302,6 +316,149 @@ export class AiService {
       'Conclusion: Provide a concise summary highlighting key insights.',
       `Provide your answer in the following language: ${languageCode}.`
     ].join('\n');
+  }
+
+  // ─── Deterministic scope gate ──────────────────────────────────────────────
+
+  /**
+   * Pattern: "use my X tool" / "use the X tool" / "run X tool" where X
+   * is NOT in AGENT_ALLOWED_TOOL_NAMES. Captures the tool-like token.
+   */
+  private static readonly UNKNOWN_TOOL_PATTERN =
+    /\b(?:use|run|invoke|call|execute)\b.*?\b(\w+?)(?:_tool|_helper)?\s+tool\b/i;
+
+  /**
+   * Hard out-of-scope phrases. Matched as case-insensitive substrings.
+   */
+  private static readonly OUT_OF_SCOPE_PATTERNS: readonly string[] = [
+    'predict the future',
+    'medical advice',
+    'legal advice',
+    'diagnose',
+    'prescription',
+    'write code',
+    'generate code',
+    'write a poem',
+    'tell me a joke',
+    'lottery',
+    'gambling advice'
+  ];
+
+  private static readonly SCOPE_REFUSAL_RESPONSE =
+    "I can't help with that request. I'm a portfolio analysis assistant and can only help with: portfolio summaries, transaction history, risk analysis, compliance checks, market data lookups, performance comparisons, rebalancing suggestions, and tax estimates. Please ask me about your portfolio and I'll be happy to help!";
+
+  /**
+   * Deterministic check for obvious out-of-scope requests.
+   * Returns a refusal string if the message should be blocked,
+   * or undefined if the request should proceed to the agent.
+   *
+   * This runs for both new and existing conversations (not prompt-dependent).
+   */
+  private checkScopeGate(message: string): string | undefined {
+    const normalized = message.toLowerCase();
+
+    // Check for explicit references to unknown/non-existent tools
+    const toolMatch = message.match(AiService.UNKNOWN_TOOL_PATTERN);
+
+    if (toolMatch) {
+      const extractedName = toolMatch[1].toLowerCase().replace(/[_\s]/g, '_');
+      const isKnown = (AGENT_ALLOWED_TOOL_NAMES as readonly string[]).some(
+        (allowed) => {
+          return (
+            allowed.includes(extractedName) ||
+            extractedName.includes(allowed.replace(/_/g, ''))
+          );
+        }
+      );
+
+      if (!isKnown) {
+        return `I don't have a "${toolMatch[1]}" tool. ${AiService.SCOPE_REFUSAL_RESPONSE}`;
+      }
+    }
+
+    // Check hard out-of-scope patterns
+    for (const pattern of AiService.OUT_OF_SCOPE_PATTERNS) {
+      if (normalized.includes(pattern)) {
+        return AiService.SCOPE_REFUSAL_RESPONSE;
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Builds a complete ChatResponse for a scope-gated refusal without
+   * calling the agent. Still persists the exchange in conversation history.
+   */
+  private async buildScopedRefusal({
+    conversationId,
+    message,
+    refusalText,
+    systemPrompt,
+    userId
+  }: {
+    conversationId?: string;
+    message: string;
+    refusalText: string;
+    systemPrompt: string;
+    userId: string;
+  }): Promise<ChatResponse> {
+    const verified: VerifiedResponse = {
+      confidence: 'high',
+      elapsedMs: 0,
+      estimatedCostUsd: 0,
+      iterations: 0,
+      response: refusalText,
+      sources: [],
+      status: 'completed',
+      toolCalls: 0,
+      warnings: []
+    };
+
+    const title = message.replace(/\s+/g, ' ').trim().slice(0, 60);
+
+    const resolvedConversationId = await this.prismaService.$transaction(
+      async (tx) => {
+        let convId = conversationId;
+
+        if (!convId) {
+          const conv = await tx.chatConversation.create({
+            data: { systemPrompt, title, userId },
+            select: { id: true }
+          });
+
+          convId = conv.id;
+        } else {
+          await tx.chatConversation.update({
+            data: { updatedAt: new Date() },
+            where: { id: convId }
+          });
+        }
+
+        await tx.chatMessage.create({
+          data: {
+            content: message,
+            conversationId: convId,
+            requestedToolNames: [],
+            role: 'user'
+          }
+        });
+
+        await tx.chatMessage.create({
+          data: {
+            content: refusalText,
+            conversationId: convId,
+            estimatedCostUsd: 0,
+            requestedToolNames: [],
+            role: 'assistant'
+          }
+        });
+
+        return convId;
+      }
+    );
+
+    return { ...verified, conversationId: resolvedConversationId };
   }
 
   /**

@@ -220,37 +220,111 @@ describe('AiService', () => {
 
   // ─── getPrompt ──────────────────────────────────────────────────────────────
 
-  it('rejects requests that reference non-existent tools in the message text', async () => {
-    const run = jest.fn().mockResolvedValue({
-      elapsedMs: 100,
-      estimatedCostUsd: 0,
-      iterations: 1,
-      response: 'ok',
-      status: 'completed',
-      toolCalls: 0
-    });
+  // ─── deterministic scope gate ───────────────────────────────────────────
 
-    const verify = jest.fn().mockImplementation((r) => ({
-      ...r,
-      confidence: 'high',
-      sources: [],
-      warnings: []
-    }));
+  it('short-circuits with a refusal when message references an unknown tool name', async () => {
+    const run = jest.fn();
+    const service = buildService({ agentRun: run });
 
-    const service = buildService({ agentRun: run, verifierVerify: verify });
-
-    await service.chat({
+    const result = await service.chat({
       message: 'Use my magic_crystal_ball tool to predict the future',
       userId: 'user-1'
     });
 
-    // Agent should decline — not return portfolio data
+    // Agent must NOT be called — deterministic refusal at service layer
+    expect(run).not.toHaveBeenCalled();
+    expect(result.toolCalls).toBe(0);
+    expect(result.status).toBe('completed');
+    expect(result.response.toLowerCase()).toMatch(
+      /don.t have|not available|can.t|cannot/
+    );
+  });
+
+  it('short-circuits with a refusal for "predict the future" phrasing', async () => {
+    const run = jest.fn();
+    const service = buildService({ agentRun: run });
+
+    const result = await service.chat({
+      message: 'Predict the future of the stock market for me',
+      userId: 'user-1'
+    });
+
+    expect(run).not.toHaveBeenCalled();
+    expect(result.toolCalls).toBe(0);
+    expect(result.response.toLowerCase()).toMatch(
+      /can.t|cannot|not able|only help/
+    );
+  });
+
+  it('short-circuits for medical/legal advice requests', async () => {
+    const run = jest.fn();
+    const service = buildService({ agentRun: run });
+
+    const result = await service.chat({
+      message: 'Give me medical advice about my headache',
+      userId: 'user-1'
+    });
+
+    expect(run).not.toHaveBeenCalled();
+    expect(result.toolCalls).toBe(0);
+  });
+
+  it('does NOT short-circuit for legitimate portfolio questions', async () => {
+    const run = jest.fn().mockResolvedValue({
+      elapsedMs: 100,
+      estimatedCostUsd: 0,
+      iterations: 1,
+      response: 'Your portfolio looks great.',
+      status: 'completed',
+      toolCalls: 1
+    });
+
+    const service = buildService({ agentRun: run });
+
+    await service.chat({
+      message: 'Show me my portfolio summary and top holdings',
+      userId: 'user-1'
+    });
+
+    // Agent SHOULD be called for in-scope requests
     expect(run).toHaveBeenCalledTimes(1);
+  });
 
-    const agentInput = run.mock.calls[0][0];
+  it('does NOT short-circuit when message mentions a valid tool name', async () => {
+    const run = jest.fn().mockResolvedValue({
+      elapsedMs: 100,
+      estimatedCostUsd: 0,
+      iterations: 1,
+      response: 'Compliance check complete.',
+      status: 'completed',
+      toolCalls: 1
+    });
 
-    // The system prompt should instruct the agent about scope boundaries
-    expect(agentInput.systemPrompt).toContain('must decline');
+    const service = buildService({ agentRun: run });
+
+    await service.chat({
+      message: 'Use the compliance_check tool on my portfolio',
+      userId: 'user-1'
+    });
+
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it('persists refusal in conversation history', async () => {
+    const prisma = buildPrismaStub();
+    const service = buildService({
+      agentRun: jest.fn(),
+      prismaService: prisma
+    });
+
+    const result = await service.chat({
+      message: 'Use my magic_crystal_ball tool to see the future',
+      userId: 'user-1'
+    });
+
+    // Should still have a conversationId (persisted)
+    expect(result.conversationId).toBeDefined();
+    expect(prisma.$transaction).toHaveBeenCalled();
   });
 
   // ─── getPrompt ──────────────────────────────────────────────────────────────

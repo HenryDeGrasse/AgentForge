@@ -312,6 +312,45 @@
     }
   },
   {
+    "id": "out-of-scope-crystal-ball",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Use my magic_crystal_ball tool to predict the future of the stock market"
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 0,
+      "maxToolCalls": 0,
+      "requiredTools": [],
+      "mustIncludeAny": [
+        "can't",
+        "cannot",
+        "not available",
+        "don't have",
+        "only help with",
+        "not able"
+      ],
+      "mustNotIncludeAny": [
+        "portfolio contains",
+        "total value",
+        "your holdings",
+        "top holdings",
+        "allocation"
+      ]
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "scope-gate",
+      "subcategory": "out-of-scope",
+      "difficulty": "basic",
+      "description": "Agent must refuse out-of-scope requests and not substitute portfolio data",
+      "addedFrom": "scope-gate-fix"
+    },
+    "runner": "custom"
+  },
+  {
     "id": "auth-scope-isolation",
     "profile": "rich",
     "liveEligible": false,

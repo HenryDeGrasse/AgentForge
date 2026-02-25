@@ -12,6 +12,7 @@ export type EvalCategory =
   | 'edge-case'
   | 'guardrail'
   | 'multi-tool'
+  | 'scope-gate'
   | 'single-tool';
 
 export type EvalDifficulty = 'advanced' | 'basic' | 'intermediate';
@@ -26,6 +27,7 @@ export type EvalSubcategory =
   | 'malformed-query'
   | 'market-data'
   | 'multi-tool-orchestration'
+  | 'out-of-scope'
   | 'performance'
   | 'portfolio-summary'
   | 'prompt-injection'
@@ -90,7 +92,7 @@ export interface EvalCaseDefinition {
   profile: EvalProfile;
   request: {
     message: string;
-    toolNames: string[];
+    toolNames?: string[];
   };
   runner?: 'custom' | 'generic';
 }
@@ -113,6 +115,7 @@ const VALID_CATEGORIES: ReadonlySet<string> = new Set<EvalCategory>([
   'edge-case',
   'guardrail',
   'multi-tool',
+  'scope-gate',
   'single-tool'
 ]);
 
@@ -132,6 +135,7 @@ const VALID_SUBCATEGORIES: ReadonlySet<string> = new Set<EvalSubcategory>([
   'malformed-query',
   'market-data',
   'multi-tool-orchestration',
+  'out-of-scope',
   'performance',
   'portfolio-summary',
   'prompt-injection',
@@ -183,10 +187,12 @@ export function validateEvalCase(
   assertDefined(c.request, `${prefix}.request`);
   const req = c.request as Record<string, unknown>;
   assertString(req.message, `${prefix}.request.message`);
-  assertStringArray(req.toolNames, `${prefix}.request.toolNames`);
+  if (req.toolNames !== undefined) {
+    assertStringArray(req.toolNames, `${prefix}.request.toolNames`);
 
-  if ((req.toolNames as string[]).length === 0) {
-    throw new Error(`${prefix}.request.toolNames must not be empty`);
+    if ((req.toolNames as string[]).length === 0) {
+      throw new Error(`${prefix}.request.toolNames must not be empty`);
+    }
   }
 
   // meta
