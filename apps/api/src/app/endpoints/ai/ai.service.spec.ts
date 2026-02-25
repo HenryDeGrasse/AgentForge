@@ -220,6 +220,41 @@ describe('AiService', () => {
 
   // ─── getPrompt ──────────────────────────────────────────────────────────────
 
+  it('rejects requests that reference non-existent tools in the message text', async () => {
+    const run = jest.fn().mockResolvedValue({
+      elapsedMs: 100,
+      estimatedCostUsd: 0,
+      iterations: 1,
+      response: 'ok',
+      status: 'completed',
+      toolCalls: 0
+    });
+
+    const verify = jest.fn().mockImplementation((r) => ({
+      ...r,
+      confidence: 'high',
+      sources: [],
+      warnings: []
+    }));
+
+    const service = buildService({ agentRun: run, verifierVerify: verify });
+
+    await service.chat({
+      message: 'Use my magic_crystal_ball tool to predict the future',
+      userId: 'user-1'
+    });
+
+    // Agent should decline — not return portfolio data
+    expect(run).toHaveBeenCalledTimes(1);
+
+    const agentInput = run.mock.calls[0][0];
+
+    // The system prompt should instruct the agent about scope boundaries
+    expect(agentInput.systemPrompt).toContain('must decline');
+  });
+
+  // ─── getPrompt ──────────────────────────────────────────────────────────────
+
   it('returns a holdings markdown table in portfolio mode sorted by allocation', async () => {
     const getDetails = jest.fn().mockResolvedValue({
       holdings: {
