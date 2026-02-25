@@ -39,6 +39,7 @@ import { Module } from '@nestjs/common';
 
 import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
+import { ChatConversationService } from './chat-conversation.service';
 import { ResponseVerifierService } from './verification/response-verifier.service';
 
 @Module({
@@ -65,6 +66,7 @@ import { ResponseVerifierService } from './verification/response-verifier.servic
     AccountBalanceService,
     AccountService,
     AiService,
+    ChatConversationService,
     CurrentRateService,
     MarketDataService,
     OpenAiClientService,

@@ -9,6 +9,7 @@ describe('AiController', () => {
     const aiController = new AiController(
       aiService as any,
       {} as any,
+      {} as any,
       {} as any
     );
 
@@ -42,6 +43,7 @@ describe('AiController', () => {
     const aiController = new AiController(
       aiService as any,
       apiService as any,
+      {} as any,
       request as any
     );
 
@@ -88,6 +90,7 @@ describe('AiController', () => {
       {
         buildFiltersFromQueryParams: jest.fn()
       } as any,
+      {} as any,
       {
         user: {
           id: 'auth-user-1',

@@ -37,6 +37,7 @@ export interface ReactAgentGuardrails {
 
 export interface ReactAgentRunInput {
   guardrails?: Partial<ReactAgentGuardrails>;
+  priorMessages?: LLMMessage[]; // rehydrated conversation history (already capped by caller)
   prompt: string;
   systemPrompt?: string;
   toolNames?: string[];
@@ -92,6 +93,11 @@ export class ReactAgentService {
 
     if (input.systemPrompt?.trim()) {
       messages.push({ content: input.systemPrompt, role: 'system' });
+    }
+
+    // Inject prior conversation turns (history cap enforced by caller)
+    if (input.priorMessages?.length) {
+      messages.push(...input.priorMessages);
     }
 
     messages.push({ content: input.prompt, role: 'user' });
