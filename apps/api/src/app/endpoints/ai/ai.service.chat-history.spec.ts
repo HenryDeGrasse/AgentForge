@@ -155,12 +155,14 @@ describe('AiService.chat() — new conversation', () => {
     const { _txConvCreate, prismaService } = buildPrisma();
     const service = buildService(prismaService);
 
-    const longMessage = 'A'.repeat(120);
+    const longMessage = 'Show my portfolio holdings ' + 'A'.repeat(94);
     await service.chat({ message: longMessage, userId: 'user-1' });
 
     expect(_txConvCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ title: 'A'.repeat(60) })
+        data: expect.objectContaining({
+          title: ('Show my portfolio holdings ' + 'A'.repeat(94)).slice(0, 60)
+        })
       })
     );
   });
@@ -170,13 +172,13 @@ describe('AiService.chat() — new conversation', () => {
     const service = buildService(prismaService);
 
     await service.chat({
-      message: 'Hello\n  world\t\tfoo',
+      message: 'Show\n  portfolio\t\tholdings',
       userId: 'user-1'
     });
 
     expect(_txConvCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ title: 'Hello world foo' })
+        data: expect.objectContaining({ title: 'Show portfolio holdings' })
       })
     );
   });
@@ -204,7 +206,7 @@ describe('AiService.chat() — continuing a conversation', () => {
 
     await service.chat({
       conversationId: 'existing-conv-id',
-      message: 'Now compare to last month',
+      message: 'Now compare my portfolio to last month',
       userId: 'user-1'
     });
 
@@ -255,7 +257,7 @@ describe('AiService.chat() — updatedAt touch', () => {
 
     await service.chat({
       conversationId: 'existing-conv-id',
-      message: 'Follow-up question',
+      message: 'What about my stock allocation?',
       userId: 'user-1'
     });
 
@@ -305,7 +307,7 @@ describe('AiService.chat() — history cap', () => {
 
     await service.chat({
       conversationId: 'long-conv-id',
-      message: 'Latest question',
+      message: 'Show latest portfolio value',
       userId: 'user-1'
     });
 
@@ -338,7 +340,7 @@ describe('AiService.chat() — history cap', () => {
 
     await service.chat({
       conversationId: 'conv-id',
-      message: 'New question',
+      message: 'Show my investment returns',
       userId: 'user-1'
     });
 
@@ -378,7 +380,7 @@ describe('AiService.chat() — seq ordering guarantee', () => {
 
     const service = buildService(prismaService);
 
-    await service.chat({ message: 'Cost test', userId: 'user-1' });
+    await service.chat({ message: 'Show portfolio value', userId: 'user-1' });
 
     const userInsert = _txMsgCreate.mock.calls[0][0].data;
     const assistantInsert = _txMsgCreate.mock.calls[1][0].data;
@@ -389,6 +391,91 @@ describe('AiService.chat() — seq ordering guarantee', () => {
     // Assistant message carries the cost from VerifiedResponse
     expect(assistantInsert.estimatedCostUsd).toBe(
       STUB_VERIFIED.estimatedCostUsd
+    );
+  });
+});
+
+// ─── Ambiguous follow-up routing ─────────────────────────────────────────────
+
+describe('AiService.chat() — ambiguous follow-up routing', () => {
+  it('asks for clarification when vague follow-up follows a scope refusal', async () => {
+    const priorDbMessages = [
+      {
+        content:
+          "I can't help with that request. I'm a portfolio analysis assistant and can only help with: portfolio summaries, transaction history, risk analysis.",
+        role: 'assistant',
+        seq: 2
+      },
+      { content: 'Tell me a joke', role: 'user', seq: 1 }
+    ];
+
+    const { prismaService } = buildPrisma({
+      conversationId: 'conv-after-refusal',
+      existingConvSystemPrompt: AGENT_DEFAULT_SYSTEM_PROMPT,
+      priorDbMessages
+    });
+
+    const agentRun = buildAgentRun();
+    const service = buildService(prismaService, agentRun);
+
+    const result = await service.chat({
+      conversationId: 'conv-after-refusal',
+      message: 'based on that, tell me more',
+      userId: 'user-1'
+    });
+
+    // Should NOT call the agent — should ask for clarification
+    expect(agentRun).not.toHaveBeenCalled();
+    expect(result.toolCalls).toBe(0);
+    expect(result.response.toLowerCase()).toMatch(
+      /more specific|which|portfolio summar/
+    );
+  });
+
+  it('allows vague follow-up when last assistant message was portfolio-related', async () => {
+    const priorDbMessages = [
+      {
+        content:
+          'Your portfolio has a total value of $71,891.80 with 10 holdings.',
+        role: 'assistant',
+        seq: 2
+      },
+      { content: 'Show my portfolio summary', role: 'user', seq: 1 }
+    ];
+
+    const { prismaService } = buildPrisma({
+      conversationId: 'conv-after-portfolio',
+      existingConvSystemPrompt: AGENT_DEFAULT_SYSTEM_PROMPT,
+      priorDbMessages
+    });
+
+    const agentRun = buildAgentRun();
+    const service = buildService(prismaService, agentRun);
+
+    await service.chat({
+      conversationId: 'conv-after-portfolio',
+      message: 'based on that, analyze the risk',
+      userId: 'user-1'
+    });
+
+    // Should call the agent — valid follow-up to portfolio context
+    expect(agentRun).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks for clarification when vague follow-up has no conversation history', async () => {
+    // New conversation (no conversationId) → no prior messages
+    const agentRun = buildAgentRun();
+    const service = buildService(buildPrisma().prismaService, agentRun);
+
+    const result = await service.chat({
+      message: 'tell me more',
+      userId: 'user-1'
+    });
+
+    expect(agentRun).not.toHaveBeenCalled();
+    expect(result.toolCalls).toBe(0);
+    expect(result.response.toLowerCase()).toMatch(
+      /more specific|which|portfolio summar/
     );
   });
 });

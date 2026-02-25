@@ -148,7 +148,7 @@ describe('AiService', () => {
     const service = buildService({ agentRun: run, verifierVerify: verify });
 
     const response = await service.chat({
-      message: 'What changed this week?',
+      message: 'What changed in my portfolio this week?',
       systemPrompt: 'be concise',
       toolNames: ['get_portfolio_summary'],
       userId: 'user-1'
@@ -156,7 +156,7 @@ describe('AiService', () => {
 
     expect(run).toHaveBeenCalledWith({
       priorMessages: [],
-      prompt: 'What changed this week?',
+      prompt: 'What changed in my portfolio this week?',
       systemPrompt: 'be concise',
       toolNames: ['get_portfolio_summary'],
       userId: 'user-1'
@@ -210,7 +210,10 @@ describe('AiService', () => {
       verifierVerify: verify
     });
 
-    const result = await service.chat({ message: 'test', userId: 'u1' });
+    const result = await service.chat({
+      message: 'show my portfolio risk',
+      userId: 'u1'
+    });
 
     expect(result.confidence).toBe('low');
     expect(result.warnings).toContain(
@@ -308,6 +311,71 @@ describe('AiService', () => {
     });
 
     expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it('short-circuits for gibberish input with no financial relevance', async () => {
+    const run = jest.fn();
+    const service = buildService({ agentRun: run });
+
+    const result = await service.chat({
+      message: 'Fi fai fo fum',
+      userId: 'user-1'
+    });
+
+    expect(run).not.toHaveBeenCalled();
+    expect(result.toolCalls).toBe(0);
+    expect(result.response.toLowerCase()).toMatch(
+      /only help.*financial|portfolio/
+    );
+  });
+
+  it('short-circuits for off-topic math questions', async () => {
+    const run = jest.fn();
+    const service = buildService({ agentRun: run });
+
+    const result = await service.chat({
+      message: 'whats 20 + 10',
+      userId: 'user-1'
+    });
+
+    expect(run).not.toHaveBeenCalled();
+    expect(result.toolCalls).toBe(0);
+    expect(result.response.toLowerCase()).toMatch(
+      /only help.*financial|portfolio/
+    );
+  });
+
+  it('allows safe smalltalk like "yes" or "ok" without financial keywords', async () => {
+    const run = jest.fn().mockResolvedValue({
+      elapsedMs: 100,
+      estimatedCostUsd: 0,
+      iterations: 1,
+      response: 'How can I help with your portfolio?',
+      status: 'completed',
+      toolCalls: 0
+    });
+
+    const service = buildService({ agentRun: run });
+
+    await service.chat({ message: 'ok', userId: 'user-1' });
+
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks for clarification when vague follow-up has no conversation history', async () => {
+    const run = jest.fn();
+    const service = buildService({ agentRun: run });
+
+    const result = await service.chat({
+      message: 'tell me more',
+      userId: 'user-1'
+    });
+
+    expect(run).not.toHaveBeenCalled();
+    expect(result.toolCalls).toBe(0);
+    expect(result.response.toLowerCase()).toMatch(
+      /more specific|which|what.*like/
+    );
   });
 
   it('persists refusal in conversation history', async () => {

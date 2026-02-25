@@ -86,15 +86,14 @@ export class AiService {
     // 1. Validate toolNames against allowlist
     const sanitizedToolNames = this.sanitizeToolNames(toolNames);
 
-    // 1b. Deterministic scope gate — reject obvious out-of-scope requests
-    //     before reaching the LLM. Works for both new and existing conversations.
-    const scopeRefusal = this.checkScopeGate(message);
+    // 1b. Deterministic scope gate — classify request before reaching the LLM
+    const scopeResult = this.checkScopeGate(message);
 
-    if (scopeRefusal) {
+    if (scopeResult.type === 'REJECT') {
       return this.buildScopedRefusal({
         conversationId,
         message,
-        refusalText: scopeRefusal,
+        refusalText: scopeResult.reason,
         systemPrompt: systemPrompt ?? AGENT_DEFAULT_SYSTEM_PROMPT,
         userId
       });
@@ -144,6 +143,38 @@ export class AiService {
     } else {
       // New conversation — resolve and freeze the effective system prompt
       effectiveSystemPrompt = systemPrompt ?? AGENT_DEFAULT_SYSTEM_PROMPT;
+    }
+
+    // 2b. Handle AMBIGUOUS messages now that we have conversation history.
+    //     Vague follow-ups are only valid when the prior conversation was on-topic.
+    if (scopeResult.type === 'AMBIGUOUS') {
+      const lastAssistantMsg = [...priorMessages]
+        .reverse()
+        .find((m) => m.role === 'assistant');
+
+      if (!lastAssistantMsg) {
+        // No prior context — ask for clarification
+        return this.buildScopedRefusal({
+          conversationId,
+          message,
+          refusalText: AiService.AMBIGUOUS_CLARIFICATION_RESPONSE,
+          systemPrompt: effectiveSystemPrompt,
+          userId
+        });
+      }
+
+      if (AiService.REFUSAL_RESPONSE_PATTERN.test(lastAssistantMsg.content)) {
+        // Last response was a refusal — don't let "based on that" sneak past
+        return this.buildScopedRefusal({
+          conversationId,
+          message,
+          refusalText: AiService.AMBIGUOUS_CLARIFICATION_RESPONSE,
+          systemPrompt: effectiveSystemPrompt,
+          userId
+        });
+      }
+
+      // Last response was portfolio-related — allow the follow-up through
     }
 
     // 3. Run the agent (outside any transaction — failure = no DB writes)
@@ -344,17 +375,123 @@ export class AiService {
     'gambling advice'
   ];
 
+  /**
+   * Regex patterns that indicate the request is plausibly about finance or
+   * portfolio analysis. If a message does NOT match any of these AND is not
+   * a short conversational follow-up (e.g. "yes", "tell me more"), it is
+   * treated as out-of-scope.
+   */
+  private static readonly FINANCIAL_RELEVANCE_PATTERNS: readonly RegExp[] = [
+    /portfoli/i,
+    /hold(?:ing|s)/i,
+    /stock/i,
+    /bond/i,
+    /etf/i,
+    /fund/i,
+    /equit/i,
+    /asset/i,
+    /invest/i,
+    /market/i,
+    /trad(?:e|ing)/i,
+    /transact/i,
+    /dividend/i,
+    /return/i,
+    /performance/i,
+    /risk/i,
+    /rebalanc/i,
+    /allocat/i,
+    /tax/i,
+    /compliance/i,
+    /ticker/i,
+    /share/i,
+    /crypto/i,
+    /bitcoin/i,
+    /price/i,
+    /value/i,
+    /gain/i,
+    /loss/i,
+    /profit/i,
+    /sector/i,
+    /diversif/i,
+    /volatil/i,
+    /yield/i,
+    /interest rate/i,
+    /inflation/i,
+    /s&p/i,
+    /nasdaq/i,
+    /dow/i,
+    /vanguard/i,
+    /fidelity/i,
+    /schwab/i,
+    /brokerage/i,
+    /401k/i,
+    /ira/i,
+    /roth/i,
+    /capital/i,
+    /financ/i,
+    /money/i,
+    /wealth/i,
+    /budget/i,
+    /expense/i,
+    /earning/i,
+    /revenue/i,
+    /fiscal/i,
+    /currency/i,
+    /forex/i,
+    /commodit/i,
+    /option/i,
+    /futures/i,
+    /hedge/i,
+    /mutual/i,
+    /index/i,
+    /benchmark/i,
+    /annuali[sz]/i,
+    /net\s*worth/i,
+    /cost\s*basis/i,
+    /unreali[sz]ed/i,
+    /reali[sz]ed/i
+  ];
+
+  /**
+   * Short acknowledgements / greetings that are safe to let through.
+   * These are so short and generic they can't carry portfolio context-bleed.
+   */
+  private static readonly SAFE_SMALLTALK_PATTERN =
+    /^(yes|no|yeah|yep|nope|sure|ok|okay|please|thanks|thank you|go ahead|do it|sounds good|got it|right|hello|hi|hey|help)[\s?!.]*$/i;
+
+  /**
+   * Vague follow-ups that depend on prior conversation context.
+   * These need history-aware routing: allowed only when the last exchange
+   * was portfolio-related, otherwise ask for clarification.
+   */
+  private static readonly AMBIGUOUS_FOLLOWUP_PATTERN =
+    /^(tell me more|more details?|explain|why|how|what do you (?:mean|think|suggest)|can you|show me|based on (?:that|this|the above)|what about (?:that|this|it)|and (?:that|this|the)|how about|what else|anything else|go on|continue|elaborate|compared? to|versus|vs|now (?:do|show|what|how|compare|analyze|check))[\s\w?!.,]*$/i;
+
+  /**
+   * Pattern to detect if an assistant message was a scope refusal.
+   * Used to prevent vague follow-ups from bypassing a prior refusal.
+   */
+  private static readonly REFUSAL_RESPONSE_PATTERN =
+    /\b(?:can.t help|cannot help|only help with|outside.{0,20}scope|can only help|portfolio.related questions)\b/i;
+
+  private static readonly AMBIGUOUS_CLARIFICATION_RESPONSE =
+    "Could you be more specific about what you'd like to do? I can help with: portfolio summaries, risk analysis, compliance checks, transaction history, market data lookups, performance comparisons, rebalancing suggestions, or tax estimates.";
+
   private static readonly SCOPE_REFUSAL_RESPONSE =
     "I can't help with that request. I'm a portfolio analysis assistant and can only help with: portfolio summaries, transaction history, risk analysis, compliance checks, market data lookups, performance comparisons, rebalancing suggestions, and tax estimates. Please ask me about your portfolio and I'll be happy to help!";
 
   /**
-   * Deterministic check for obvious out-of-scope requests.
-   * Returns a refusal string if the message should be blocked,
-   * or undefined if the request should proceed to the agent.
-   *
-   * This runs for both new and existing conversations (not prompt-dependent).
+   * Deterministic request router. Classifies the message into one of:
+   * - ALLOW: message has clear financial/portfolio relevance → run agent
+   * - REJECT: message is clearly out-of-scope → refuse with reason
+   * - AMBIGUOUS: vague follow-up that needs history context to decide
    */
-  private checkScopeGate(message: string): string | undefined {
+  private checkScopeGate(
+    message: string
+  ):
+    | { type: 'ALLOW' }
+    | { type: 'REJECT'; reason: string }
+    | { type: 'AMBIGUOUS' } {
     const normalized = message.toLowerCase();
 
     // Check for explicit references to unknown/non-existent tools
@@ -372,18 +509,46 @@ export class AiService {
       );
 
       if (!isKnown) {
-        return `I don't have a "${toolMatch[1]}" tool. ${AiService.SCOPE_REFUSAL_RESPONSE}`;
+        return {
+          reason: `I don't have a "${toolMatch[1]}" tool. ${AiService.SCOPE_REFUSAL_RESPONSE}`,
+          type: 'REJECT'
+        };
       }
     }
 
     // Check hard out-of-scope patterns
     for (const pattern of AiService.OUT_OF_SCOPE_PATTERNS) {
       if (normalized.includes(pattern)) {
-        return AiService.SCOPE_REFUSAL_RESPONSE;
+        return { reason: AiService.SCOPE_REFUSAL_RESPONSE, type: 'REJECT' };
       }
     }
 
-    return undefined;
+    // Check for clear financial relevance first — if present, always allow
+    const hasFinancialRelevance = AiService.FINANCIAL_RELEVANCE_PATTERNS.some(
+      (pattern) => pattern.test(message)
+    );
+
+    if (hasFinancialRelevance) {
+      return { type: 'ALLOW' };
+    }
+
+    // Safe smalltalk (greetings, acks) — let through without history check
+    if (AiService.SAFE_SMALLTALK_PATTERN.test(message.trim())) {
+      return { type: 'ALLOW' };
+    }
+
+    // Vague follow-ups ("based on that", "tell me more", "explain") —
+    // need history context to decide if they're valid
+    if (AiService.AMBIGUOUS_FOLLOWUP_PATTERN.test(message.trim())) {
+      return { type: 'AMBIGUOUS' };
+    }
+
+    // No financial relevance and not a recognized follow-up → reject
+    return {
+      reason:
+        "Sorry, but I can only help you with financial and portfolio-related questions. Try asking about your holdings, transactions, risk analysis, market data, or other portfolio topics and I'll be happy to assist!",
+      type: 'REJECT'
+    };
   }
 
   /**

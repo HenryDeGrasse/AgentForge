@@ -212,19 +212,38 @@ export class ReactAgentService {
 
         if (completion.text?.trim()) {
           // Tool-required escalation: if tools are available but the LLM
-          // answered without calling any, retry once with toolChoice 'required'
-          // to prevent hallucinated portfolio-specific determinations.
+          // answered without calling any AND the response contains
+          // portfolio-specific claims (dollar amounts, percentages, ticker
+          // symbols), retry once with toolChoice 'required' to prevent
+          // hallucinated portfolio-specific determinations.
+          // Skip escalation when the LLM is correctly declining an
+          // out-of-scope request (refusal / "I can't help" responses).
+          const responseText = completion.text.trim();
+          const looksLikePortfolioClaim =
+            /\$[\d,]+/.test(responseText) ||
+            /\d+(\.\d+)?%/.test(responseText) ||
+            /\b[A-Z]{2,5}\b.*(?:shares?|units?|position)/i.test(responseText) ||
+            /\b(?:compliant|non-compliant|portfolio|holdings?|allocation|diversif|rebalanc|risk\s*(?:level|score|rating))\b/i.test(
+              responseText
+            );
+          const looksLikeRefusal =
+            /\b(?:can'?t|cannot|don'?t|unable to|not able to|outside.{0,20}scope|only help with)\b/i.test(
+              responseText
+            );
+
           if (
             toolDefinitions.length > 0 &&
             toolCallsCount === 0 &&
-            !escalationAttempted
+            !escalationAttempted &&
+            looksLikePortfolioClaim &&
+            !looksLikeRefusal
           ) {
             escalationAttempted = true;
             escalationPending = true;
 
             // Replace the premature text response with an escalation nudge
             messages.push({
-              content: completion.text,
+              content: responseText,
               role: 'assistant'
             });
 
