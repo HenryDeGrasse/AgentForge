@@ -22,7 +22,7 @@ export const AGENT_DEFAULT_SYSTEM_PROMPT = [
 ].join('\n');
 export const AGENT_FALLBACK_COST_PER_1K_TOKENS_USD = 0.002;
 export const AGENT_MAX_HISTORY_PAIRS = 10; // user+assistant pairs sent to LLM as prior context
-export const AGENT_MAX_ITERATIONS = 6;
+export const AGENT_MAX_ITERATIONS = 15;
 export const AGENT_TIMEOUT_MS = 15_000;
 
 /** Tool names that the AI agent is allowed to invoke */
