@@ -50,6 +50,23 @@ jobs:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY_EVAL }}
       MVP_EVAL_BASE_URL: ${{ secrets.EVAL_API_URL }}
     steps:
+      - name: Check required secrets
+        run: |
+          if [ -z "$MVP_EVAL_BASE_URL" ]; then
+            echo "::error::EVAL_API_URL secret is not set — cannot reach live API"
+            exit 1
+          fi
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "::error::OPENAI_API_KEY_EVAL secret is not set"
+            exit 1
+          fi
+      - name: Pre-flight API health check
+        run: |
+          echo "Checking API at $MVP_EVAL_BASE_URL ..."
+          curl --fail --silent --max-time 10 \
+            "${MVP_EVAL_BASE_URL%/api/v1}/api/v1/info" \
+            || (echo "::error::API not reachable at $MVP_EVAL_BASE_URL" && exit 1)
+          echo "API is healthy ✓"
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
