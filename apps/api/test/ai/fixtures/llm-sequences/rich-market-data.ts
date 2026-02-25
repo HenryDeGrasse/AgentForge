@@ -4,7 +4,9 @@ export const richMarketData: LLMCompletionResponse[] = [
   {
     finishReason: 'tool_calls',
     text: '',
-    toolCalls: [{ arguments: { symbol: 'SYM-A' }, id: 'tc-1', name: 'market_data_lookup' }],
+    toolCalls: [
+      { arguments: { symbol: 'SYM-A' }, id: 'tc-1', name: 'market_data_lookup' }
+    ],
     usage: { estimatedCostUsd: 0.001 }
   },
   {

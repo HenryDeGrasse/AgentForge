@@ -8,17 +8,13 @@ export const authScopeCrossTool: LLMCompletionResponse[] = [
   {
     finishReason: 'tool_calls',
     text: '',
-    toolCalls: [
-      { arguments: {}, id: 'tc-1', name: 'get_portfolio_summary' }
-    ],
+    toolCalls: [{ arguments: {}, id: 'tc-1', name: 'get_portfolio_summary' }],
     usage: { estimatedCostUsd: 0.001 }
   },
   {
     finishReason: 'tool_calls',
     text: '',
-    toolCalls: [
-      { arguments: {}, id: 'tc-2', name: 'get_transaction_history' }
-    ],
+    toolCalls: [{ arguments: {}, id: 'tc-2', name: 'get_transaction_history' }],
     usage: { estimatedCostUsd: 0.001 }
   },
   {

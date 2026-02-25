@@ -7,9 +7,6 @@
  *
  * Cases are loaded at MODULE SCOPE — Jest registers it() blocks at parse time.
  */
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-
 import { ReactAgentService } from '@ghostfolio/api/app/endpoints/ai/agent/react-agent.service';
 import type {
   LLMClient,
@@ -22,6 +19,9 @@ import {
 import { ToolRegistry } from '@ghostfolio/api/app/endpoints/ai/tools/tool.registry';
 import type { ToolDefinition } from '@ghostfolio/api/app/endpoints/ai/tools/tool.types';
 import { ResponseVerifierService } from '@ghostfolio/api/app/endpoints/ai/verification/response-verifier.service';
+
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import {
   assertAuthScoping,
@@ -205,9 +205,7 @@ describe('Golden Sets (fast)', () => {
   // ─── Custom: Circuit Breaker (multi-run) ─────────────────────────────────
 
   it('[guardrail] guardrail-circuit-breaker', async () => {
-    const cbCase = allCases.find(
-      (c) => c.id === 'guardrail-circuit-breaker'
-    );
+    const cbCase = allCases.find((c) => c.id === 'guardrail-circuit-breaker');
 
     if (!cbCase) {
       throw new Error(
@@ -294,7 +292,8 @@ function buildToolRegistryForCase(
   // For schema-tool-output-violation: register a special tool that returns invalid output
   if (evalCase.id === 'schema-tool-output-violation') {
     const invalidOutputTool: ToolDefinition = {
-      description: 'Return portfolio totals (deliberately invalid output for testing).',
+      description:
+        'Return portfolio totals (deliberately invalid output for testing).',
       execute: (input, context) => {
         invocationLog.push({
           input,

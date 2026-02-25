@@ -83,9 +83,19 @@ export const MARKET_DATA_LOOKUP_OUTPUT_SCHEMA: ToolJsonSchema = {
     }
   },
   required: [
-    'assetClass', 'assetSubClass', 'countries', 'currency', 'dataSource',
-    'historicalData', 'marketPrice', 'name', 'priceChange', 'priceUpdatedAt',
-    'sectors', 'symbol', 'warnings'
+    'assetClass',
+    'assetSubClass',
+    'countries',
+    'currency',
+    'dataSource',
+    'historicalData',
+    'marketPrice',
+    'name',
+    'priceChange',
+    'priceUpdatedAt',
+    'sectors',
+    'symbol',
+    'warnings'
   ],
   type: 'object'
 };

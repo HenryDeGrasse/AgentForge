@@ -42,7 +42,13 @@ export const ANALYZE_RISK_OUTPUT_SCHEMA: ToolJsonSchema = {
               symbol: { type: 'string' },
               valueInBaseCurrency: { type: 'number' }
             },
-            required: ['allocationInPortfolio', 'assetClass', 'name', 'symbol', 'valueInBaseCurrency'],
+            required: [
+              'allocationInPortfolio',
+              'assetClass',
+              'name',
+              'symbol',
+              'valueInBaseCurrency'
+            ],
             type: 'object'
           },
           type: 'array'
@@ -61,8 +67,11 @@ export const ANALYZE_RISK_OUTPUT_SCHEMA: ToolJsonSchema = {
         }
       },
       required: [
-        'assetClassExposures', 'sectorCoverageInPortfolio',
-        'top3AllocationInPortfolio', 'topHoldings', 'topSectorExposures'
+        'assetClassExposures',
+        'sectorCoverageInPortfolio',
+        'top3AllocationInPortfolio',
+        'topHoldings',
+        'topSectorExposures'
       ],
       type: 'object'
     },
@@ -78,7 +87,15 @@ export const ANALYZE_RISK_OUTPUT_SCHEMA: ToolJsonSchema = {
           threshold: { type: 'number' },
           title: { type: 'string' }
         },
-        required: ['code', 'description', 'metricName', 'metricValue', 'severity', 'threshold', 'title'],
+        required: [
+          'code',
+          'description',
+          'metricName',
+          'metricValue',
+          'severity',
+          'threshold',
+          'title'
+        ],
         type: 'object'
       },
       type: 'array'
@@ -102,9 +119,16 @@ export const ANALYZE_RISK_OUTPUT_SCHEMA: ToolJsonSchema = {
     }
   },
   required: [
-    'assumptions', 'baseCurrency', 'exposures', 'flags', 'generatedAt',
-    'holdingsCount', 'overallRiskLevel', 'portfolioValueInBaseCurrency',
-    'volatilityProxyScore', 'warnings'
+    'assumptions',
+    'baseCurrency',
+    'exposures',
+    'flags',
+    'generatedAt',
+    'holdingsCount',
+    'overallRiskLevel',
+    'portfolioValueInBaseCurrency',
+    'volatilityProxyScore',
+    'warnings'
   ],
   type: 'object'
 };

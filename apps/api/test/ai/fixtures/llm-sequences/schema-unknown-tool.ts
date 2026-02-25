@@ -8,9 +8,7 @@ export const schemaUnknownTool: LLMCompletionResponse[] = [
   {
     finishReason: 'tool_calls',
     text: '',
-    toolCalls: [
-      { arguments: {}, id: 'tc-1', name: 'nonexistent_tool' }
-    ],
+    toolCalls: [{ arguments: {}, id: 'tc-1', name: 'nonexistent_tool' }],
     usage: { estimatedCostUsd: 0.001 }
   },
   {

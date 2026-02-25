@@ -33,7 +33,13 @@ export const TRANSACTION_HISTORY_OUTPUT_SCHEMA: ToolJsonSchema = {
         returnedCount: { type: 'number' },
         totalCount: { type: 'number' }
       },
-      required: ['cursor', 'hasMore', 'pageSize', 'returnedCount', 'totalCount'],
+      required: [
+        'cursor',
+        'hasMore',
+        'pageSize',
+        'returnedCount',
+        'totalCount'
+      ],
       type: 'object'
     },
     summary: {
@@ -74,9 +80,20 @@ export const TRANSACTION_HISTORY_OUTPUT_SCHEMA: ToolJsonSchema = {
           valueInBaseCurrency: { type: 'number' }
         },
         required: [
-          'accountId', 'accountName', 'currency', 'dataSource', 'date',
-          'fee', 'feeInBaseCurrency', 'id', 'quantity', 'symbol',
-          'type', 'unitPrice', 'value', 'valueInBaseCurrency'
+          'accountId',
+          'accountName',
+          'currency',
+          'dataSource',
+          'date',
+          'fee',
+          'feeInBaseCurrency',
+          'id',
+          'quantity',
+          'symbol',
+          'type',
+          'unitPrice',
+          'value',
+          'valueInBaseCurrency'
         ],
         type: 'object'
       },

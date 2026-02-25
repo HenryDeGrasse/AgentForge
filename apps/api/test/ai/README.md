@@ -25,11 +25,11 @@ test/ai/
 
 ## Three-Tier Strategy
 
-| Tier | Trigger | LLM | Budget | Cases |
-|------|---------|-----|--------|-------|
-| **Stage 1 — Fast** | Every commit | Mocked (scripted fixtures) | ~0.4 s, $0 | 21 |
-| **Stage 1 — Pre-merge** | `merge_group` / PRs | Live (OpenAI) | < 5 min, ~$0.25 | 21 live-eligible |
-| **Stage 2 — Nightly** | `schedule` (02:00 UTC) | Live (OpenAI) | < 15 min, ~$1.00 | 29 |
+| Tier                    | Trigger                | LLM                        | Budget           | Cases            |
+| ----------------------- | ---------------------- | -------------------------- | ---------------- | ---------------- |
+| **Stage 1 — Fast**      | Every commit           | Mocked (scripted fixtures) | ~0.4 s, $0       | 21               |
+| **Stage 1 — Pre-merge** | `merge_group` / PRs    | Live (OpenAI)              | < 5 min, ~$0.25  | 21 live-eligible |
+| **Stage 2 — Nightly**   | `schedule` (02:00 UTC) | Live (OpenAI)              | < 15 min, ~$1.00 | 29               |
 
 ### Running locally
 
@@ -55,14 +55,14 @@ npx ts-node -P apps/api/tsconfig.spec.json apps/api/test/ai/coverage-matrix.ts -
 
 The 21 mandatory cases that run on every commit. Split into a **fast tier** (deterministic mocked LLM) and a **pre-merge tier** (live LLM, same cases):
 
-| Group | Cases | What it verifies |
-|-------|------:|-----------------|
-| Single-tool (rich profile) | 8 | Each of the 8 tools fires exactly once, returns valid schema |
-| Edge-case (empty portfolio) | 1 | Agent handles zero-data gracefully, no hallucination |
-| Multi-tool orchestration | 2 | Agent chains tools correctly, deduplicates calls |
-| Auth scoping | 2 | `context.userId` isolation — tools never see a foreign user's data |
-| Guardrails | 4 | Max-iterations cap, cost limit, timeout, circuit breaker |
-| Schema safety | 4 | Invalid inputs, unknown tools, malformed args, output schema violations |
+| Group                       | Cases | What it verifies                                                        |
+| --------------------------- | ----: | ----------------------------------------------------------------------- |
+| Single-tool (rich profile)  |     8 | Each of the 8 tools fires exactly once, returns valid schema            |
+| Edge-case (empty portfolio) |     1 | Agent handles zero-data gracefully, no hallucination                    |
+| Multi-tool orchestration    |     2 | Agent chains tools correctly, deduplicates calls                        |
+| Auth scoping                |     2 | `context.userId` isolation — tools never see a foreign user's data      |
+| Guardrails                  |     4 | Max-iterations cap, cost limit, timeout, circuit breaker                |
+| Schema safety               |     4 | Invalid inputs, unknown tools, malformed args, output schema violations |
 
 ### Stage 2 — Labeled Scenarios (`labeled-scenarios.json`)
 
@@ -91,42 +91,42 @@ The 21 mandatory cases that run on every commit. Split into a **fast tier** (det
 ### Summary
 
 | Tier                                       | Cases | Live-eligible |
-|--------------------------------------------|-----:-|-------------:-|
+| ------------------------------------------ | ----: | ------------: |
 | Stage 1 — Golden Sets (fast, every commit) |    21 |            11 |
 | Stage 2 — Labeled Scenarios (nightly)      |    29 |            29 |
 | Total                                      |    50 |            40 |
 
 ### Coverage by Subcategory
 
-| Subcategory               | Category         | Golden | Labeled | Live | Total | Difficulty      |
-|---------------------------|------------------|------:-|-------:-|----:-|-----:-|-----------------|
-| compliance                | 🔧 single-tool   |      1 |       2 |    3 |     3 | 🟡 intermediate |
-| empty-data                | ⚠️  edge-case    |      1 |       5 |    6 |     6 | 🟢 basic        |
-| guardrail-circuit-breaker | 🚧 guardrail     |      1 |       0 |    0 |     1 | 🔴 advanced     |
-| guardrail-cost            | 🚧 guardrail     |      1 |       0 |    0 |     1 | 🟡 intermediate |
-| guardrail-iterations      | 🚧 guardrail     |      1 |       0 |    0 |     1 | 🟡 intermediate |
-| guardrail-timeout         | 🚧 guardrail     |      1 |       0 |    0 |     1 | 🟡 intermediate |
-| market-data               | 🔧 single-tool   |      1 |       2 |    3 |     3 | 🟡 intermediate |
-| multi-tool-orchestration  | 🔗 multi-tool    |      2 |       4 |    6 |     6 | 🔴 advanced     |
-| performance               | 🔧 single-tool   |      1 |       2 |    3 |     3 | 🟢 basic        |
-| portfolio-summary         | 🔧 single-tool   |      1 |       5 |    6 |     6 | 🟢 basic        |
-| rebalance                 | 🔧 single-tool   |      1 |       2 |    3 |     3 | 🟡 intermediate |
-| risk-analysis             | 🔧 single-tool   |      1 |       2 |    3 |     3 | 🟡 intermediate |
-| schema-safety             | 🛡️  adversarial |      4 |       0 |    0 |     4 | 🔴 advanced     |
-| tax                       | 🔧 single-tool   |      1 |       3 |    4 |     4 | 🟡 intermediate |
-| transaction-history       | 🔧 single-tool   |      1 |       2 |    3 |     3 | 🟢 basic        |
-| user-scoping              | 🔐 auth          |      2 |       0 |    0 |     2 | 🟡 intermediate |
+| Subcategory               | Category       | Golden | Labeled | Live | Total | Difficulty      |
+| ------------------------- | -------------- | -----: | ------: | ---: | ----: | --------------- |
+| compliance                | 🔧 single-tool |      1 |       2 |    3 |     3 | 🟡 intermediate |
+| empty-data                | ⚠️ edge-case   |      1 |       5 |    6 |     6 | 🟢 basic        |
+| guardrail-circuit-breaker | 🚧 guardrail   |      1 |       0 |    0 |     1 | 🔴 advanced     |
+| guardrail-cost            | 🚧 guardrail   |      1 |       0 |    0 |     1 | 🟡 intermediate |
+| guardrail-iterations      | 🚧 guardrail   |      1 |       0 |    0 |     1 | 🟡 intermediate |
+| guardrail-timeout         | 🚧 guardrail   |      1 |       0 |    0 |     1 | 🟡 intermediate |
+| market-data               | 🔧 single-tool |      1 |       2 |    3 |     3 | 🟡 intermediate |
+| multi-tool-orchestration  | 🔗 multi-tool  |      2 |       4 |    6 |     6 | 🔴 advanced     |
+| performance               | 🔧 single-tool |      1 |       2 |    3 |     3 | 🟢 basic        |
+| portfolio-summary         | 🔧 single-tool |      1 |       5 |    6 |     6 | 🟢 basic        |
+| rebalance                 | 🔧 single-tool |      1 |       2 |    3 |     3 | 🟡 intermediate |
+| risk-analysis             | 🔧 single-tool |      1 |       2 |    3 |     3 | 🟡 intermediate |
+| schema-safety             | 🛡️ adversarial |      4 |       0 |    0 |     4 | 🔴 advanced     |
+| tax                       | 🔧 single-tool |      1 |       3 |    4 |     4 | 🟡 intermediate |
+| transaction-history       | 🔧 single-tool |      1 |       2 |    3 |     3 | 🟢 basic        |
+| user-scoping              | 🔐 auth        |      2 |       0 |    0 |     2 | 🟡 intermediate |
 
 ### By Category
 
-| Category         | Total | Live |
-|------------------|-----:-|----:-|
-| 🛡️  adversarial |     4 |    0 |
-| 🔐 auth          |     2 |    0 |
-| ⚠️  edge-case    |     6 |    6 |
-| 🚧 guardrail     |     4 |    0 |
-| 🔗 multi-tool    |     6 |    6 |
-| 🔧 single-tool   |    28 |   28 |
+| Category       | Total | Live |
+| -------------- | ----: | ---: |
+| 🛡️ adversarial |     4 |    0 |
+| 🔐 auth        |     2 |    0 |
+| ⚠️ edge-case   |     6 |    6 |
+| 🚧 guardrail   |     4 |    0 |
+| 🔗 multi-tool  |     6 |    6 |
+| 🔧 single-tool |    28 |   28 |
 
 ### Coverage Gaps
 

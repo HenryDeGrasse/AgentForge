@@ -46,8 +46,13 @@ export const COMPLIANCE_CHECK_OUTPUT_SCHEMA: ToolJsonSchema = {
           threshold: { type: 'number' }
         },
         required: [
-          'currentValue', 'description', 'details', 'ruleId',
-          'ruleName', 'status', 'threshold'
+          'currentValue',
+          'description',
+          'details',
+          'ruleId',
+          'ruleName',
+          'status',
+          'threshold'
         ],
         type: 'object'
       },
@@ -70,9 +75,17 @@ export const COMPLIANCE_CHECK_OUTPUT_SCHEMA: ToolJsonSchema = {
     }
   },
   required: [
-    'assumptions', 'baseCurrency', 'generatedAt', 'holdingsCount',
-    'overallStatus', 'portfolioValueInBaseCurrency', 'results',
-    'rulesChecked', 'rulesFailed', 'rulesPassed', 'warnings'
+    'assumptions',
+    'baseCurrency',
+    'generatedAt',
+    'holdingsCount',
+    'overallStatus',
+    'portfolioValueInBaseCurrency',
+    'results',
+    'rulesChecked',
+    'rulesFailed',
+    'rulesPassed',
+    'warnings'
   ],
   type: 'object'
 };

@@ -45,8 +45,13 @@ export const PERFORMANCE_COMPARE_OUTPUT_SCHEMA: ToolJsonSchema = {
           trend50d: { type: 'string' }
         },
         required: [
-          'dataSource', 'marketCondition', 'name', 'performances',
-          'symbol', 'trend200d', 'trend50d'
+          'dataSource',
+          'marketCondition',
+          'name',
+          'performances',
+          'symbol',
+          'trend200d',
+          'trend50d'
         ],
         type: 'object'
       },
@@ -85,10 +90,15 @@ export const PERFORMANCE_COMPARE_OUTPUT_SCHEMA: ToolJsonSchema = {
         totalInvestment: { type: 'number' }
       },
       required: [
-        'currentNetWorth', 'currentValueInBaseCurrency', 'firstOrderDate',
-        'hasErrors', 'netPerformance', 'netPerformancePercentage',
+        'currentNetWorth',
+        'currentValueInBaseCurrency',
+        'firstOrderDate',
+        'hasErrors',
+        'netPerformance',
+        'netPerformancePercentage',
         'netPerformancePercentageWithCurrencyEffect',
-        'netPerformanceWithCurrencyEffect', 'totalInvestment'
+        'netPerformanceWithCurrencyEffect',
+        'totalInvestment'
       ],
       type: 'object'
     },
@@ -106,8 +116,14 @@ export const PERFORMANCE_COMPARE_OUTPUT_SCHEMA: ToolJsonSchema = {
     }
   },
   required: [
-    'assumptions', 'baseCurrency', 'benchmarks', 'comparison',
-    'dateRange', 'period', 'portfolio', 'warnings'
+    'assumptions',
+    'baseCurrency',
+    'benchmarks',
+    'comparison',
+    'dateRange',
+    'period',
+    'portfolio',
+    'warnings'
   ],
   type: 'object'
 };

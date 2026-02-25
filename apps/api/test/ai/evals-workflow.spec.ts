@@ -17,6 +17,8 @@ describe('AI evals workflow path coverage', () => {
     expect(workflowContent).toContain("'apps/api/src/app/symbol/**'");
     expect(workflowContent).toContain("'apps/api/src/services/benchmark/**'");
     expect(workflowContent).toContain("'apps/api/src/services/market-data/**'");
-    expect(workflowContent).toContain("'apps/api/src/services/symbol-profile/**'");
+    expect(workflowContent).toContain(
+      "'apps/api/src/services/symbol-profile/**'"
+    );
   });
 });

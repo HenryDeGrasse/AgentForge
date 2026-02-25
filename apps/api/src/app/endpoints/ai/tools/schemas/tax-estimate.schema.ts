@@ -18,7 +18,12 @@ const GAIN_LOSS_SCHEMA: ToolJsonSchema = {
     netInBaseCurrency: { type: 'number' },
     transactionCount: { type: 'number' }
   },
-  required: ['gainInBaseCurrency', 'lossInBaseCurrency', 'netInBaseCurrency', 'transactionCount'],
+  required: [
+    'gainInBaseCurrency',
+    'lossInBaseCurrency',
+    'netInBaseCurrency',
+    'transactionCount'
+  ],
   type: 'object'
 };
 
@@ -52,8 +57,12 @@ export const TAX_ESTIMATE_OUTPUT_SCHEMA: ToolJsonSchema = {
           unrealizedLossInBaseCurrency: { type: 'number' }
         },
         required: [
-          'costBasisInBaseCurrency', 'currentValueInBaseCurrency',
-          'holdingPeriodDays', 'isLongTerm', 'name', 'symbol',
+          'costBasisInBaseCurrency',
+          'currentValueInBaseCurrency',
+          'holdingPeriodDays',
+          'isLongTerm',
+          'name',
+          'symbol',
           'unrealizedLossInBaseCurrency'
         ],
         type: 'object'
@@ -75,8 +84,14 @@ export const TAX_ESTIMATE_OUTPUT_SCHEMA: ToolJsonSchema = {
     }
   },
   required: [
-    'assumptions', 'baseCurrency', 'disclaimers', 'jurisdiction',
-    'realizedGains', 'taxLossHarvestingCandidates', 'taxYear', 'warnings'
+    'assumptions',
+    'baseCurrency',
+    'disclaimers',
+    'jurisdiction',
+    'realizedGains',
+    'taxLossHarvestingCandidates',
+    'taxYear',
+    'warnings'
   ],
   type: 'object'
 };

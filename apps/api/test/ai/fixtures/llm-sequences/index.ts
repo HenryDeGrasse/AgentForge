@@ -60,7 +60,7 @@ export function loadLlmSequence(caseId: string): LLMCompletionResponse[] {
   if (!sequence) {
     throw new Error(
       `No LLM sequence fixture found for case "${caseId}". ` +
-      `Available: ${Object.keys(LLM_SEQUENCES).join(', ')}`
+        `Available: ${Object.keys(LLM_SEQUENCES).join(', ')}`
     );
   }
 

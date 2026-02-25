@@ -12,9 +12,7 @@ export const schemaToolOutputViolation: LLMCompletionResponse[] = [
   {
     finishReason: 'tool_calls',
     text: '',
-    toolCalls: [
-      { arguments: {}, id: 'tc-1', name: 'get_portfolio_summary' }
-    ],
+    toolCalls: [{ arguments: {}, id: 'tc-1', name: 'get_portfolio_summary' }],
     usage: { estimatedCostUsd: 0.001 }
   },
   {

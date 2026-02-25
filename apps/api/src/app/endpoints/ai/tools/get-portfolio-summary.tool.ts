@@ -64,7 +64,8 @@ export class GetPortfolioSummaryTool implements ToolDefinition<
 
   public readonly name = 'get_portfolio_summary';
 
-  public readonly outputSchema: ToolJsonSchema = PORTFOLIO_SUMMARY_OUTPUT_SCHEMA;
+  public readonly outputSchema: ToolJsonSchema =
+    PORTFOLIO_SUMMARY_OUTPUT_SCHEMA;
 
   public constructor(
     private readonly portfolioService: PortfolioService,

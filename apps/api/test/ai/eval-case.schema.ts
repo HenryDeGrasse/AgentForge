@@ -166,7 +166,11 @@ export function validateEvalCase(
 
   // id
   assertString(c.id, `${prefix}.id`);
-  assertMatches(c.id as string, /^[a-z0-9-]+$/, `${prefix}.id (must be kebab-case)`);
+  assertMatches(
+    c.id as string,
+    /^[a-z0-9-]+$/,
+    `${prefix}.id (must be kebab-case)`
+  );
 
   // profile
   assertString(c.profile, `${prefix}.profile`);

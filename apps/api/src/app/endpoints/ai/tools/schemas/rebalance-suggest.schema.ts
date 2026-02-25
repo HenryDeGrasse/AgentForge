@@ -13,7 +13,10 @@ export const REBALANCE_SUGGEST_INPUT_SCHEMA: ToolJsonSchema = {
       },
       type: 'object'
     },
-    strategy: { enum: ['equal_weight', 'market_cap_weight', 'custom'], type: 'string' },
+    strategy: {
+      enum: ['equal_weight', 'market_cap_weight', 'custom'],
+      type: 'string'
+    },
     targetAllocations: {
       items: {
         additionalProperties: false,
@@ -44,7 +47,12 @@ export const REBALANCE_SUGGEST_OUTPUT_SCHEMA: ToolJsonSchema = {
           name: { type: 'string' },
           symbol: { type: 'string' }
         },
-        required: ['currentPct', 'currentValueInBaseCurrency', 'name', 'symbol'],
+        required: [
+          'currentPct',
+          'currentValueInBaseCurrency',
+          'name',
+          'symbol'
+        ],
         type: 'object'
       },
       type: 'array'
@@ -67,8 +75,14 @@ export const REBALANCE_SUGGEST_OUTPUT_SCHEMA: ToolJsonSchema = {
           valueInBaseCurrency: { type: 'number' }
         },
         required: [
-          'action', 'currentPct', 'driftPct', 'name',
-          'quantityEstimate', 'symbol', 'targetPct', 'valueInBaseCurrency'
+          'action',
+          'currentPct',
+          'driftPct',
+          'name',
+          'quantityEstimate',
+          'symbol',
+          'targetPct',
+          'valueInBaseCurrency'
         ],
         type: 'object'
       },
@@ -85,9 +99,12 @@ export const REBALANCE_SUGGEST_OUTPUT_SCHEMA: ToolJsonSchema = {
         tradesLimitedByConstraints: { type: 'boolean' }
       },
       required: [
-        'constraintsApplied', 'estimatedTurnoverPct',
-        'totalBuyValueInBaseCurrency', 'totalSellValueInBaseCurrency',
-        'totalTradesCount', 'tradesLimitedByConstraints'
+        'constraintsApplied',
+        'estimatedTurnoverPct',
+        'totalBuyValueInBaseCurrency',
+        'totalSellValueInBaseCurrency',
+        'totalTradesCount',
+        'tradesLimitedByConstraints'
       ],
       type: 'object'
     },
@@ -119,9 +136,17 @@ export const REBALANCE_SUGGEST_OUTPUT_SCHEMA: ToolJsonSchema = {
     }
   },
   required: [
-    'assumptions', 'baseCurrency', 'currentAllocations', 'disclaimers',
-    'generatedAt', 'portfolioValueInBaseCurrency', 'strategy',
-    'suggestedTrades', 'summary', 'targetAllocations', 'warnings'
+    'assumptions',
+    'baseCurrency',
+    'currentAllocations',
+    'disclaimers',
+    'generatedAt',
+    'portfolioValueInBaseCurrency',
+    'strategy',
+    'suggestedTrades',
+    'summary',
+    'targetAllocations',
+    'warnings'
   ],
   type: 'object'
 };

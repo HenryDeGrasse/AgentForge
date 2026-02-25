@@ -19,9 +19,7 @@ import { validateEvalSuite, type EvalCaseDefinition } from './eval-case.schema';
 
 function loadCases(filename: string): EvalCaseDefinition[] {
   try {
-    const raw = JSON.parse(
-      readFileSync(join(__dirname, filename), 'utf8')
-    );
+    const raw = JSON.parse(readFileSync(join(__dirname, filename), 'utf8'));
 
     return validateEvalSuite(raw);
   } catch (error) {
@@ -102,17 +100,32 @@ function pad(value: string, width: number, numeric = false): string {
   return numeric ? value.padStart(width) : value.padEnd(width);
 }
 
-function renderTable(headers: string[], rows: Row[], numericCols: number[] = []): string {
+function renderTable(
+  headers: string[],
+  rows: Row[],
+  numericCols: number[] = []
+): string {
   const colWidths = headers.map((h, i) =>
     Math.max(h.length, ...rows.map((r) => (r[i] ?? '').length))
   );
 
   const isNum = (i: number) => numericCols.includes(i);
 
-  const header = '| ' + headers.map((h, i) => pad(h, colWidths[i], isNum(i))).join(' | ') + ' |';
-  const separator = '|-' + colWidths.map((w, i) => (isNum(i) ? '-'.repeat(w - 1) + ':' : '-'.repeat(w))).join('-|-') + '-|';
+  const header =
+    '| ' +
+    headers.map((h, i) => pad(h, colWidths[i], isNum(i))).join(' | ') +
+    ' |';
+  const separator =
+    '|-' +
+    colWidths
+      .map((w, i) => (isNum(i) ? '-'.repeat(w - 1) + ':' : '-'.repeat(w)))
+      .join('-|-') +
+    '-|';
   const dataRows = rows.map(
-    (r) => '| ' + r.map((cell, i) => pad(cell, colWidths[i], isNum(i))).join(' | ') + ' |'
+    (r) =>
+      '| ' +
+      r.map((cell, i) => pad(cell, colWidths[i], isNum(i))).join(' | ') +
+      ' |'
   );
 
   return [header, separator, ...dataRows].join('\n');
@@ -127,10 +140,10 @@ const DIFFICULTY_BADGE: Record<string, string> = {
 };
 
 const CATEGORY_EMOJI: Record<string, string> = {
-  'adversarial': '🛡️  adversarial',
-  'auth': '🔐 auth',
+  adversarial: '🛡️  adversarial',
+  auth: '🔐 auth',
   'edge-case': '⚠️  edge-case',
-  'guardrail': '🚧 guardrail',
+  guardrail: '🚧 guardrail',
   'multi-tool': '🔗 multi-tool',
   'single-tool': '🔧 single-tool'
 };
@@ -148,9 +161,21 @@ function toMarkdown(entries: CoverageEntry[]): string {
     renderTable(
       ['Tier', 'Cases', 'Live-eligible'],
       [
-        ['Stage 1 — Golden Sets (fast, every commit)', String(goldenCases.length), String(goldenCases.filter((c) => c.liveEligible).length)],
-        ['Stage 2 — Labeled Scenarios (nightly)', String(labeledCases.length), String(labeledCases.filter((c) => c.liveEligible).length)],
-        ['Total', String(allCases.length), String(allCases.filter((c) => c.liveEligible).length)]
+        [
+          'Stage 1 — Golden Sets (fast, every commit)',
+          String(goldenCases.length),
+          String(goldenCases.filter((c) => c.liveEligible).length)
+        ],
+        [
+          'Stage 2 — Labeled Scenarios (nightly)',
+          String(labeledCases.length),
+          String(labeledCases.filter((c) => c.liveEligible).length)
+        ],
+        [
+          'Total',
+          String(allCases.length),
+          String(allCases.filter((c) => c.liveEligible).length)
+        ]
       ],
       [1, 2]
     )
@@ -162,7 +187,15 @@ function toMarkdown(entries: CoverageEntry[]): string {
   lines.push('## Coverage by Subcategory\n');
   lines.push(
     renderTable(
-      ['Subcategory', 'Category', 'Golden', 'Labeled', 'Live', 'Total', 'Difficulty'],
+      [
+        'Subcategory',
+        'Category',
+        'Golden',
+        'Labeled',
+        'Live',
+        'Total',
+        'Difficulty'
+      ],
       entries.map((e) => [
         e.subcategory,
         CATEGORY_EMOJI[e.category] ?? e.category,
@@ -193,11 +226,13 @@ function toMarkdown(entries: CoverageEntry[]): string {
   lines.push(
     renderTable(
       ['Category', 'Total', 'Live'],
-      [...categoryMap.entries()].sort().map(([cat, { live, total }]) => [
-        CATEGORY_EMOJI[cat] ?? cat,
-        String(total),
-        String(live)
-      ]),
+      [...categoryMap.entries()]
+        .sort()
+        .map(([cat, { live, total }]) => [
+          CATEGORY_EMOJI[cat] ?? cat,
+          String(total),
+          String(live)
+        ]),
       [1, 2]
     )
   );
@@ -229,13 +264,13 @@ function toMarkdown(entries: CoverageEntry[]): string {
     'user-scoping'
   ];
 
-  const missing = allSubcategories.filter(
-    (s) => !coveredSubcategories.has(s)
-  );
+  const missing = allSubcategories.filter((s) => !coveredSubcategories.has(s));
 
   if (missing.length > 0) {
     for (const sub of missing) {
-      lines.push(`- ❌ **${sub}** — no eval cases yet (requires live LLM; deferred to Stage 3)`);
+      lines.push(
+        `- ❌ **${sub}** — no eval cases yet (requires live LLM; deferred to Stage 3)`
+      );
     }
   } else {
     lines.push('✅ All subcategories have at least 1 eval case.');

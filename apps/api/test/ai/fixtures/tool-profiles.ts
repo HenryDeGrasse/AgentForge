@@ -50,14 +50,17 @@ export function buildToolsForProfile(
 
 // ─── Rich Profile ──────────────────────────────────────────────────────────────
 
-function buildRichProfileTools(
-  log: ToolInvocationEntry[]
-): ToolDefinition[] {
+function buildRichProfileTools(log: ToolInvocationEntry[]): ToolDefinition[] {
   return [
     {
-      description: 'Return portfolio totals, allocation percentages and top holdings.',
+      description:
+        'Return portfolio totals, allocation percentages and top holdings.',
       execute: (input, context) => {
-        log.push({ input, toolName: 'get_portfolio_summary', userId: context.userId });
+        log.push({
+          input,
+          toolName: 'get_portfolio_summary',
+          userId: context.userId
+        });
 
         return {
           baseCurrency: 'USD',
@@ -66,7 +69,7 @@ function buildRichProfileTools(
           snapshotCreatedAt: '2025-06-01T00:00:00.000Z',
           topHoldings: [
             {
-              allocationInHoldings: 0.40,
+              allocationInHoldings: 0.4,
               allocationInPortfolio: 0.38,
               assetClass: 'EQUITY',
               currency: 'USD',
@@ -78,7 +81,7 @@ function buildRichProfileTools(
               valueInBaseCurrency: 4000
             },
             {
-              allocationInHoldings: 0.30,
+              allocationInHoldings: 0.3,
               allocationInPortfolio: 0.29,
               assetClass: 'EQUITY',
               currency: 'USD',
@@ -90,7 +93,7 @@ function buildRichProfileTools(
               valueInBaseCurrency: 3000
             },
             {
-              allocationInHoldings: 0.20,
+              allocationInHoldings: 0.2,
               allocationInPortfolio: 0.19,
               assetClass: 'BOND',
               currency: 'USD',
@@ -102,7 +105,7 @@ function buildRichProfileTools(
               valueInBaseCurrency: 2000
             },
             {
-              allocationInHoldings: 0.10,
+              allocationInHoldings: 0.1,
               allocationInPortfolio: 0.095,
               assetClass: 'COMMODITY',
               currency: 'USD',
@@ -131,10 +134,20 @@ function buildRichProfileTools(
     {
       description: 'Return paginated transaction history.',
       execute: (input, context) => {
-        log.push({ input, toolName: 'get_transaction_history', userId: context.userId });
+        log.push({
+          input,
+          toolName: 'get_transaction_history',
+          userId: context.userId
+        });
 
         return {
-          page: { cursor: 0, hasMore: false, pageSize: 30, returnedCount: 5, totalCount: 30 },
+          page: {
+            cursor: 0,
+            hasMore: false,
+            pageSize: 30,
+            returnedCount: 5,
+            totalCount: 30
+          },
           summary: {
             buyValueInBaseCurrency: 9500,
             byType: { BUY: 30 },
@@ -143,11 +156,86 @@ function buildRichProfileTools(
             sellValueInBaseCurrency: 0
           },
           transactions: [
-            { accountId: 'acc-1', accountName: 'Main', currency: 'USD', dataSource: 'MANUAL', date: '2025-01-01', fee: 0, feeInBaseCurrency: 0, id: 'tx-1', quantity: 2, symbol: 'SYM-A', type: 'BUY', unitPrice: 100, value: 200, valueInBaseCurrency: 200 },
-            { accountId: 'acc-1', accountName: 'Main', currency: 'USD', dataSource: 'MANUAL', date: '2025-01-02', fee: 0, feeInBaseCurrency: 0, id: 'tx-2', quantity: 3, symbol: 'SYM-B', type: 'BUY', unitPrice: 115, value: 345, valueInBaseCurrency: 345 },
-            { accountId: 'acc-1', accountName: 'Main', currency: 'USD', dataSource: 'MANUAL', date: '2025-01-03', fee: 0, feeInBaseCurrency: 0, id: 'tx-3', quantity: 1, symbol: 'SYM-C', type: 'BUY', unitPrice: 100, value: 100, valueInBaseCurrency: 100 },
-            { accountId: 'acc-1', accountName: 'Main', currency: 'USD', dataSource: 'MANUAL', date: '2025-01-04', fee: 0, feeInBaseCurrency: 0, id: 'tx-4', quantity: 2, symbol: 'SYM-D', type: 'BUY', unitPrice: 130, value: 260, valueInBaseCurrency: 260 },
-            { accountId: 'acc-1', accountName: 'Main', currency: 'USD', dataSource: 'MANUAL', date: '2025-01-05', fee: 0, feeInBaseCurrency: 0, id: 'tx-5', quantity: 3, symbol: 'SYM-A', type: 'BUY', unitPrice: 145, value: 435, valueInBaseCurrency: 435 }
+            {
+              accountId: 'acc-1',
+              accountName: 'Main',
+              currency: 'USD',
+              dataSource: 'MANUAL',
+              date: '2025-01-01',
+              fee: 0,
+              feeInBaseCurrency: 0,
+              id: 'tx-1',
+              quantity: 2,
+              symbol: 'SYM-A',
+              type: 'BUY',
+              unitPrice: 100,
+              value: 200,
+              valueInBaseCurrency: 200
+            },
+            {
+              accountId: 'acc-1',
+              accountName: 'Main',
+              currency: 'USD',
+              dataSource: 'MANUAL',
+              date: '2025-01-02',
+              fee: 0,
+              feeInBaseCurrency: 0,
+              id: 'tx-2',
+              quantity: 3,
+              symbol: 'SYM-B',
+              type: 'BUY',
+              unitPrice: 115,
+              value: 345,
+              valueInBaseCurrency: 345
+            },
+            {
+              accountId: 'acc-1',
+              accountName: 'Main',
+              currency: 'USD',
+              dataSource: 'MANUAL',
+              date: '2025-01-03',
+              fee: 0,
+              feeInBaseCurrency: 0,
+              id: 'tx-3',
+              quantity: 1,
+              symbol: 'SYM-C',
+              type: 'BUY',
+              unitPrice: 100,
+              value: 100,
+              valueInBaseCurrency: 100
+            },
+            {
+              accountId: 'acc-1',
+              accountName: 'Main',
+              currency: 'USD',
+              dataSource: 'MANUAL',
+              date: '2025-01-04',
+              fee: 0,
+              feeInBaseCurrency: 0,
+              id: 'tx-4',
+              quantity: 2,
+              symbol: 'SYM-D',
+              type: 'BUY',
+              unitPrice: 130,
+              value: 260,
+              valueInBaseCurrency: 260
+            },
+            {
+              accountId: 'acc-1',
+              accountName: 'Main',
+              currency: 'USD',
+              dataSource: 'MANUAL',
+              date: '2025-01-05',
+              fee: 0,
+              feeInBaseCurrency: 0,
+              id: 'tx-5',
+              quantity: 3,
+              symbol: 'SYM-A',
+              type: 'BUY',
+              unitPrice: 145,
+              value: 435,
+              valueInBaseCurrency: 435
+            }
           ],
           warnings: []
         };
@@ -166,21 +254,47 @@ function buildRichProfileTools(
           baseCurrency: 'USD',
           exposures: {
             assetClassExposures: [
-              { allocationInPortfolio: 0.70, assetClass: 'EQUITY' },
-              { allocationInPortfolio: 0.20, assetClass: 'BOND' },
-              { allocationInPortfolio: 0.10, assetClass: 'COMMODITY' }
+              { allocationInPortfolio: 0.7, assetClass: 'EQUITY' },
+              { allocationInPortfolio: 0.2, assetClass: 'BOND' },
+              { allocationInPortfolio: 0.1, assetClass: 'COMMODITY' }
             ],
             sectorCoverageInPortfolio: 0,
-            top3AllocationInPortfolio: 0.90,
+            top3AllocationInPortfolio: 0.9,
             topHoldings: [
-              { allocationInPortfolio: 0.40, assetClass: 'EQUITY', name: 'Asset A', symbol: 'SYM-A', valueInBaseCurrency: 4000 },
-              { allocationInPortfolio: 0.30, assetClass: 'EQUITY', name: 'Asset B', symbol: 'SYM-B', valueInBaseCurrency: 3000 },
-              { allocationInPortfolio: 0.20, assetClass: 'BOND', name: 'Asset C', symbol: 'SYM-C', valueInBaseCurrency: 2000 }
+              {
+                allocationInPortfolio: 0.4,
+                assetClass: 'EQUITY',
+                name: 'Asset A',
+                symbol: 'SYM-A',
+                valueInBaseCurrency: 4000
+              },
+              {
+                allocationInPortfolio: 0.3,
+                assetClass: 'EQUITY',
+                name: 'Asset B',
+                symbol: 'SYM-B',
+                valueInBaseCurrency: 3000
+              },
+              {
+                allocationInPortfolio: 0.2,
+                assetClass: 'BOND',
+                name: 'Asset C',
+                symbol: 'SYM-C',
+                valueInBaseCurrency: 2000
+              }
             ],
             topSectorExposures: []
           },
           flags: [
-            { code: 'single_position_concentration', description: 'SYM-A is 40% of portfolio', metricName: 'singlePositionPct', metricValue: 0.40, severity: 'high', threshold: 0.25, title: 'Single Position Concentration' }
+            {
+              code: 'single_position_concentration',
+              description: 'SYM-A is 40% of portfolio',
+              metricName: 'singlePositionPct',
+              metricValue: 0.4,
+              severity: 'high',
+              threshold: 0.25,
+              title: 'Single Position Concentration'
+            }
           ],
           generatedAt: '2025-06-01T00:00:00.000Z',
           holdingsCount: 4,
@@ -197,7 +311,11 @@ function buildRichProfileTools(
     {
       description: 'Look up market data for a given symbol.',
       execute: (input, context) => {
-        log.push({ input, toolName: 'market_data_lookup', userId: context.userId });
+        log.push({
+          input,
+          toolName: 'market_data_lookup',
+          userId: context.userId
+        });
 
         return {
           assetClass: 'EQUITY',
@@ -208,7 +326,11 @@ function buildRichProfileTools(
           historicalData: [],
           marketPrice: 150,
           name: 'Asset A',
-          priceChange: { absoluteChange: 3.67, percentChange: 0.025, periodDays: 1 },
+          priceChange: {
+            absoluteChange: 3.67,
+            percentChange: 0.025,
+            periodDays: 1
+          },
           priceUpdatedAt: '2025-06-01T00:00:00.000Z',
           sectors: [{ name: 'Technology', weight: 1.0 }],
           symbol: 'SYM-A',
@@ -222,7 +344,11 @@ function buildRichProfileTools(
     {
       description: 'Compare portfolio performance against benchmarks.',
       execute: (input, context) => {
-        log.push({ input, toolName: 'performance_compare', userId: context.userId });
+        log.push({
+          input,
+          toolName: 'performance_compare',
+          userId: context.userId
+        });
 
         return {
           assumptions: ['Returns are time-weighted'],
@@ -232,13 +358,18 @@ function buildRichProfileTools(
               dataSource: 'YAHOO',
               marketCondition: 'BULL',
               name: 'S&P 500',
-              performances: { allTimeHigh: { date: '2025-05-15', performancePercent: -0.02 } },
+              performances: {
+                allTimeHigh: { date: '2025-05-15', performancePercent: -0.02 }
+              },
               symbol: 'SPY',
               trend200d: 'UP',
               trend50d: 'UP'
             }
           ],
-          comparison: { outperformingBenchmarks: [], underperformingBenchmarks: ['SPY'] },
+          comparison: {
+            outperformingBenchmarks: [],
+            underperformingBenchmarks: ['SPY']
+          },
           dateRange: 'ytd',
           period: { endDate: '2025-06-01', startDate: '2025-01-01' },
           portfolio: {
@@ -265,14 +396,32 @@ function buildRichProfileTools(
         log.push({ input, toolName: 'tax_estimate', userId: context.userId });
 
         return {
-          assumptions: ['FIFO cost basis method', 'Short-term = held < 12 months'],
+          assumptions: [
+            'FIFO cost basis method',
+            'Short-term = held < 12 months'
+          ],
           baseCurrency: 'USD',
           disclaimers: ['This is an estimate, not tax advice'],
           jurisdiction: 'US',
           realizedGains: {
-            longTerm: { gainInBaseCurrency: 200, lossInBaseCurrency: 0, netInBaseCurrency: 200, transactionCount: 1 },
-            shortTerm: { gainInBaseCurrency: 140, lossInBaseCurrency: 0, netInBaseCurrency: 140, transactionCount: 2 },
-            total: { gainInBaseCurrency: 340, lossInBaseCurrency: 0, netInBaseCurrency: 340, transactionCount: 3 }
+            longTerm: {
+              gainInBaseCurrency: 200,
+              lossInBaseCurrency: 0,
+              netInBaseCurrency: 200,
+              transactionCount: 1
+            },
+            shortTerm: {
+              gainInBaseCurrency: 140,
+              lossInBaseCurrency: 0,
+              netInBaseCurrency: 140,
+              transactionCount: 2
+            },
+            total: {
+              gainInBaseCurrency: 340,
+              lossInBaseCurrency: 0,
+              netInBaseCurrency: 340,
+              transactionCount: 3
+            }
           },
           taxLossHarvestingCandidates: [],
           taxYear: 2025,
@@ -286,7 +435,11 @@ function buildRichProfileTools(
     {
       description: 'Check portfolio compliance against rules.',
       execute: (input, context) => {
-        log.push({ input, toolName: 'compliance_check', userId: context.userId });
+        log.push({
+          input,
+          toolName: 'compliance_check',
+          userId: context.userId
+        });
 
         return {
           assumptions: ['Using default rule thresholds'],
@@ -296,7 +449,15 @@ function buildRichProfileTools(
           overallStatus: 'NON_COMPLIANT',
           portfolioValueInBaseCurrency: 10000,
           results: [
-            { currentValue: 0.40, description: 'No single position exceeds 25%', details: 'SYM-A at 40%', ruleId: 'max_single_position', ruleName: 'Max Single Position', status: 'fail', threshold: 0.25 }
+            {
+              currentValue: 0.4,
+              description: 'No single position exceeds 25%',
+              details: 'SYM-A at 40%',
+              ruleId: 'max_single_position',
+              ruleName: 'Max Single Position',
+              status: 'fail',
+              threshold: 0.25
+            }
           ],
           rulesChecked: 1,
           rulesFailed: 1,
@@ -311,40 +472,120 @@ function buildRichProfileTools(
     {
       description: 'Suggest trades to rebalance the portfolio.',
       execute: (input, context) => {
-        log.push({ input, toolName: 'rebalance_suggest', userId: context.userId });
+        log.push({
+          input,
+          toolName: 'rebalance_suggest',
+          userId: context.userId
+        });
 
         return {
           assumptions: ['Equal weight strategy applied'],
           baseCurrency: 'USD',
           currentAllocations: [
-            { currentPct: 0.40, currentValueInBaseCurrency: 4000, name: 'Asset A', symbol: 'SYM-A' },
-            { currentPct: 0.30, currentValueInBaseCurrency: 3000, name: 'Asset B', symbol: 'SYM-B' },
-            { currentPct: 0.20, currentValueInBaseCurrency: 2000, name: 'Asset C', symbol: 'SYM-C' },
-            { currentPct: 0.10, currentValueInBaseCurrency: 1000, name: 'Asset D', symbol: 'SYM-D' }
+            {
+              currentPct: 0.4,
+              currentValueInBaseCurrency: 4000,
+              name: 'Asset A',
+              symbol: 'SYM-A'
+            },
+            {
+              currentPct: 0.3,
+              currentValueInBaseCurrency: 3000,
+              name: 'Asset B',
+              symbol: 'SYM-B'
+            },
+            {
+              currentPct: 0.2,
+              currentValueInBaseCurrency: 2000,
+              name: 'Asset C',
+              symbol: 'SYM-C'
+            },
+            {
+              currentPct: 0.1,
+              currentValueInBaseCurrency: 1000,
+              name: 'Asset D',
+              symbol: 'SYM-D'
+            }
           ],
           disclaimers: ['This is a suggestion, not financial advice'],
           generatedAt: '2025-06-01T00:00:00.000Z',
           portfolioValueInBaseCurrency: 10000,
           strategy: 'equal_weight',
           suggestedTrades: [
-            { action: 'SELL', currentPct: 0.40, driftPct: 0.15, name: 'Asset A', quantityEstimate: 10, symbol: 'SYM-A', targetPct: 0.25, valueInBaseCurrency: 1500 },
-            { action: 'SELL', currentPct: 0.30, driftPct: 0.05, name: 'Asset B', quantityEstimate: 4.17, symbol: 'SYM-B', targetPct: 0.25, valueInBaseCurrency: 500 },
-            { action: 'BUY', currentPct: 0.20, driftPct: -0.05, name: 'Asset C', quantityEstimate: 5, symbol: 'SYM-C', targetPct: 0.25, valueInBaseCurrency: 500 },
-            { action: 'BUY', currentPct: 0.10, driftPct: -0.15, name: 'Asset D', quantityEstimate: 30, symbol: 'SYM-D', targetPct: 0.25, valueInBaseCurrency: 1500 }
+            {
+              action: 'SELL',
+              currentPct: 0.4,
+              driftPct: 0.15,
+              name: 'Asset A',
+              quantityEstimate: 10,
+              symbol: 'SYM-A',
+              targetPct: 0.25,
+              valueInBaseCurrency: 1500
+            },
+            {
+              action: 'SELL',
+              currentPct: 0.3,
+              driftPct: 0.05,
+              name: 'Asset B',
+              quantityEstimate: 4.17,
+              symbol: 'SYM-B',
+              targetPct: 0.25,
+              valueInBaseCurrency: 500
+            },
+            {
+              action: 'BUY',
+              currentPct: 0.2,
+              driftPct: -0.05,
+              name: 'Asset C',
+              quantityEstimate: 5,
+              symbol: 'SYM-C',
+              targetPct: 0.25,
+              valueInBaseCurrency: 500
+            },
+            {
+              action: 'BUY',
+              currentPct: 0.1,
+              driftPct: -0.15,
+              name: 'Asset D',
+              quantityEstimate: 30,
+              symbol: 'SYM-D',
+              targetPct: 0.25,
+              valueInBaseCurrency: 1500
+            }
           ],
           summary: {
             constraintsApplied: [],
-            estimatedTurnoverPct: 0.30,
+            estimatedTurnoverPct: 0.3,
             totalBuyValueInBaseCurrency: 2000,
             totalSellValueInBaseCurrency: 2000,
             totalTradesCount: 4,
             tradesLimitedByConstraints: false
           },
           targetAllocations: [
-            { name: 'Asset A', symbol: 'SYM-A', targetPct: 0.25, targetValueInBaseCurrency: 2500 },
-            { name: 'Asset B', symbol: 'SYM-B', targetPct: 0.25, targetValueInBaseCurrency: 2500 },
-            { name: 'Asset C', symbol: 'SYM-C', targetPct: 0.25, targetValueInBaseCurrency: 2500 },
-            { name: 'Asset D', symbol: 'SYM-D', targetPct: 0.25, targetValueInBaseCurrency: 2500 }
+            {
+              name: 'Asset A',
+              symbol: 'SYM-A',
+              targetPct: 0.25,
+              targetValueInBaseCurrency: 2500
+            },
+            {
+              name: 'Asset B',
+              symbol: 'SYM-B',
+              targetPct: 0.25,
+              targetValueInBaseCurrency: 2500
+            },
+            {
+              name: 'Asset C',
+              symbol: 'SYM-C',
+              targetPct: 0.25,
+              targetValueInBaseCurrency: 2500
+            },
+            {
+              name: 'Asset D',
+              symbol: 'SYM-D',
+              targetPct: 0.25,
+              targetValueInBaseCurrency: 2500
+            }
           ],
           warnings: []
         };
@@ -358,14 +599,17 @@ function buildRichProfileTools(
 
 // ─── Empty Profile ─────────────────────────────────────────────────────────────
 
-function buildEmptyProfileTools(
-  log: ToolInvocationEntry[]
-): ToolDefinition[] {
+function buildEmptyProfileTools(log: ToolInvocationEntry[]): ToolDefinition[] {
   return [
     {
-      description: 'Return portfolio totals, allocation percentages and top holdings.',
+      description:
+        'Return portfolio totals, allocation percentages and top holdings.',
       execute: (input, context) => {
-        log.push({ input, toolName: 'get_portfolio_summary', userId: context.userId });
+        log.push({
+          input,
+          toolName: 'get_portfolio_summary',
+          userId: context.userId
+        });
 
         return {
           baseCurrency: 'USD',
@@ -373,8 +617,19 @@ function buildEmptyProfileTools(
           latestActivityDate: '',
           snapshotCreatedAt: '',
           topHoldings: [],
-          totals: { activityCount: 0, cashInBaseCurrency: 0, holdingsCount: 0, holdingsValueInBaseCurrency: 0, totalPortfolioValueInBaseCurrency: 0 },
-          warnings: [{ code: 'no_holdings_data', message: 'No holdings were found for this user.' }]
+          totals: {
+            activityCount: 0,
+            cashInBaseCurrency: 0,
+            holdingsCount: 0,
+            holdingsValueInBaseCurrency: 0,
+            totalPortfolioValueInBaseCurrency: 0
+          },
+          warnings: [
+            {
+              code: 'no_holdings_data',
+              message: 'No holdings were found for this user.'
+            }
+          ]
         };
       },
       inputSchema: PORTFOLIO_SUMMARY_INPUT_SCHEMA,
@@ -384,13 +639,31 @@ function buildEmptyProfileTools(
     {
       description: 'Return paginated transaction history.',
       execute: (input, context) => {
-        log.push({ input, toolName: 'get_transaction_history', userId: context.userId });
+        log.push({
+          input,
+          toolName: 'get_transaction_history',
+          userId: context.userId
+        });
 
         return {
-          page: { cursor: 0, hasMore: false, pageSize: 25, returnedCount: 0, totalCount: 0 },
-          summary: { buyValueInBaseCurrency: 0, byType: {}, pageFeesInBaseCurrency: 0, pageValueInBaseCurrency: 0, sellValueInBaseCurrency: 0 },
+          page: {
+            cursor: 0,
+            hasMore: false,
+            pageSize: 25,
+            returnedCount: 0,
+            totalCount: 0
+          },
+          summary: {
+            buyValueInBaseCurrency: 0,
+            byType: {},
+            pageFeesInBaseCurrency: 0,
+            pageValueInBaseCurrency: 0,
+            sellValueInBaseCurrency: 0
+          },
           transactions: [],
-          warnings: [{ code: 'no_activity_history', message: 'No transactions found.' }]
+          warnings: [
+            { code: 'no_activity_history', message: 'No transactions found.' }
+          ]
         };
       },
       inputSchema: TRANSACTION_HISTORY_INPUT_SCHEMA,
@@ -405,14 +678,22 @@ function buildEmptyProfileTools(
         return {
           assumptions: [],
           baseCurrency: 'USD',
-          exposures: { assetClassExposures: [], sectorCoverageInPortfolio: 0, top3AllocationInPortfolio: 0, topHoldings: [], topSectorExposures: [] },
+          exposures: {
+            assetClassExposures: [],
+            sectorCoverageInPortfolio: 0,
+            top3AllocationInPortfolio: 0,
+            topHoldings: [],
+            topSectorExposures: []
+          },
           flags: [],
           generatedAt: '2025-06-01T00:00:00.000Z',
           holdingsCount: 0,
           overallRiskLevel: 'LOW',
           portfolioValueInBaseCurrency: 0,
           volatilityProxyScore: 0,
-          warnings: [{ code: 'no_holdings_data', message: 'No holdings to analyze.' }]
+          warnings: [
+            { code: 'no_holdings_data', message: 'No holdings to analyze.' }
+          ]
         };
       },
       inputSchema: ANALYZE_RISK_INPUT_SCHEMA,
@@ -422,12 +703,25 @@ function buildEmptyProfileTools(
     {
       description: 'Look up market data for a given symbol.',
       execute: (input, context) => {
-        log.push({ input, toolName: 'market_data_lookup', userId: context.userId });
+        log.push({
+          input,
+          toolName: 'market_data_lookup',
+          userId: context.userId
+        });
 
         return {
-          assetClass: '', assetSubClass: '', countries: [], currency: '', dataSource: '',
-          historicalData: [], marketPrice: 0, name: '', priceChange: { absoluteChange: 0, percentChange: 0, periodDays: 0 },
-          priceUpdatedAt: '', sectors: [], symbol: '',
+          assetClass: '',
+          assetSubClass: '',
+          countries: [],
+          currency: '',
+          dataSource: '',
+          historicalData: [],
+          marketPrice: 0,
+          name: '',
+          priceChange: { absoluteChange: 0, percentChange: 0, periodDays: 0 },
+          priceUpdatedAt: '',
+          sectors: [],
+          symbol: '',
           warnings: [{ code: 'no_data', message: 'No market data available.' }]
         };
       },
@@ -438,14 +732,36 @@ function buildEmptyProfileTools(
     {
       description: 'Compare portfolio performance against benchmarks.',
       execute: (input, context) => {
-        log.push({ input, toolName: 'performance_compare', userId: context.userId });
+        log.push({
+          input,
+          toolName: 'performance_compare',
+          userId: context.userId
+        });
 
         return {
-          assumptions: [], baseCurrency: 'USD', benchmarks: [],
-          comparison: { outperformingBenchmarks: [], underperformingBenchmarks: [] },
-          dateRange: 'ytd', period: { endDate: '', startDate: '' },
-          portfolio: { currentNetWorth: 0, currentValueInBaseCurrency: 0, firstOrderDate: '', hasErrors: false, netPerformance: 0, netPerformancePercentage: 0, netPerformancePercentageWithCurrencyEffect: 0, netPerformanceWithCurrencyEffect: 0, totalInvestment: 0 },
-          warnings: [{ code: 'no_holdings_data', message: 'No holdings to compare.' }]
+          assumptions: [],
+          baseCurrency: 'USD',
+          benchmarks: [],
+          comparison: {
+            outperformingBenchmarks: [],
+            underperformingBenchmarks: []
+          },
+          dateRange: 'ytd',
+          period: { endDate: '', startDate: '' },
+          portfolio: {
+            currentNetWorth: 0,
+            currentValueInBaseCurrency: 0,
+            firstOrderDate: '',
+            hasErrors: false,
+            netPerformance: 0,
+            netPerformancePercentage: 0,
+            netPerformancePercentageWithCurrencyEffect: 0,
+            netPerformanceWithCurrencyEffect: 0,
+            totalInvestment: 0
+          },
+          warnings: [
+            { code: 'no_holdings_data', message: 'No holdings to compare.' }
+          ]
         };
       },
       inputSchema: PERFORMANCE_COMPARE_INPUT_SCHEMA,
@@ -458,14 +774,38 @@ function buildEmptyProfileTools(
         log.push({ input, toolName: 'tax_estimate', userId: context.userId });
 
         return {
-          assumptions: [], baseCurrency: 'USD', disclaimers: [], jurisdiction: 'US',
+          assumptions: [],
+          baseCurrency: 'USD',
+          disclaimers: [],
+          jurisdiction: 'US',
           realizedGains: {
-            longTerm: { gainInBaseCurrency: 0, lossInBaseCurrency: 0, netInBaseCurrency: 0, transactionCount: 0 },
-            shortTerm: { gainInBaseCurrency: 0, lossInBaseCurrency: 0, netInBaseCurrency: 0, transactionCount: 0 },
-            total: { gainInBaseCurrency: 0, lossInBaseCurrency: 0, netInBaseCurrency: 0, transactionCount: 0 }
+            longTerm: {
+              gainInBaseCurrency: 0,
+              lossInBaseCurrency: 0,
+              netInBaseCurrency: 0,
+              transactionCount: 0
+            },
+            shortTerm: {
+              gainInBaseCurrency: 0,
+              lossInBaseCurrency: 0,
+              netInBaseCurrency: 0,
+              transactionCount: 0
+            },
+            total: {
+              gainInBaseCurrency: 0,
+              lossInBaseCurrency: 0,
+              netInBaseCurrency: 0,
+              transactionCount: 0
+            }
           },
-          taxLossHarvestingCandidates: [], taxYear: 2025,
-          warnings: [{ code: 'no_activity_history', message: 'No transactions for tax estimation.' }]
+          taxLossHarvestingCandidates: [],
+          taxYear: 2025,
+          warnings: [
+            {
+              code: 'no_activity_history',
+              message: 'No transactions for tax estimation.'
+            }
+          ]
         };
       },
       inputSchema: TAX_ESTIMATE_INPUT_SCHEMA,
@@ -475,13 +815,26 @@ function buildEmptyProfileTools(
     {
       description: 'Check portfolio compliance against rules.',
       execute: (input, context) => {
-        log.push({ input, toolName: 'compliance_check', userId: context.userId });
+        log.push({
+          input,
+          toolName: 'compliance_check',
+          userId: context.userId
+        });
 
         return {
-          assumptions: [], baseCurrency: 'USD', generatedAt: '2025-06-01T00:00:00.000Z',
-          holdingsCount: 0, overallStatus: 'NEEDS_REVIEW', portfolioValueInBaseCurrency: 0,
-          results: [], rulesChecked: 0, rulesFailed: 0, rulesPassed: 0,
-          warnings: [{ code: 'no_holdings_data', message: 'No holdings to check.' }]
+          assumptions: [],
+          baseCurrency: 'USD',
+          generatedAt: '2025-06-01T00:00:00.000Z',
+          holdingsCount: 0,
+          overallStatus: 'NEEDS_REVIEW',
+          portfolioValueInBaseCurrency: 0,
+          results: [],
+          rulesChecked: 0,
+          rulesFailed: 0,
+          rulesPassed: 0,
+          warnings: [
+            { code: 'no_holdings_data', message: 'No holdings to check.' }
+          ]
         };
       },
       inputSchema: COMPLIANCE_CHECK_INPUT_SCHEMA,
@@ -491,16 +844,33 @@ function buildEmptyProfileTools(
     {
       description: 'Suggest trades to rebalance the portfolio.',
       execute: (input, context) => {
-        log.push({ input, toolName: 'rebalance_suggest', userId: context.userId });
+        log.push({
+          input,
+          toolName: 'rebalance_suggest',
+          userId: context.userId
+        });
 
         return {
-          assumptions: [], baseCurrency: 'USD', currentAllocations: [],
-          disclaimers: [], generatedAt: '2025-06-01T00:00:00.000Z',
-          portfolioValueInBaseCurrency: 0, strategy: 'equal_weight',
+          assumptions: [],
+          baseCurrency: 'USD',
+          currentAllocations: [],
+          disclaimers: [],
+          generatedAt: '2025-06-01T00:00:00.000Z',
+          portfolioValueInBaseCurrency: 0,
+          strategy: 'equal_weight',
           suggestedTrades: [],
-          summary: { constraintsApplied: [], estimatedTurnoverPct: 0, totalBuyValueInBaseCurrency: 0, totalSellValueInBaseCurrency: 0, totalTradesCount: 0, tradesLimitedByConstraints: false },
+          summary: {
+            constraintsApplied: [],
+            estimatedTurnoverPct: 0,
+            totalBuyValueInBaseCurrency: 0,
+            totalSellValueInBaseCurrency: 0,
+            totalTradesCount: 0,
+            tradesLimitedByConstraints: false
+          },
           targetAllocations: [],
-          warnings: [{ code: 'no_holdings_data', message: 'No holdings to rebalance.' }]
+          warnings: [
+            { code: 'no_holdings_data', message: 'No holdings to rebalance.' }
+          ]
         };
       },
       inputSchema: REBALANCE_SUGGEST_INPUT_SCHEMA,

@@ -83,11 +83,13 @@ export class PerformanceCompareTool implements ToolDefinition<
   public readonly description =
     'Compare deterministic portfolio performance against configured benchmarks for a selected date range.';
 
-  public readonly inputSchema: ToolJsonSchema = PERFORMANCE_COMPARE_INPUT_SCHEMA;
+  public readonly inputSchema: ToolJsonSchema =
+    PERFORMANCE_COMPARE_INPUT_SCHEMA;
 
   public readonly name = 'performance_compare';
 
-  public readonly outputSchema: ToolJsonSchema = PERFORMANCE_COMPARE_OUTPUT_SCHEMA;
+  public readonly outputSchema: ToolJsonSchema =
+    PERFORMANCE_COMPARE_OUTPUT_SCHEMA;
 
   public constructor(
     private readonly portfolioService: PortfolioService,

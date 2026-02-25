@@ -317,7 +317,11 @@
     "liveEligible": true,
     "request": {
       "message": "Give me a full review of my portfolio: summary, risk, and rebalancing suggestions",
-      "toolNames": ["get_portfolio_summary", "analyze_risk", "rebalance_suggest"]
+      "toolNames": [
+        "get_portfolio_summary",
+        "analyze_risk",
+        "rebalance_suggest"
+      ]
     },
     "expect": {
       "status": "completed",
@@ -533,7 +537,11 @@
     "liveEligible": true,
     "request": {
       "message": "Give me a comprehensive view: my portfolio value, how it is performing, and what risks I should watch",
-      "toolNames": ["get_portfolio_summary", "performance_compare", "analyze_risk"]
+      "toolNames": [
+        "get_portfolio_summary",
+        "performance_compare",
+        "analyze_risk"
+      ]
     },
     "expect": {
       "status": "completed",

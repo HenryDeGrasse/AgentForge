@@ -85,11 +85,13 @@ export class GetTransactionHistoryTool implements ToolDefinition<
   public readonly description =
     'Return filtered, paginated transaction history with deterministic summary statistics.';
 
-  public readonly inputSchema: ToolJsonSchema = TRANSACTION_HISTORY_INPUT_SCHEMA;
+  public readonly inputSchema: ToolJsonSchema =
+    TRANSACTION_HISTORY_INPUT_SCHEMA;
 
   public readonly name = 'get_transaction_history';
 
-  public readonly outputSchema: ToolJsonSchema = TRANSACTION_HISTORY_OUTPUT_SCHEMA;
+  public readonly outputSchema: ToolJsonSchema =
+    TRANSACTION_HISTORY_OUTPUT_SCHEMA;
 
   public constructor(
     private readonly orderService: OrderService,

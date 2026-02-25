@@ -109,7 +109,8 @@ export class RebalanceSuggestTool implements ToolDefinition<
 
   public readonly name = 'rebalance_suggest';
 
-  public readonly outputSchema: ToolJsonSchema = REBALANCE_SUGGEST_OUTPUT_SCHEMA;
+  public readonly outputSchema: ToolJsonSchema =
+    REBALANCE_SUGGEST_OUTPUT_SCHEMA;
 
   public constructor(
     private readonly portfolioService: PortfolioService,

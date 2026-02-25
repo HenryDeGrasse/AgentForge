@@ -69,7 +69,8 @@ export class MarketDataLookupTool implements ToolDefinition<
 
   public readonly name = 'market_data_lookup';
 
-  public readonly outputSchema: ToolJsonSchema = MARKET_DATA_LOOKUP_OUTPUT_SCHEMA;
+  public readonly outputSchema: ToolJsonSchema =
+    MARKET_DATA_LOOKUP_OUTPUT_SCHEMA;
 
   public constructor(
     private readonly symbolService: SymbolService,
