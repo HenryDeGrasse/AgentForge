@@ -155,7 +155,7 @@
     "profile": "rich",
     "liveEligible": true,
     "request": {
-      "message": "Check if my portfolio is compliant with standard rules",
+      "message": "Check if my current portfolio holdings are compliant with the standard compliance rules",
       "toolNames": ["compliance_check"]
     },
     "expect": {
@@ -257,7 +257,7 @@
       "category": "edge-case",
       "subcategory": "empty-data",
       "difficulty": "basic",
-      "description": "Portfolio summary on empty portfolio — graceful degradation",
+      "description": "Portfolio summary on empty portfolio \u2014 graceful degradation",
       "addedFrom": "initial"
     }
   },
@@ -357,7 +357,7 @@
       "category": "auth",
       "subcategory": "user-scoping",
       "difficulty": "intermediate",
-      "description": "Auth scoping across two tool calls — both get same userId",
+      "description": "Auth scoping across two tool calls \u2014 both get same userId",
       "addedFrom": "initial"
     }
   },
@@ -366,7 +366,9 @@
     "profile": "rich",
     "liveEligible": false,
     "runner": "generic",
-    "guardrailOverrides": { "maxIterations": 2 },
+    "guardrailOverrides": {
+      "maxIterations": 2
+    },
     "request": {
       "message": "Analyze everything about my portfolio in detail",
       "toolNames": ["get_portfolio_summary", "analyze_risk"]
@@ -393,7 +395,9 @@
     "id": "guardrail-cost-limit",
     "profile": "rich",
     "liveEligible": false,
-    "guardrailOverrides": { "costLimitUsd": 0.001 },
+    "guardrailOverrides": {
+      "costLimitUsd": 0.001
+    },
     "request": {
       "message": "What is my portfolio?",
       "toolNames": ["get_portfolio_summary"]
@@ -421,7 +425,9 @@
     "profile": "rich",
     "liveEligible": false,
     "runner": "custom",
-    "guardrailOverrides": { "timeoutMs": 1 },
+    "guardrailOverrides": {
+      "timeoutMs": 1
+    },
     "request": {
       "message": "What is my portfolio?",
       "toolNames": ["get_portfolio_summary"]
@@ -440,7 +446,7 @@
       "category": "guardrail",
       "subcategory": "guardrail-timeout",
       "difficulty": "intermediate",
-      "description": "Timeout guardrail triggers — uses fake timers for determinism",
+      "description": "Timeout guardrail triggers \u2014 uses fake timers for determinism",
       "addedFrom": "initial"
     }
   },
@@ -449,7 +455,9 @@
     "profile": "rich",
     "liveEligible": false,
     "runner": "custom",
-    "guardrailOverrides": { "circuitBreakerFailureThreshold": 1 },
+    "guardrailOverrides": {
+      "circuitBreakerFailureThreshold": 1
+    },
     "request": {
       "message": "What is my portfolio?",
       "toolNames": ["get_portfolio_summary"]
@@ -501,7 +509,7 @@
       "category": "adversarial",
       "subcategory": "schema-safety",
       "difficulty": "intermediate",
-      "description": "LLM sends invalid tool args — registry rejects, agent recovers",
+      "description": "LLM sends invalid tool args \u2014 registry rejects, agent recovers",
       "addedFrom": "initial"
     }
   },
@@ -533,7 +541,7 @@
       "category": "adversarial",
       "subcategory": "schema-safety",
       "difficulty": "intermediate",
-      "description": "LLM calls nonexistent tool — registry returns tool_not_found, agent recovers",
+      "description": "LLM calls nonexistent tool \u2014 registry returns tool_not_found, agent recovers",
       "addedFrom": "initial"
     }
   },
@@ -566,7 +574,7 @@
       "category": "adversarial",
       "subcategory": "schema-safety",
       "difficulty": "intermediate",
-      "description": "LLM sends empty args to tool requiring required fields — input validation fails",
+      "description": "LLM sends empty args to tool requiring required fields \u2014 input validation fails",
       "addedFrom": "initial"
     }
   },
@@ -598,7 +606,7 @@
       "category": "adversarial",
       "subcategory": "schema-safety",
       "difficulty": "advanced",
-      "description": "Tool returns invalid output — registry catches via validateToolOutput, agent recovers",
+      "description": "Tool returns invalid output \u2014 registry catches via validateToolOutput, agent recovers",
       "addedFrom": "initial"
     }
   }

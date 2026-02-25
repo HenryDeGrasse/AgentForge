@@ -25,7 +25,7 @@ export interface LLMCompletionRequest {
   messages: LLMMessage[];
   response?: LLMStructuredResponseDefinition;
   temperature?: number;
-  toolChoice?: 'auto' | 'none';
+  toolChoice?: 'auto' | 'none' | 'required';
   tools?: LLMToolDefinition[];
 }
 

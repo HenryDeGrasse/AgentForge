@@ -104,7 +104,18 @@ export class ReactAgentService {
 
     const toolRegistry = this.getToolRegistry();
     const tools = toolRegistry.list(input.toolNames);
+    const toolDefinitions: LLMToolDefinition[] = tools.map(
+      ({ description, inputSchema, name }): LLMToolDefinition => {
+        return {
+          description,
+          inputSchema: inputSchema as unknown as Record<string, unknown>,
+          name
+        };
+      }
+    );
     let estimatedCostUsd = 0;
+    let escalationAttempted = false;
+    let escalationPending = false;
     let iterationCount = 0;
     let toolCallsCount = 0;
 
@@ -140,25 +151,16 @@ export class ReactAgentService {
           });
         }
 
+        const toolChoice = escalationPending ? 'required' : 'auto';
+
         const completion = await this.withTimeout(
           this.llmClient.complete({
             messages,
             temperature: 0,
-            ...(tools.length
+            ...(toolDefinitions.length
               ? {
-                  toolChoice: 'auto',
-                  tools: tools.map(
-                    ({ description, inputSchema, name }): LLMToolDefinition => {
-                      return {
-                        description,
-                        inputSchema: inputSchema as unknown as Record<
-                          string,
-                          unknown
-                        >,
-                        name
-                      };
-                    }
-                  )
+                  toolChoice,
+                  tools: toolDefinitions
                 }
               : {})
           }),
@@ -166,6 +168,11 @@ export class ReactAgentService {
         );
 
         estimatedCostUsd += this.getEstimatedCostUsd(completion, guardrails);
+
+        // Reset pending flag after the retry has been consumed
+        if (escalationPending) {
+          escalationPending = false;
+        }
 
         if (estimatedCostUsd > guardrails.costLimitUsd) {
           this.recordSuccess();
@@ -204,6 +211,32 @@ export class ReactAgentService {
         }
 
         if (completion.text?.trim()) {
+          // Tool-required escalation: if tools are available but the LLM
+          // answered without calling any, retry once with toolChoice 'required'
+          // to prevent hallucinated portfolio-specific determinations.
+          if (
+            toolDefinitions.length > 0 &&
+            toolCallsCount === 0 &&
+            !escalationAttempted
+          ) {
+            escalationAttempted = true;
+            escalationPending = true;
+
+            // Replace the premature text response with an escalation nudge
+            messages.push({
+              content: completion.text,
+              role: 'assistant'
+            });
+
+            messages.push({
+              content:
+                'You must use the available tools to answer portfolio-specific questions. Do not provide determinations without calling the relevant tool first.',
+              role: 'user'
+            });
+
+            continue;
+          }
+
           this.recordSuccess();
 
           return {

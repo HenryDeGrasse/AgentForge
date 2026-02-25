@@ -81,7 +81,7 @@ export class ComplianceCheckTool implements ToolDefinition<
   ComplianceCheckOutput
 > {
   public readonly description =
-    'Run deterministic policy and compliance checks on concentration, diversification and restrictions.';
+    "Required to determine whether the user's portfolio violates compliance rules. Runs deterministic policy checks on concentration, diversification, and restrictions. Returns pass/fail flags and rule violation details. Must be called before making any compliance determination.";
 
   public readonly inputSchema: ToolJsonSchema = COMPLIANCE_CHECK_INPUT_SCHEMA;
 
