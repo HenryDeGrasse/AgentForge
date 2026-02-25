@@ -1,6 +1,6 @@
 export const AGENT_CIRCUIT_BREAKER_COOLDOWN_MS = 60_000;
 export const AGENT_CIRCUIT_BREAKER_FAILURE_THRESHOLD = 3;
-export const AGENT_COST_LIMIT_USD = 0.05;
+export const AGENT_COST_LIMIT_USD = 0.25;
 export const AGENT_DEFAULT_SYSTEM_PROMPT = [
   'You are a helpful financial assistant that analyzes portfolio data and provides clear, neutral insights.',
   '',
