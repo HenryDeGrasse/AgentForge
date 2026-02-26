@@ -61,6 +61,10 @@ export class ChartDataExtractorService {
         return this.extractPerformanceCompare(data);
       case 'get_transaction_history':
         return this.extractTransactionHistory(data);
+      case 'simulate_trades':
+        return this.extractSimulateTrades(data);
+      case 'stress_test':
+        return this.extractStressTest(data);
       default:
         return [];
     }
@@ -378,5 +382,107 @@ export class ChartDataExtractorService {
         toolName: 'get_transaction_history'
       }
     ];
+  }
+
+  private extractSimulateTrades(
+    data: Record<string, unknown>
+  ): ChartDataItem[] {
+    const charts: ChartDataItem[] = [];
+
+    // Before allocation chart
+    const before = data['portfolioBefore'] as Record<string, unknown>;
+
+    if (before) {
+      const positions = before['positions'];
+
+      if (Array.isArray(positions) && positions.length > 0) {
+        charts.push({
+          chartType: 'doughnut',
+          data: {
+            items: positions
+              .slice(0, ChartDataExtractorService.MAX_DOUGHNUT_ITEMS)
+              .map((p: Record<string, unknown>) => ({
+                name: String(p['symbol'] ?? 'Unknown'),
+                value:
+                  Math.round(Number(p['allocationPct'] ?? 0) * 100 * 100) / 100
+              }))
+          },
+          label: 'Current Allocation',
+          toolName: 'simulate_trades'
+        });
+      }
+    }
+
+    // After allocation chart
+    const after = data['hypotheticalPortfolio'] as Record<string, unknown>;
+
+    if (after) {
+      const positions = after['positions'];
+
+      if (Array.isArray(positions) && positions.length > 0) {
+        charts.push({
+          chartType: 'doughnut',
+          data: {
+            items: positions
+              .slice(0, ChartDataExtractorService.MAX_DOUGHNUT_ITEMS)
+              .map((p: Record<string, unknown>) => ({
+                name: String(p['symbol'] ?? 'Unknown'),
+                value:
+                  Math.round(Number(p['allocationPct'] ?? 0) * 100 * 100) / 100
+              }))
+          },
+          label: 'Hypothetical Allocation',
+          toolName: 'simulate_trades'
+        });
+      }
+    }
+
+    return charts;
+  }
+
+  private extractStressTest(data: Record<string, unknown>): ChartDataItem[] {
+    const charts: ChartDataItem[] = [];
+
+    // Position losses chart
+    const positionImpacts = data['positionImpacts'];
+
+    if (Array.isArray(positionImpacts) && positionImpacts.length > 0) {
+      charts.push({
+        chartType: 'horizontalBar',
+        data: {
+          items: positionImpacts
+            .slice(0, ChartDataExtractorService.MAX_DOUGHNUT_ITEMS)
+            .map((p: Record<string, unknown>) => ({
+              name: String(p['symbol'] ?? 'Unknown'),
+              value: Math.round(Number(p['lossPct'] ?? 0) * 100) / 100
+            }))
+        },
+        label:
+          String(
+            (data['scenario'] as Record<string, unknown>)?.['name'] ??
+              'Stress Test'
+          ) + ' — Position Losses (%)',
+        toolName: 'stress_test'
+      });
+    }
+
+    // Asset class aggregation chart
+    const assetClassImpacts = data['assetClassImpacts'];
+
+    if (Array.isArray(assetClassImpacts) && assetClassImpacts.length > 0) {
+      charts.push({
+        chartType: 'horizontalBar',
+        data: {
+          items: assetClassImpacts.map((a: Record<string, unknown>) => ({
+            name: String(a['name'] ?? 'Unknown'),
+            value: Math.round(Number(a['lossPct'] ?? 0) * 100) / 100
+          }))
+        },
+        label: 'Asset Class Impact (%)',
+        toolName: 'stress_test'
+      });
+    }
+
+    return charts;
   }
 }

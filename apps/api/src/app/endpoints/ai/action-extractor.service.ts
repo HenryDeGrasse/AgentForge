@@ -103,6 +103,34 @@ export class ActionExtractorService {
         prompt: 'Suggest how I should rebalance my portfolio'
       }
     ],
+    simulate_trades: [
+      {
+        actionType: 'chip',
+        key: 'analyze-risk-simulated',
+        label: 'Analyze risk of new portfolio',
+        prompt: 'Analyze the risk of my portfolio after these simulated trades'
+      },
+      {
+        actionType: 'chip',
+        key: 'try-different-trades',
+        label: 'Try different trades',
+        prompt: 'Let me simulate different trades on my portfolio'
+      }
+    ],
+    stress_test: [
+      {
+        actionType: 'chip',
+        key: 'try-another-scenario',
+        label: 'Try another scenario',
+        prompt: 'Run a different stress test scenario on my portfolio'
+      },
+      {
+        actionType: 'chip',
+        key: 'analyze-risk-from-stress',
+        label: 'Analyze my risk',
+        prompt: 'Analyze the risk in my portfolio'
+      }
+    ],
     rebalance_suggest: [
       {
         actionType: 'chip',

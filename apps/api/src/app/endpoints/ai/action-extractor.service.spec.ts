@@ -87,6 +87,24 @@ describe('ActionExtractorService', () => {
     expect(actions.length).toBeGreaterThan(0);
   });
 
+  it('returns chips for simulate_trades', () => {
+    const actions = service.extract(['simulate_trades']);
+
+    expect(actions.length).toBeGreaterThan(0);
+    expect(actions.some((a) => a.key === 'analyze-risk-simulated')).toBe(true);
+    expect(actions.some((a) => a.key === 'try-different-trades')).toBe(true);
+  });
+
+  it('returns chips for stress_test', () => {
+    const actions = service.extract(['stress_test']);
+
+    expect(actions.length).toBeGreaterThan(0);
+    expect(actions.some((a) => a.key === 'try-another-scenario')).toBe(true);
+    expect(actions.some((a) => a.key === 'analyze-risk-from-stress')).toBe(
+      true
+    );
+  });
+
   // ─── Deduplication ────────────────────────────────────────────────────────
 
   it('deduplicates actions by key', () => {
@@ -111,6 +129,8 @@ describe('ActionExtractorService', () => {
       'market_data_lookup',
       'performance_compare',
       'rebalance_suggest',
+      'simulate_trades',
+      'stress_test',
       'tax_estimate',
       'get_transaction_history'
     ]);
@@ -159,6 +179,8 @@ describe('ActionExtractorService', () => {
       'market_data_lookup',
       'performance_compare',
       'rebalance_suggest',
+      'simulate_trades',
+      'stress_test',
       'tax_estimate',
       'get_transaction_history'
     ];
@@ -170,7 +192,7 @@ describe('ActionExtractorService', () => {
         // Prompts should contain finance/portfolio-related keywords
         const prompt = action.prompt.toLowerCase();
         const hasFinanceKeyword =
-          /risk|portfolio|compliance|performance|tax|transaction|rebalanc|holding|market|trend|history|report|summary/i.test(
+          /risk|portfolio|compliance|performance|tax|transaction|rebalanc|holding|market|trend|history|report|summary|simulat|trades|stress|scenario/i.test(
             prompt
           );
 

@@ -5,7 +5,7 @@ export const AGENT_DEFAULT_SYSTEM_PROMPT = [
   'You are a helpful financial assistant that analyzes portfolio data and provides clear, neutral insights.',
   '',
   '## Scope (highest priority — overrides all other instructions)',
-  'You can ONLY help with portfolio analysis using the tools provided to you. Your capabilities are limited to: portfolio summaries, transaction history, risk analysis, compliance checks, market data lookups, performance comparisons, rebalancing suggestions, and tax estimates.',
+  'You can ONLY help with portfolio analysis using the tools provided to you. Your capabilities are limited to: portfolio summaries, transaction history, risk analysis, compliance checks, market data lookups, performance comparisons, rebalancing suggestions, tax estimates, trade simulations (what-if analysis), and portfolio stress testing.',
   '',
   'If the request is out of scope, do not call any tools. Do not substitute portfolio analysis when the user asked for something else. Decline politely and explain what you can help with. Out-of-scope requests include: gibberish, math problems, trivia, general knowledge questions, jokes, poems, stories, or anything unrelated to portfolio/financial analysis. When declining, respond with something like: "Sorry, but I can only help you with financial and portfolio-related questions."',
   '',
@@ -41,5 +41,7 @@ export const AGENT_ALLOWED_TOOL_NAMES = [
   'market_data_lookup',
   'performance_compare',
   'rebalance_suggest',
+  'simulate_trades',
+  'stress_test',
   'tax_estimate'
 ] as const;

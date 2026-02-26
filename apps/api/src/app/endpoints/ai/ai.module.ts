@@ -10,6 +10,8 @@ import { GetTransactionHistoryTool } from '@ghostfolio/api/app/endpoints/ai/tool
 import { MarketDataLookupTool } from '@ghostfolio/api/app/endpoints/ai/tools/market-data-lookup.tool';
 import { PerformanceCompareTool } from '@ghostfolio/api/app/endpoints/ai/tools/performance-compare.tool';
 import { RebalanceSuggestTool } from '@ghostfolio/api/app/endpoints/ai/tools/rebalance-suggest.tool';
+import { SimulateTradesTool } from '@ghostfolio/api/app/endpoints/ai/tools/simulate-trades.tool';
+import { StressTestTool } from '@ghostfolio/api/app/endpoints/ai/tools/stress-test.tool';
 import { TaxEstimateTool } from '@ghostfolio/api/app/endpoints/ai/tools/tax-estimate.tool';
 import { ToolRegistry } from '@ghostfolio/api/app/endpoints/ai/tools/tool.registry';
 import { AI_TOOL_DEFINITIONS_TOKEN } from '@ghostfolio/api/app/endpoints/ai/tools/tool.types';
@@ -84,6 +86,8 @@ import { ResponseVerifierService } from './verification/response-verifier.servic
     MarketDataLookupTool,
     PerformanceCompareTool,
     RebalanceSuggestTool,
+    SimulateTradesTool,
+    StressTestTool,
     TaxEstimateTool,
     ToolRegistry,
     PortfolioService,
@@ -97,6 +101,8 @@ import { ResponseVerifierService } from './verification/response-verifier.servic
         MarketDataLookupTool,
         PerformanceCompareTool,
         RebalanceSuggestTool,
+        SimulateTradesTool,
+        StressTestTool,
         TaxEstimateTool
       ],
       provide: AI_TOOL_DEFINITIONS_TOKEN,
@@ -108,6 +114,8 @@ import { ResponseVerifierService } from './verification/response-verifier.servic
         marketDataLookupTool,
         performanceCompareTool,
         rebalanceSuggestTool,
+        simulateTradesTool,
+        stressTestTool,
         taxEstimateTool
       ) => {
         return [
@@ -118,7 +126,9 @@ import { ResponseVerifierService } from './verification/response-verifier.servic
           performanceCompareTool,
           taxEstimateTool,
           complianceCheckTool,
-          rebalanceSuggestTool
+          rebalanceSuggestTool,
+          simulateTradesTool,
+          stressTestTool
         ];
       }
     },

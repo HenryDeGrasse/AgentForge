@@ -777,7 +777,12 @@ export class AiService {
     /net\s*worth/i,
     /cost\s*basis/i,
     /unreali[sz]ed/i,
-    /reali[sz]ed/i
+    /reali[sz]ed/i,
+    /simulat/i,
+    /what.if/i,
+    /hypothetical/i,
+    /stress.test/i,
+    /scenario/i
   ];
 
   /**
@@ -803,10 +808,10 @@ export class AiService {
     /\b(?:can.t help|cannot help|only help with|outside.{0,20}scope|can only help|portfolio.related questions)\b/i;
 
   private static readonly AMBIGUOUS_CLARIFICATION_RESPONSE =
-    "Could you be more specific about what you'd like to do? I can help with: portfolio summaries, risk analysis, compliance checks, transaction history, market data lookups, performance comparisons, rebalancing suggestions, or tax estimates.";
+    "Could you be more specific about what you'd like to do? I can help with: portfolio summaries, risk analysis, compliance checks, transaction history, market data lookups, performance comparisons, rebalancing suggestions, tax estimates, trade simulations (what-if analysis), or portfolio stress testing.";
 
   private static readonly SCOPE_REFUSAL_RESPONSE =
-    "I can't help with that request. I'm a portfolio analysis assistant and can only help with: portfolio summaries, transaction history, risk analysis, compliance checks, market data lookups, performance comparisons, rebalancing suggestions, and tax estimates. Please ask me about your portfolio and I'll be happy to help!";
+    "I can't help with that request. I'm a portfolio analysis assistant and can only help with: portfolio summaries, transaction history, risk analysis, compliance checks, market data lookups, performance comparisons, rebalancing suggestions, tax estimates, trade simulations, and stress testing. Please ask me about your portfolio and I'll be happy to help!";
 
   /**
    * Deterministic request router. Classifies the message into one of:

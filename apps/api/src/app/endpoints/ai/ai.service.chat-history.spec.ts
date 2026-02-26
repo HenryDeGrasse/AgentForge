@@ -509,7 +509,7 @@ describe('AiService.chat() — toolNames validation', () => {
 
     await service.chat({ message: 'Hello', userId: 'user-1' });
 
-    // toolNames: undefined now defaults to all 8 curated tools
+    // toolNames: undefined now defaults to all curated tools
     expect(agentRun.mock.calls[0][0].toolNames).toEqual([
       'analyze_risk',
       'compliance_check',
@@ -518,6 +518,8 @@ describe('AiService.chat() — toolNames validation', () => {
       'market_data_lookup',
       'performance_compare',
       'rebalance_suggest',
+      'simulate_trades',
+      'stress_test',
       'tax_estimate'
     ]);
   });
