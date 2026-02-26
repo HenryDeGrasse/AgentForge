@@ -1,13 +1,15 @@
-import { AiChatResponse } from '@ghostfolio/common/interfaces';
+import { AiChatResponse, SseEvent } from '@ghostfolio/common/interfaces';
 import { DataService } from '@ghostfolio/ui/services';
 
-import { TestBed } from '@angular/core/testing';
+import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 
 import { AiChatStateService } from './ai-chat-state.service';
 
 const MOCK_RESPONSE: AiChatResponse = {
+  chartData: [],
   confidence: 'high',
+  conversationId: 'conv-1',
   elapsedMs: 2000,
   estimatedCostUsd: 0.001,
   iterations: 1,
@@ -18,11 +20,16 @@ const MOCK_RESPONSE: AiChatResponse = {
   warnings: []
 };
 
-function configureModule(postAiChat: jest.Mock): AiChatStateService {
+/** Builds a stream of SSE events ending with a done event. */
+function buildDoneStream(payload: AiChatResponse = MOCK_RESPONSE): SseEvent[] {
+  return [{ type: 'done', payload } as SseEvent];
+}
+
+function configureModule(streamAiChat: jest.Mock): AiChatStateService {
   TestBed.configureTestingModule({
     providers: [
       AiChatStateService,
-      { provide: DataService, useValue: { postAiChat } }
+      { provide: DataService, useValue: { streamAiChat } }
     ]
   });
   return TestBed.inject(AiChatStateService);
@@ -31,11 +38,11 @@ function configureModule(postAiChat: jest.Mock): AiChatStateService {
 // ─── success path ────────────────────────────────────────────────────────────
 describe('AiChatStateService (success mock)', () => {
   let service: AiChatStateService;
-  let mockPost: jest.Mock;
+  let mockStream: jest.Mock;
 
   beforeEach(() => {
-    mockPost = jest.fn().mockReturnValue(of(MOCK_RESPONSE));
-    service = configureModule(mockPost);
+    mockStream = jest.fn().mockReturnValue(of(...buildDoneStream()));
+    service = configureModule(mockStream);
   });
 
   afterEach(() => TestBed.resetTestingModule());
@@ -109,7 +116,7 @@ describe('AiChatStateService (success mock)', () => {
     let msgs: any[] = [];
     service.messages$.subscribe((m) => (msgs = m));
     expect(msgs.length).toBe(0);
-    expect(mockPost).not.toHaveBeenCalled();
+    expect(mockStream).not.toHaveBeenCalled();
   });
 
   it('appends user message immediately', () => {
@@ -119,12 +126,14 @@ describe('AiChatStateService (success mock)', () => {
     expect(msgs[0]).toEqual({ role: 'user', text: 'Hello' });
   });
 
-  it('appends assistant message on success', () => {
+  it('appends assistant message on done event', () => {
     service.sendMessage('Hello');
     let msgs: any[] = [];
     service.messages$.subscribe((m) => (msgs = m));
     expect(msgs.length).toBe(2);
     expect(msgs[1]).toEqual({
+      actions: undefined,
+      chartData: [],
       confidence: 'high',
       role: 'assistant',
       sources: ['get_portfolio_summary'],
@@ -133,7 +142,7 @@ describe('AiChatStateService (success mock)', () => {
     });
   });
 
-  it('sets isLoading to false after success', () => {
+  it('sets isLoading to false after done', () => {
     service.sendMessage('Hello');
     let loading: boolean;
     service.isLoading$.subscribe((v) => (loading = v));
@@ -177,6 +186,60 @@ describe('AiChatStateService (success mock)', () => {
     service.error$.subscribe((e) => (error = e));
     expect(error).toBeNull();
   });
+
+  it('stores conversationId from done event', () => {
+    service.sendMessage('Hello');
+    let convId: string | null;
+    service.conversationId$.subscribe((v) => (convId = v));
+    expect(convId).toBe('conv-1');
+  });
+});
+
+// ─── streaming events ────────────────────────────────────────────────────────
+describe('AiChatStateService (streaming events)', () => {
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('sets activeTool$ on tool_call event', fakeAsync(() => {
+    const events: SseEvent[] = [
+      { type: 'tool_call', toolName: 'analyze_risk', iteration: 1 },
+      {
+        type: 'tool_result',
+        toolName: 'analyze_risk',
+        status: 'success',
+        summary: 'done'
+      },
+      { type: 'done', payload: MOCK_RESPONSE }
+    ];
+
+    const mockStream = jest.fn().mockReturnValue(of(...events));
+    const service = configureModule(mockStream);
+
+    // Capture all activeTool emissions
+    const toolHistory: (string | null)[] = [];
+    service.activeTool$.subscribe((v) => toolHistory.push(v));
+
+    service.sendMessage('Analyze risk');
+    tick(100);
+
+    // Should have seen: null (initial), 'analyze_risk', null (tool_result), null (done)
+    expect(toolHistory).toContain('analyze_risk');
+    expect(toolHistory[toolHistory.length - 1]).toBeNull();
+  }));
+
+  it('handles error SSE event', () => {
+    const events: SseEvent[] = [
+      { type: 'error', message: 'Something went wrong' }
+    ];
+
+    const mockStream = jest.fn().mockReturnValue(of(...events));
+    const service = configureModule(mockStream);
+
+    service.sendMessage('Hello');
+
+    let error: string | null;
+    service.error$.subscribe((e) => (error = e));
+    expect(error).toBe('Something went wrong');
+  });
 });
 
 // ─── error path ──────────────────────────────────────────────────────────────
@@ -184,10 +247,10 @@ describe('AiChatStateService (error mock)', () => {
   let service: AiChatStateService;
 
   beforeEach(() => {
-    const mockPost = jest
+    const mockStream = jest
       .fn()
       .mockReturnValue(throwError(() => new Error('API down')));
-    service = configureModule(mockPost);
+    service = configureModule(mockStream);
   });
 
   afterEach(() => TestBed.resetTestingModule());

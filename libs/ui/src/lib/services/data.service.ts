@@ -30,6 +30,7 @@ import {
   ConversationDetail,
   ConversationSummary,
   ApiKeyResponse,
+  SseEvent,
   AssetProfileIdentifier,
   AssetResponse,
   BenchmarkMarketDataDetailsResponse,
@@ -882,6 +883,113 @@ export class DataService {
       message,
       ...(conversationId ? { conversationId } : {}),
       ...(toolNames?.length ? { toolNames } : {})
+    });
+  }
+
+  public streamAiChat({
+    conversationId,
+    message,
+    toolNames
+  }: {
+    conversationId?: string;
+    message: string;
+    toolNames?: string[];
+  }): Observable<SseEvent> {
+    return new Observable<SseEvent>((subscriber) => {
+      const abortController = new AbortController();
+
+      const token =
+        window.sessionStorage.getItem('auth-token') ||
+        window.localStorage.getItem('auth-token');
+
+      const body = JSON.stringify({
+        message,
+        ...(conversationId ? { conversationId } : {}),
+        ...(toolNames?.length ? { toolNames } : {})
+      });
+
+      fetch('/api/v1/ai/chat/stream', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body,
+        signal: abortController.signal
+      })
+        .then(async (response) => {
+          if (!response.ok) {
+            subscriber.error(
+              new Error(`Stream request failed: ${response.status}`)
+            );
+
+            return;
+          }
+
+          const reader = response.body?.getReader();
+
+          if (!reader) {
+            subscriber.error(new Error('No readable stream available'));
+
+            return;
+          }
+
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+
+              if (done) {
+                break;
+              }
+
+              buffer += decoder.decode(value, { stream: true });
+
+              // Parse SSE frames: split on double newline
+              const frames = buffer.split('\n\n');
+              buffer = frames.pop() ?? '';
+
+              for (const frame of frames) {
+                const trimmed = frame.trim();
+
+                if (!trimmed) {
+                  continue;
+                }
+
+                // Strip "data: " prefix
+                const dataLine = trimmed.startsWith('data: ')
+                  ? trimmed.slice(6)
+                  : trimmed;
+
+                try {
+                  const event = JSON.parse(dataLine) as SseEvent;
+                  subscriber.next(event);
+                } catch {
+                  // Skip malformed frames
+                }
+              }
+            }
+          } catch (error) {
+            if (!abortController.signal.aborted) {
+              subscriber.error(error);
+
+              return;
+            }
+          }
+
+          subscriber.complete();
+        })
+        .catch((error) => {
+          if (!abortController.signal.aborted) {
+            subscriber.error(error);
+          }
+        });
+
+      return () => {
+        abortController.abort();
+      };
     });
   }
 

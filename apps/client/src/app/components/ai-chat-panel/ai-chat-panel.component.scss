@@ -677,6 +677,100 @@ $c-low-bg: #fef2f2;
   }
 }
 
+// ─── Action chips (after assistant messages) ─────────────────────────────────
+.action-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-top: 0.5rem;
+}
+
+.action-chip {
+  padding: 0.375rem 0.75rem;
+  border: 1.5px solid $c-border;
+  border-radius: 10px;
+  background: $c-surface;
+  color: $c-indigo-dark;
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  line-height: 1.4;
+  transition: all 0.15s;
+
+  &:hover {
+    background: $c-indigo-dim;
+    border-color: rgba($c-indigo, 0.4);
+    color: $c-indigo-dark;
+    transform: translateY(-1px);
+  }
+
+  &.action-button {
+    background: $c-indigo-dim;
+    border-color: rgba($c-indigo, 0.3);
+    font-weight: 600;
+
+    &:hover {
+      background: rgba($c-indigo, 0.15);
+      border-color: $c-indigo;
+    }
+  }
+}
+
+// ─── Tool indicator ──────────────────────────────────────────────────────────
+.tool-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  background: $c-indigo-dim;
+  border: 1px solid rgba($c-indigo, 0.15);
+  border-radius: 10px;
+  font-size: 0.75rem;
+  color: $c-indigo-dark;
+  font-weight: 500;
+  animation: fadeIn 0.2s ease;
+}
+
+.tool-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba($c-indigo, 0.2);
+  border-top-color: $c-indigo;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.tool-name {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.6875rem;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// ─── Streaming preview ───────────────────────────────────────────────────────
+.streaming-preview {
+  white-space: pre-wrap;
+  font-size: 0.875rem;
+  line-height: 1.65;
+  opacity: 0.85;
+}
+
 // ─── Typing indicator ─────────────────────────────────────────────────────────
 .typing-indicator {
   display: flex;
@@ -1021,5 +1115,42 @@ $c-low-bg: #fef2f2;
 
   .typing-indicator .dot {
     background: #818cf8;
+  }
+
+  .action-chip {
+    background: #2a2a3e;
+    border-color: rgba(255, 255, 255, 0.08);
+    color: #818cf8;
+
+    &:hover {
+      background: rgba(129, 140, 248, 0.12);
+      border-color: rgba(129, 140, 248, 0.4);
+      color: #a5b4fc;
+    }
+
+    &.action-button {
+      background: rgba(129, 140, 248, 0.1);
+      border-color: rgba(129, 140, 248, 0.25);
+
+      &:hover {
+        background: rgba(129, 140, 248, 0.18);
+        border-color: #818cf8;
+      }
+    }
+  }
+
+  .tool-indicator {
+    background: rgba(129, 140, 248, 0.1);
+    border-color: rgba(129, 140, 248, 0.15);
+    color: #a5b4fc;
+  }
+
+  .tool-spinner {
+    border-color: rgba(129, 140, 248, 0.2);
+    border-top-color: #818cf8;
+  }
+
+  .streaming-preview {
+    color: rgba(255, 255, 255, 0.75);
   }
 }

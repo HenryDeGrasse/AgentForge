@@ -145,11 +145,43 @@
               {{ msg.confidence }}
             </span>
           </div>
+
+          @if (msg.actions?.length) {
+            <div class="action-chips">
+              @for (action of msg.actions; track action.key) {
+                <button
+                  class="action-chip"
+                  type="button"
+                  [class.action-button]="action.actionType === 'button'"
+                  (click)="onActionClick(action)"
+                >
+                  {{ action.label }}
+                </button>
+              }
+            </div>
+          }
         </div>
       }
     }
 
-    @if (isLoading$ | async) {
+    <!-- Tool indicator -->
+    @if (activeTool$ | async; as toolName) {
+      <div class="tool-indicator">
+        <span class="tool-spinner"></span>
+        <span class="tool-name">{{ toolName }}</span>
+      </div>
+    }
+
+    <!-- Streaming preview (plaintext, not markdown) -->
+    @if (isStreaming$ | async) {
+      @if (streamingText$ | async; as streamText) {
+        <div class="message-assistant">
+          <div class="bubble streaming-preview">{{ streamText }}</div>
+        </div>
+      }
+    }
+
+    @if ((isLoading$ | async) && !(isStreaming$ | async)) {
       <div class="typing-indicator">
         <span class="dot"></span>
         <span class="dot"></span>

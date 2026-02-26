@@ -1,6 +1,7 @@
 import { AiChatChartComponent } from '@ghostfolio/client/components/ai-chat-chart/ai-chat-chart.component';
 import { AiChatStateService } from '@ghostfolio/client/services/ai-chat-state.service';
 import {
+  ActionItem,
   ChatMessage,
   ConversationSummary
 } from '@ghostfolio/common/interfaces';
@@ -40,6 +41,9 @@ export class AiChatPanelComponent implements AfterViewChecked, OnDestroy {
   public readonly isOpen$ = this.stateService.isOpen$;
   public readonly isLoading$ = this.stateService.isLoading$;
   public readonly error$ = this.stateService.error$;
+  public readonly streamingText$ = this.stateService.streamingText$;
+  public readonly activeTool$ = this.stateService.activeTool$;
+  public readonly isStreaming$ = this.stateService.isStreaming$;
 
   public inputControl = new FormControl('', { nonNullable: true });
   public showHistory = false;
@@ -120,6 +124,10 @@ export class AiChatPanelComponent implements AfterViewChecked, OnDestroy {
 
   public onSuggestionClick(text: string): void {
     this.stateService.sendMessage(text);
+  }
+
+  public onActionClick(action: ActionItem): void {
+    this.stateService.sendMessage(action.prompt);
   }
 
   public onKeydown(event: KeyboardEvent): void {
