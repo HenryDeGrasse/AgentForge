@@ -50,8 +50,19 @@ export interface LLMCompletionResponse {
   usage?: LLMUsage;
 }
 
+export interface LLMStreamChunk {
+  delta: string;
+  finishReason?: LLMFinishReason;
+  toolCalls?: LLMToolCall[];
+  usage?: LLMUsage;
+}
+
 export interface LLMClient {
   complete(request: LLMCompletionRequest): Promise<LLMCompletionResponse>;
+  completeStream?(
+    request: LLMCompletionRequest,
+    signal?: AbortSignal
+  ): AsyncIterable<LLMStreamChunk>;
 }
 
 export const LLM_CLIENT_TOKEN = 'LLM_CLIENT_TOKEN';

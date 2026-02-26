@@ -3,6 +3,7 @@ import {
   LLMCompletionRequest,
   LLMCompletionResponse,
   LLMFinishReason,
+  LLMStreamChunk,
   LLMToolCall,
   LLMUsage
 } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
@@ -29,7 +30,99 @@ export class OpenAiClientService implements LLMClient {
   public async complete(
     request: LLMCompletionRequest
   ): Promise<LLMCompletionResponse> {
-    const response = await this.getClient().chat.completions.create({
+    const response = await this.getClient().chat.completions.create(
+      this.buildRequestParams(request)
+    );
+
+    const firstChoice = response.choices?.[0];
+    const content = this.getMessageContent(firstChoice?.message?.content);
+
+    const usage = this.mapUsage(response.usage);
+
+    return {
+      finishReason: this.mapFinishReason(firstChoice?.finish_reason),
+      ...(request.response
+        ? {
+            structuredResponse: this.parseJsonObject(content)
+          }
+        : {}),
+      text: content,
+      toolCalls: this.mapToolCalls(firstChoice?.message?.tool_calls),
+      ...(usage ? { usage } : {})
+    };
+  }
+
+  public async *completeStream(
+    request: LLMCompletionRequest,
+    signal?: AbortSignal
+  ): AsyncIterable<LLMStreamChunk> {
+    const stream = await this.getClient().chat.completions.create({
+      ...this.buildRequestParams(request),
+      stream: true as const,
+      stream_options: { include_usage: true }
+    });
+
+    // Accumulate tool call deltas by index
+    const toolCallAccumulator = new Map<
+      number,
+      { argumentsString: string; id: string; name: string }
+    >();
+
+    for await (const chunk of stream) {
+      if (signal?.aborted) {
+        break;
+      }
+
+      const delta = chunk.choices?.[0]?.delta;
+      const finishReason = chunk.choices?.[0]?.finish_reason;
+
+      // Accumulate tool call deltas
+      if (delta?.tool_calls) {
+        for (const tc of delta.tool_calls) {
+          const existing = toolCallAccumulator.get(tc.index);
+
+          if (existing) {
+            existing.argumentsString += tc.function?.arguments ?? '';
+
+            if (tc.function?.name) {
+              existing.name = tc.function.name;
+            }
+          } else {
+            toolCallAccumulator.set(tc.index, {
+              argumentsString: tc.function?.arguments ?? '',
+              id: tc.id ?? '',
+              name: tc.function?.name ?? ''
+            });
+          }
+        }
+      }
+
+      // Yield text deltas
+      const textDelta = delta?.content ?? '';
+
+      // On finish, yield final chunk with accumulated data
+      if (finishReason) {
+        const mappedFinishReason = this.mapFinishReason(finishReason);
+        const usage = this.mapUsage(chunk.usage);
+        const toolCalls =
+          finishReason === 'tool_calls'
+            ? this.finalizeToolCalls(toolCallAccumulator)
+            : undefined;
+
+        yield {
+          delta: textDelta,
+          finishReason: mappedFinishReason,
+          ...(toolCalls ? { toolCalls } : {}),
+          ...(usage ? { usage } : {})
+        };
+      } else if (textDelta) {
+        yield { delta: textDelta };
+      }
+    }
+  }
+
+  private buildRequestParams(request: LLMCompletionRequest) {
+    return {
       messages: request.messages.map(
         ({ content, name, role, toolCallId, toolCalls }) => {
           return {
@@ -66,7 +159,7 @@ export class OpenAiClientService implements LLMClient {
                   name,
                   parameters: inputSchema
                 },
-                type: 'function'
+                type: 'function' as const
               };
             })
           }
@@ -79,28 +172,36 @@ export class OpenAiClientService implements LLMClient {
                 schema: request.response.schema,
                 strict: true
               },
-              type: 'json_schema'
+              type: 'json_schema' as const
             }
           }
         : {})
-    });
-
-    const firstChoice = response.choices?.[0];
-    const content = this.getMessageContent(firstChoice?.message?.content);
-
-    const usage = this.mapUsage(response.usage);
-
-    return {
-      finishReason: this.mapFinishReason(firstChoice?.finish_reason),
-      ...(request.response
-        ? {
-            structuredResponse: this.parseJsonObject(content)
-          }
-        : {}),
-      text: content,
-      toolCalls: this.mapToolCalls(firstChoice?.message?.tool_calls),
-      ...(usage ? { usage } : {})
     };
+  }
+
+  private finalizeToolCalls(
+    accumulator: Map<
+      number,
+      { argumentsString: string; id: string; name: string }
+    >
+  ): LLMToolCall[] {
+    const toolCalls: LLMToolCall[] = [];
+
+    for (const [, entry] of [...accumulator.entries()].sort(
+      (a, b) => a[0] - b[0]
+    )) {
+      if (!entry.id || !entry.name) {
+        continue;
+      }
+
+      toolCalls.push({
+        arguments: this.parseJsonObject(entry.argumentsString),
+        id: entry.id,
+        name: entry.name
+      });
+    }
+
+    return toolCalls;
   }
 
   private getClient() {

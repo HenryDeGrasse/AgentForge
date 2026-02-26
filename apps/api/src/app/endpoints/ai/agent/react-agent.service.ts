@@ -16,6 +16,7 @@ import {
 } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
 import { ToolRegistry } from '@ghostfolio/api/app/endpoints/ai/tools/tool.registry';
 import { ToolResultEnvelope } from '@ghostfolio/api/app/endpoints/ai/tools/tool.types';
+import type { SseEvent } from '@ghostfolio/common/interfaces';
 
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 
@@ -45,10 +46,19 @@ export interface ReactAgentRunInput {
   guardrails?: Partial<ReactAgentGuardrails>;
   priorMessages?: LLMMessage[]; // rehydrated conversation history (already capped by caller)
   prompt: string;
+  signal?: AbortSignal;
   systemPrompt?: string;
   toolNames?: string[];
   userId: string;
 }
+
+/** Internal event yielded at the end of runStreaming() to pass the final result. */
+export interface SseAgentDoneEvent {
+  type: '_agent_done';
+  result: ReactAgentRunResult;
+}
+
+export type AgentStreamEvent = SseAgentDoneEvent | SseEvent;
 
 export interface ExecutedToolEntry {
   envelope: ToolResultEnvelope;
@@ -87,19 +97,47 @@ export class ReactAgentService {
     @Optional() private readonly toolRegistry?: ToolRegistry
   ) {}
 
+  /**
+   * Consumes runStreaming() and returns the final result.
+   * Single execution path — no logic drift.
+   */
   public async run(input: ReactAgentRunInput): Promise<ReactAgentRunResult> {
+    let result: ReactAgentRunResult | undefined;
+
+    for await (const event of this.runStreaming(input)) {
+      if (event.type === '_agent_done') {
+        result = (event as SseAgentDoneEvent).result;
+      }
+    }
+
+    return result!;
+  }
+
+  /**
+   * Core execution engine. Yields typed SSE events during the ReAct loop,
+   * ending with an internal `_agent_done` event containing the final result.
+   */
+  public async *runStreaming(
+    input: ReactAgentRunInput
+  ): AsyncIterable<AgentStreamEvent> {
     const guardrails = this.getGuardrails(input.guardrails);
     const startedAt = Date.now();
+    const signal = input.signal;
 
     if (this.isCircuitBreakerOpen(guardrails, startedAt)) {
-      return this.buildGuardrailResult({
-        estimatedCostUsd: 0,
-        executedTools: [],
-        guardrail: 'CIRCUIT_BREAKER',
-        iterations: 0,
-        startedAt,
-        toolCalls: 0
-      });
+      yield {
+        type: '_agent_done',
+        result: this.buildGuardrailResult({
+          estimatedCostUsd: 0,
+          executedTools: [],
+          guardrail: 'CIRCUIT_BREAKER',
+          iterations: 0,
+          startedAt,
+          toolCalls: 0
+        })
+      };
+
+      return;
     }
 
     const messages: LLMMessage[] = [];
@@ -108,7 +146,6 @@ export class ReactAgentService {
       messages.push({ content: input.systemPrompt, role: 'system' });
     }
 
-    // Inject prior conversation turns (history cap enforced by caller)
     if (input.priorMessages?.length) {
       messages.push(...input.priorMessages);
     }
@@ -118,13 +155,11 @@ export class ReactAgentService {
     const toolRegistry = this.getToolRegistry();
     const tools = toolRegistry.list(input.toolNames);
     const toolDefinitions: LLMToolDefinition[] = tools.map(
-      ({ description, inputSchema, name }): LLMToolDefinition => {
-        return {
-          description,
-          inputSchema: inputSchema as unknown as Record<string, unknown>,
-          name
-        };
-      }
+      ({ description, inputSchema, name }): LLMToolDefinition => ({
+        description,
+        inputSchema: inputSchema as unknown as Record<string, unknown>,
+        name
+      })
     );
     const executedToolResults: ExecutedToolEntry[] = [];
     let estimatedCostUsd = 0;
@@ -141,51 +176,96 @@ export class ReactAgentService {
       ) {
         iterationCount = iteration;
 
+        // Check abort signal before each iteration
+        if (signal?.aborted) {
+          yield {
+            type: '_agent_done',
+            result: {
+              elapsedMs: Date.now() - startedAt,
+              estimatedCostUsd: this.roundCost(estimatedCostUsd),
+              executedTools: executedToolResults,
+              iterations: iterationCount,
+              response: 'Request was cancelled.',
+              status: 'partial',
+              toolCalls: toolCallsCount
+            }
+          };
+
+          return;
+        }
+
+        // Emit thinking event
+        yield {
+          type: 'thinking',
+          iteration,
+          maxIterations: guardrails.maxIterations
+        };
+
         if (this.hasTimedOut(startedAt, guardrails.timeoutMs)) {
           this.recordSuccess();
 
-          return this.buildGuardrailResult({
-            estimatedCostUsd,
-            executedTools: executedToolResults,
-            guardrail: 'TIMEOUT',
-            iterations: iterationCount,
-            startedAt,
-            toolCalls: toolCallsCount
-          });
+          yield {
+            type: '_agent_done',
+            result: this.buildGuardrailResult({
+              estimatedCostUsd,
+              executedTools: executedToolResults,
+              guardrail: 'TIMEOUT',
+              iterations: iterationCount,
+              startedAt,
+              toolCalls: toolCallsCount
+            })
+          };
+
+          return;
         }
 
         if (estimatedCostUsd >= guardrails.costLimitUsd) {
           this.recordSuccess();
 
-          return this.buildGuardrailResult({
-            estimatedCostUsd,
-            executedTools: executedToolResults,
-            guardrail: 'COST_LIMIT',
-            iterations: iterationCount,
-            startedAt,
-            toolCalls: toolCallsCount
-          });
+          yield {
+            type: '_agent_done',
+            result: this.buildGuardrailResult({
+              estimatedCostUsd,
+              executedTools: executedToolResults,
+              guardrail: 'COST_LIMIT',
+              iterations: iterationCount,
+              startedAt,
+              toolCalls: toolCallsCount
+            })
+          };
+
+          return;
         }
 
         const toolChoice = escalationPending ? 'required' : 'auto';
 
-        const completion = await this.withTimeout(
-          this.llmClient.complete({
+        // Use streaming LLM if available, otherwise fall back to non-streaming
+        let completion: LLMCompletionResponse;
+
+        if (this.llmClient.completeStream) {
+          completion = yield* this.streamLlmCompletion(
             messages,
-            temperature: 0,
-            ...(toolDefinitions.length
-              ? {
-                  toolChoice,
-                  tools: toolDefinitions
-                }
-              : {})
-          }),
-          this.getRemainingTime(startedAt, guardrails.timeoutMs)
-        );
+            toolDefinitions,
+            toolChoice,
+            guardrails,
+            startedAt,
+            signal
+          );
+        } else {
+          completion = await this.withTimeout(
+            this.llmClient.complete({
+              messages,
+              temperature: 0,
+              ...(toolDefinitions.length
+                ? { toolChoice, tools: toolDefinitions }
+                : {})
+            }),
+            this.getRemainingTime(startedAt, guardrails.timeoutMs)
+          );
+        }
 
         estimatedCostUsd += this.getEstimatedCostUsd(completion, guardrails);
 
-        // Reset pending flag after the retry has been consumed
         if (escalationPending) {
           escalationPending = false;
         }
@@ -193,14 +273,19 @@ export class ReactAgentService {
         if (estimatedCostUsd > guardrails.costLimitUsd) {
           this.recordSuccess();
 
-          return this.buildGuardrailResult({
-            estimatedCostUsd,
-            executedTools: executedToolResults,
-            guardrail: 'COST_LIMIT',
-            iterations: iterationCount,
-            startedAt,
-            toolCalls: toolCallsCount
-          });
+          yield {
+            type: '_agent_done',
+            result: this.buildGuardrailResult({
+              estimatedCostUsd,
+              executedTools: executedToolResults,
+              guardrail: 'COST_LIMIT',
+              iterations: iterationCount,
+              startedAt,
+              toolCalls: toolCallsCount
+            })
+          };
+
+          return;
         }
 
         if (completion.toolCalls.length > 0) {
@@ -213,6 +298,30 @@ export class ReactAgentService {
           });
 
           for (const toolCall of completion.toolCalls) {
+            // Check abort before tool execution
+            if (signal?.aborted) {
+              yield {
+                type: '_agent_done',
+                result: {
+                  elapsedMs: Date.now() - startedAt,
+                  estimatedCostUsd: this.roundCost(estimatedCostUsd),
+                  executedTools: executedToolResults,
+                  iterations: iterationCount,
+                  response: 'Request was cancelled.',
+                  status: 'partial',
+                  toolCalls: toolCallsCount
+                }
+              };
+
+              return;
+            }
+
+            yield {
+              type: 'tool_call',
+              toolName: toolCall.name,
+              iteration
+            };
+
             const { envelope, message: toolMessage } =
               await this.executeToolCall({
                 startedAt,
@@ -227,19 +336,19 @@ export class ReactAgentService {
               envelope,
               toolName: toolCall.name
             });
+
+            yield {
+              type: 'tool_result',
+              toolName: toolCall.name,
+              status: envelope.status === 'success' ? 'success' : 'error',
+              summary: this.summarizeToolResult(toolCall.name, envelope)
+            };
           }
 
           continue;
         }
 
         if (completion.text?.trim()) {
-          // Tool-required escalation: if tools are available but the LLM
-          // answered without calling any AND the response contains
-          // portfolio-specific claims (dollar amounts, percentages, ticker
-          // symbols), retry once with toolChoice 'required' to prevent
-          // hallucinated portfolio-specific determinations.
-          // Skip escalation when the LLM is correctly declining an
-          // out-of-scope request (refusal / "I can't help" responses).
           const responseText = completion.text.trim();
           const looksLikePortfolioClaim =
             /\$[\d,]+/.test(responseText) ||
@@ -263,12 +372,7 @@ export class ReactAgentService {
             escalationAttempted = true;
             escalationPending = true;
 
-            // Replace the premature text response with an escalation nudge
-            messages.push({
-              content: responseText,
-              role: 'assistant'
-            });
-
+            messages.push({ content: responseText, role: 'assistant' });
             messages.push({
               content:
                 'You must use the available tools to answer portfolio-specific questions. Do not provide determinations without calling the relevant tool first.',
@@ -280,40 +384,53 @@ export class ReactAgentService {
 
           this.recordSuccess();
 
-          return {
-            elapsedMs: Date.now() - startedAt,
-            estimatedCostUsd: this.roundCost(estimatedCostUsd),
-            executedTools: executedToolResults,
-            iterations: iterationCount,
-            response: completion.text.trim(),
-            status: 'completed',
-            toolCalls: toolCallsCount
+          yield {
+            type: '_agent_done',
+            result: {
+              elapsedMs: Date.now() - startedAt,
+              estimatedCostUsd: this.roundCost(estimatedCostUsd),
+              executedTools: executedToolResults,
+              iterations: iterationCount,
+              response: responseText,
+              status: 'completed',
+              toolCalls: toolCallsCount
+            }
           };
+
+          return;
         }
       }
 
       this.recordSuccess();
 
-      return this.buildGuardrailResult({
-        estimatedCostUsd,
-        executedTools: executedToolResults,
-        guardrail: 'MAX_ITERATIONS',
-        iterations: guardrails.maxIterations,
-        startedAt,
-        toolCalls: toolCallsCount
-      });
+      yield {
+        type: '_agent_done',
+        result: this.buildGuardrailResult({
+          estimatedCostUsd,
+          executedTools: executedToolResults,
+          guardrail: 'MAX_ITERATIONS',
+          iterations: guardrails.maxIterations,
+          startedAt,
+          toolCalls: toolCallsCount
+        })
+      };
     } catch (error) {
       if (error instanceof AgentTimeoutError) {
         this.recordSuccess();
 
-        return this.buildGuardrailResult({
-          estimatedCostUsd,
-          executedTools: executedToolResults,
-          guardrail: 'TIMEOUT',
-          iterations: iterationCount,
-          startedAt,
-          toolCalls: toolCallsCount
-        });
+        yield {
+          type: '_agent_done',
+          result: this.buildGuardrailResult({
+            estimatedCostUsd,
+            executedTools: executedToolResults,
+            guardrail: 'TIMEOUT',
+            iterations: iterationCount,
+            startedAt,
+            toolCalls: toolCallsCount
+          })
+        };
+
+        return;
       }
 
       Logger.error(
@@ -324,17 +441,79 @@ export class ReactAgentService {
 
       this.recordFailure(guardrails, Date.now());
 
-      return {
-        elapsedMs: Date.now() - startedAt,
-        estimatedCostUsd: this.roundCost(estimatedCostUsd),
-        executedTools: executedToolResults,
-        iterations: iterationCount,
-        response:
-          'The AI assistant is temporarily unavailable. Please try again shortly.',
-        status: 'failed',
-        toolCalls: toolCallsCount
+      yield {
+        type: '_agent_done',
+        result: {
+          elapsedMs: Date.now() - startedAt,
+          estimatedCostUsd: this.roundCost(estimatedCostUsd),
+          executedTools: executedToolResults,
+          iterations: iterationCount,
+          response:
+            'The AI assistant is temporarily unavailable. Please try again shortly.',
+          status: 'failed',
+          toolCalls: toolCallsCount
+        }
       };
     }
+  }
+
+  /**
+   * Streams an LLM completion, yielding response_chunk events for text deltas.
+   * Returns the accumulated LLMCompletionResponse.
+   */
+  private async *streamLlmCompletion(
+    messages: LLMMessage[],
+    toolDefinitions: LLMToolDefinition[],
+    toolChoice: 'auto' | 'none' | 'required',
+    _guardrails: ReactAgentGuardrails,
+    _startedAt: number,
+    signal?: AbortSignal
+  ): AsyncGenerator<SseEvent, LLMCompletionResponse> {
+    let fullText = '';
+    let finishReason: LLMCompletionResponse['finishReason'] = 'unknown';
+    let toolCalls: LLMToolCall[] = [];
+    let usage: LLMCompletionResponse['usage'];
+
+    const stream = this.llmClient.completeStream!(
+      {
+        messages,
+        temperature: 0,
+        ...(toolDefinitions.length
+          ? { toolChoice, tools: toolDefinitions }
+          : {})
+      },
+      signal
+    );
+
+    for await (const chunk of stream) {
+      if (signal?.aborted) {
+        break;
+      }
+
+      if (chunk.delta) {
+        fullText += chunk.delta;
+        yield { type: 'response_chunk', text: chunk.delta };
+      }
+
+      if (chunk.finishReason) {
+        finishReason = chunk.finishReason;
+      }
+
+      if (chunk.toolCalls) {
+        toolCalls = chunk.toolCalls;
+      }
+
+      if (chunk.usage) {
+        usage = chunk.usage;
+      }
+    }
+
+    return {
+      finishReason,
+      text: fullText,
+      toolCalls,
+      ...(usage ? { usage } : {})
+    };
   }
 
   private buildGuardrailResult({
@@ -584,6 +763,29 @@ export class ReactAgentService {
       openedAt: 0,
       state: 'closed'
     };
+  }
+
+  private summarizeToolResult(
+    toolName: string,
+    envelope: ToolResultEnvelope
+  ): string {
+    if (envelope.status !== 'success') {
+      return `${toolName} encountered an error.`;
+    }
+
+    const data = envelope.data;
+
+    if (!data || typeof data !== 'object') {
+      return `${toolName} completed successfully.`;
+    }
+
+    const keys = Object.keys(data);
+
+    if (keys.length === 0) {
+      return `${toolName} returned no data.`;
+    }
+
+    return `${toolName} returned ${keys.length} field(s).`;
   }
 
   private roundCost(value: number) {

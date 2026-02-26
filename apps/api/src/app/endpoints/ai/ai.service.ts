@@ -4,7 +4,10 @@ import {
   AGENT_DEFAULT_SYSTEM_PROMPT,
   AGENT_MAX_HISTORY_PAIRS
 } from '@ghostfolio/api/app/endpoints/ai/agent/agent.constants';
-import { ReactAgentService } from '@ghostfolio/api/app/endpoints/ai/agent/react-agent.service';
+import {
+  ReactAgentService,
+  SseAgentDoneEvent
+} from '@ghostfolio/api/app/endpoints/ai/agent/react-agent.service';
 import { ChartDataExtractorService } from '@ghostfolio/api/app/endpoints/ai/chart-data-extractor.service';
 import { toToolNameArray } from '@ghostfolio/api/app/endpoints/ai/chat-conversation.service';
 import { VerifiedResponse } from '@ghostfolio/api/app/endpoints/ai/contracts/final-response.schema';
@@ -17,9 +20,15 @@ import { ResponseVerifierService } from '@ghostfolio/api/app/endpoints/ai/verifi
 import { PortfolioService } from '@ghostfolio/api/app/portfolio/portfolio.service';
 import { PrismaService } from '@ghostfolio/api/services/prisma/prisma.service';
 import { Filter } from '@ghostfolio/common/interfaces';
+import type { SseEvent } from '@ghostfolio/common/interfaces';
 import type { AiPromptMode } from '@ghostfolio/common/types';
 
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger
+} from '@nestjs/common';
 import { StatusCodes, getReasonPhrase } from 'http-status-codes';
 import type { ColumnDescriptor } from 'tablemark';
 
@@ -264,6 +273,306 @@ export class AiService {
     );
 
     return { ...verified, conversationId: resolvedConversationId };
+  }
+
+  /**
+   * Streaming version of chat(). Yields SSE events as an async iterable.
+   * The final `done` event is only emitted after successful DB persistence.
+   * A top-level heartbeat timer runs throughout to keep connections alive.
+   */
+  public async *chatStream({
+    conversationId,
+    message,
+    signal,
+    systemPrompt,
+    toolNames,
+    userId
+  }: {
+    conversationId?: string;
+    message: string;
+    signal?: AbortSignal;
+    systemPrompt?: string;
+    toolNames?: string[];
+    userId: string;
+  }): AsyncIterable<SseEvent> {
+    // 1. Validate toolNames against allowlist
+    const sanitizedToolNames = this.sanitizeToolNames(toolNames);
+
+    // 1b. Deterministic scope gate
+    const scopeResult = this.checkScopeGate(message);
+
+    if (scopeResult.type === 'REJECT') {
+      const refusalResponse = await this.buildScopedRefusal({
+        conversationId,
+        message,
+        refusalText: scopeResult.reason,
+        systemPrompt: systemPrompt ?? AGENT_DEFAULT_SYSTEM_PROMPT,
+        userId
+      });
+
+      yield {
+        type: 'done',
+        payload: {
+          actions: refusalResponse.actions,
+          chartData: refusalResponse.chartData,
+          confidence: refusalResponse.confidence,
+          conversationId: refusalResponse.conversationId,
+          elapsedMs: refusalResponse.elapsedMs,
+          estimatedCostUsd: refusalResponse.estimatedCostUsd,
+          invokedToolNames: refusalResponse.invokedToolNames,
+          iterations: refusalResponse.iterations,
+          response: refusalResponse.response,
+          sources: refusalResponse.sources,
+          status: refusalResponse.status,
+          toolCalls: refusalResponse.toolCalls,
+          warnings: refusalResponse.warnings
+        }
+      };
+
+      return;
+    }
+
+    // 2. Resolve prior context and effective system prompt
+    let priorMessages: LLMMessage[] = [];
+    let effectiveSystemPrompt: string;
+
+    if (conversationId) {
+      if (systemPrompt) {
+        yield {
+          type: 'error',
+          message: 'Cannot change the system prompt of an existing conversation'
+        };
+
+        return;
+      }
+
+      const conversation = await this.prismaService.chatConversation.findFirst({
+        select: { systemPrompt: true },
+        where: { id: conversationId, userId }
+      });
+
+      if (!conversation) {
+        yield {
+          type: 'error',
+          message: `Conversation not found: ${conversationId}`
+        };
+
+        return;
+      }
+
+      effectiveSystemPrompt = conversation.systemPrompt;
+
+      const recentMessages = await this.prismaService.chatMessage.findMany({
+        orderBy: { seq: 'desc' },
+        select: { content: true, role: true, seq: true },
+        take: AGENT_MAX_HISTORY_PAIRS * 2,
+        where: { conversationId }
+      });
+
+      recentMessages.reverse();
+      priorMessages = recentMessages.map((m) => ({
+        content: m.content,
+        role: m.role as LLMMessage['role']
+      }));
+    } else {
+      effectiveSystemPrompt = systemPrompt ?? AGENT_DEFAULT_SYSTEM_PROMPT;
+    }
+
+    // 2b. Handle AMBIGUOUS messages
+    if (scopeResult.type === 'AMBIGUOUS') {
+      const lastAssistantMsg = [...priorMessages]
+        .reverse()
+        .find((m) => m.role === 'assistant');
+
+      if (
+        !lastAssistantMsg ||
+        AiService.REFUSAL_RESPONSE_PATTERN.test(lastAssistantMsg.content)
+      ) {
+        const refusalResponse = await this.buildScopedRefusal({
+          conversationId,
+          message,
+          refusalText: AiService.AMBIGUOUS_CLARIFICATION_RESPONSE,
+          systemPrompt: effectiveSystemPrompt,
+          userId
+        });
+
+        yield {
+          type: 'done',
+          payload: {
+            actions: refusalResponse.actions,
+            chartData: refusalResponse.chartData,
+            confidence: refusalResponse.confidence,
+            conversationId: refusalResponse.conversationId,
+            elapsedMs: refusalResponse.elapsedMs,
+            estimatedCostUsd: refusalResponse.estimatedCostUsd,
+            invokedToolNames: refusalResponse.invokedToolNames,
+            iterations: refusalResponse.iterations,
+            response: refusalResponse.response,
+            sources: refusalResponse.sources,
+            status: refusalResponse.status,
+            toolCalls: refusalResponse.toolCalls,
+            warnings: refusalResponse.warnings
+          }
+        };
+
+        return;
+      }
+    }
+
+    // 3. Start heartbeat timer (top-level, not inside agent)
+    const HEARTBEAT_INTERVAL_MS = 15_000;
+    const heartbeatQueue: SseEvent[] = [];
+    const heartbeatTimer = setInterval(() => {
+      heartbeatQueue.push({ type: 'heartbeat' });
+    }, HEARTBEAT_INTERVAL_MS);
+
+    try {
+      // 4. Run the streaming agent
+      let agentResult: SseAgentDoneEvent['result'] | undefined;
+
+      for await (const event of this.reactAgentService.runStreaming({
+        priorMessages,
+        prompt: message,
+        signal,
+        systemPrompt: effectiveSystemPrompt,
+        toolNames: sanitizedToolNames,
+        userId
+      })) {
+        if (signal?.aborted) {
+          return;
+        }
+
+        if (event.type === '_agent_done') {
+          agentResult = (event as SseAgentDoneEvent).result;
+        } else {
+          yield event as SseEvent;
+        }
+
+        // Flush any queued heartbeats
+        while (heartbeatQueue.length > 0) {
+          yield heartbeatQueue.shift()!;
+        }
+      }
+
+      if (!agentResult || signal?.aborted) {
+        return;
+      }
+
+      // 5. Verify, extract charts + actions
+      const invokedToolNames = [
+        ...new Set((agentResult.executedTools ?? []).map((t) => t.toolName))
+      ];
+
+      const verified = this.responseVerifierService.verify(
+        agentResult,
+        invokedToolNames
+      );
+
+      verified.chartData = this.chartDataExtractorService.extract(
+        agentResult.executedTools ?? []
+      );
+      verified.actions = this.actionExtractorService.extract(invokedToolNames);
+
+      // 6. Persist before emitting done (critical ordering)
+      const title = message.replace(/\s+/g, ' ').trim().slice(0, 60);
+
+      let resolvedConversationId: string;
+
+      try {
+        resolvedConversationId = await this.prismaService.$transaction(
+          async (tx) => {
+            let convId = conversationId;
+
+            if (!convId) {
+              const conv = await tx.chatConversation.create({
+                data: {
+                  systemPrompt: effectiveSystemPrompt,
+                  title,
+                  userId
+                },
+                select: { id: true }
+              });
+
+              convId = conv.id;
+            } else {
+              await tx.chatConversation.update({
+                data: { updatedAt: new Date() },
+                where: { id: convId }
+              });
+            }
+
+            await tx.chatMessage.create({
+              data: {
+                content: message,
+                conversationId: convId,
+                requestedToolNames: [],
+                role: 'user'
+              }
+            });
+
+            await tx.chatMessage.create({
+              data: {
+                chartData: verified.chartData as any,
+                content: verified.response,
+                conversationId: convId,
+                estimatedCostUsd: verified.estimatedCostUsd,
+                requestedToolNames: toToolNameArray(verified.sources),
+                role: 'assistant'
+              }
+            });
+
+            return convId;
+          }
+        );
+      } catch (persistError) {
+        Logger.error(
+          `chatStream persistence failed: ${persistError instanceof Error ? persistError.message : persistError}`,
+          persistError instanceof Error ? persistError.stack : undefined,
+          'AiService'
+        );
+
+        yield {
+          type: 'error',
+          message:
+            'Failed to save conversation. Your response was generated but could not be persisted.'
+        };
+
+        return;
+      }
+
+      // 7. Emit done with full envelope (only after successful persistence)
+      yield {
+        type: 'done',
+        payload: {
+          actions: verified.actions,
+          chartData: verified.chartData,
+          confidence: verified.confidence,
+          conversationId: resolvedConversationId,
+          elapsedMs: verified.elapsedMs,
+          estimatedCostUsd: verified.estimatedCostUsd,
+          invokedToolNames: verified.invokedToolNames,
+          iterations: verified.iterations,
+          response: verified.response,
+          sources: verified.sources,
+          status: verified.status,
+          toolCalls: verified.toolCalls,
+          warnings: verified.warnings
+        }
+      };
+    } catch (error) {
+      Logger.error(
+        `chatStream failed: ${error instanceof Error ? error.message : error}`,
+        error instanceof Error ? error.stack : undefined,
+        'AiService'
+      );
+
+      yield {
+        type: 'error',
+        message: 'An unexpected error occurred during streaming.'
+      };
+    } finally {
+      clearInterval(heartbeatTimer);
+    }
   }
 
   public async getPrompt({

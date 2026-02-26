@@ -16,10 +16,13 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  Req,
+  Res,
   UseGuards
 } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { AuthGuard } from '@nestjs/passport';
+import type { Request, Response } from 'express';
 
 import { AiService } from './ai.service';
 import { ChatConversationService } from './chat-conversation.service';
@@ -52,6 +55,55 @@ export class AiController {
       toolNames,
       userId: this.request.user.id
     });
+  }
+
+  @Post('chat/stream')
+  @HasPermission(permissions.accessAssistant)
+  @UseGuards(AuthGuard('jwt'), HasPermissionGuard)
+  public async chatStream(
+    @Body() { conversationId, message, systemPrompt, toolNames }: ChatDto,
+    @Req() req: Request,
+    @Res() res: Response
+  ) {
+    // Set SSE headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    // Abort propagation: client disconnect → abort agent
+    const abortController = new AbortController();
+
+    req.on('close', () => {
+      abortController.abort();
+    });
+
+    try {
+      for await (const event of this.aiService.chatStream({
+        conversationId,
+        message,
+        signal: abortController.signal,
+        systemPrompt,
+        toolNames,
+        userId: this.request.user.id
+      })) {
+        if (abortController.signal.aborted) {
+          break;
+        }
+
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+      }
+    } catch {
+      // Stream error — write error event if connection still open
+      if (!abortController.signal.aborted) {
+        res.write(
+          `data: ${JSON.stringify({ type: 'error', message: 'Stream interrupted unexpectedly.' })}\n\n`
+        );
+      }
+    } finally {
+      res.end();
+    }
   }
 
   @Get('conversations')
