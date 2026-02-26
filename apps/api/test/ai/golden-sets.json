@@ -648,5 +648,154 @@
       "description": "Tool returns invalid output \u2014 registry catches via validateToolOutput, agent recovers",
       "addedFrom": "initial"
     }
+  },
+  {
+    "id": "insider-activity-query",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Are there any insider sells in NVDA recently?",
+      "toolNames": ["get_insider_activity"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "maxToolCalls": 2,
+      "requiredTools": ["get_insider_activity"],
+      "mustIncludeAny": ["insider", "sell", "NVDA", "transaction", "activity"],
+      "mustNotIncludeAny": ["technical issue", "unable to access"],
+      "toolEnvelopeChecks": [
+        {
+          "toolName": "get_insider_activity",
+          "expectStatus": "success",
+          "dataFieldsPresent": ["transactions", "providerName"]
+        }
+      ]
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "single-tool",
+      "subcategory": "insider-activity",
+      "difficulty": "basic",
+      "description": "Basic insider activity query for a single symbol",
+      "addedFrom": "insider-bounty"
+    }
+  },
+  {
+    "id": "insider-unknown-symbol",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Show me insider trading activity for XYZFAKE123",
+      "toolNames": ["get_insider_activity"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "maxToolCalls": 2,
+      "requiredTools": ["get_insider_activity"],
+      "mustIncludeAny": ["no", "insider", "found", "XYZFAKE123"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "edge-case",
+      "subcategory": "insider-unknown-symbol",
+      "difficulty": "basic",
+      "description": "Insider query for unknown symbol — partial result with warning",
+      "addedFrom": "insider-bounty"
+    }
+  },
+  {
+    "id": "insider-rule-crud",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Create a monitoring rule to alert me if any insider sells more than $100k in my top 3 holdings",
+      "toolNames": ["create_insider_monitoring_rule"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "maxToolCalls": 2,
+      "requiredTools": ["create_insider_monitoring_rule"],
+      "mustIncludeAny": ["rule", "created", "monitoring", "alert"],
+      "mustNotIncludeAny": ["technical issue", "unable to access"],
+      "toolEnvelopeChecks": [
+        {
+          "toolName": "create_insider_monitoring_rule",
+          "expectStatus": "success",
+          "dataFieldsPresent": ["rule", "message"]
+        }
+      ]
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "single-tool",
+      "subcategory": "insider-rules",
+      "difficulty": "intermediate",
+      "description": "Create an insider monitoring rule via agent tool",
+      "addedFrom": "insider-bounty"
+    }
+  },
+  {
+    "id": "insider-list-rules",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Show me my insider monitoring rules",
+      "toolNames": ["list_insider_monitoring_rules"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "maxToolCalls": 2,
+      "requiredTools": ["list_insider_monitoring_rules"],
+      "mustIncludeAny": ["rule", "monitoring", "insider"],
+      "mustNotIncludeAny": ["technical issue"],
+      "toolEnvelopeChecks": [
+        {
+          "toolName": "list_insider_monitoring_rules",
+          "expectStatus": "success",
+          "dataFieldsPresent": ["rules", "total"]
+        }
+      ]
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "single-tool",
+      "subcategory": "insider-rules",
+      "difficulty": "basic",
+      "description": "List insider monitoring rules",
+      "addedFrom": "insider-bounty"
+    }
+  },
+  {
+    "id": "insider-scope-gate",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Are insiders selling my top holdings?"
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredTools": ["get_insider_activity"],
+      "mustIncludeAny": ["insider", "sell", "holding"],
+      "mustNotIncludeAny": ["can't help", "out of scope"]
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "scope-gate",
+      "subcategory": "insider-allowed",
+      "difficulty": "basic",
+      "description": "Insider-related question passes scope gate and invokes tool",
+      "addedFrom": "insider-bounty"
+    }
   }
 ]

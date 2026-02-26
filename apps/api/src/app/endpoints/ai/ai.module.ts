@@ -5,16 +5,22 @@ import { LLM_CLIENT_TOKEN } from '@ghostfolio/api/app/endpoints/ai/llm/llm-clien
 import { OpenAiClientService } from '@ghostfolio/api/app/endpoints/ai/llm/openai-client.service';
 import { AnalyzeRiskTool } from '@ghostfolio/api/app/endpoints/ai/tools/analyze-risk.tool';
 import { ComplianceCheckTool } from '@ghostfolio/api/app/endpoints/ai/tools/compliance-check.tool';
+import { CreateInsiderRuleTool } from '@ghostfolio/api/app/endpoints/ai/tools/create-insider-rule.tool';
+import { DeleteInsiderRuleTool } from '@ghostfolio/api/app/endpoints/ai/tools/delete-insider-rule.tool';
+import { GetInsiderActivityTool } from '@ghostfolio/api/app/endpoints/ai/tools/get-insider-activity.tool';
 import { GetPortfolioSummaryTool } from '@ghostfolio/api/app/endpoints/ai/tools/get-portfolio-summary.tool';
 import { GetTransactionHistoryTool } from '@ghostfolio/api/app/endpoints/ai/tools/get-transaction-history.tool';
+import { ListInsiderRulesTool } from '@ghostfolio/api/app/endpoints/ai/tools/list-insider-rules.tool';
 import { MarketDataLookupTool } from '@ghostfolio/api/app/endpoints/ai/tools/market-data-lookup.tool';
 import { PerformanceCompareTool } from '@ghostfolio/api/app/endpoints/ai/tools/performance-compare.tool';
 import { RebalanceSuggestTool } from '@ghostfolio/api/app/endpoints/ai/tools/rebalance-suggest.tool';
 import { SimulateTradesTool } from '@ghostfolio/api/app/endpoints/ai/tools/simulate-trades.tool';
 import { StressTestTool } from '@ghostfolio/api/app/endpoints/ai/tools/stress-test.tool';
 import { TaxEstimateTool } from '@ghostfolio/api/app/endpoints/ai/tools/tax-estimate.tool';
+import { UpdateInsiderRuleTool } from '@ghostfolio/api/app/endpoints/ai/tools/update-insider-rule.tool';
 import { ToolRegistry } from '@ghostfolio/api/app/endpoints/ai/tools/tool.registry';
 import { AI_TOOL_DEFINITIONS_TOKEN } from '@ghostfolio/api/app/endpoints/ai/tools/tool.types';
+import { InsiderModule } from '@ghostfolio/api/app/endpoints/insider/insider.module';
 import { OrderModule } from '@ghostfolio/api/app/order/order.module';
 import { PortfolioCalculatorFactory } from '@ghostfolio/api/app/portfolio/calculator/portfolio-calculator.factory';
 import { CurrentRateService } from '@ghostfolio/api/app/portfolio/current-rate.service';
@@ -56,6 +62,7 @@ import { ResponseVerifierService } from './verification/response-verifier.servic
     ExchangeRateDataModule,
     I18nModule,
     ImpersonationModule,
+    InsiderModule,
     MarketDataModule,
     OrderModule,
     PortfolioSnapshotQueueModule,
@@ -81,14 +88,19 @@ import { ResponseVerifierService } from './verification/response-verifier.servic
     ResponseVerifierService,
     AnalyzeRiskTool,
     ComplianceCheckTool,
+    CreateInsiderRuleTool,
+    DeleteInsiderRuleTool,
+    GetInsiderActivityTool,
     GetPortfolioSummaryTool,
     GetTransactionHistoryTool,
+    ListInsiderRulesTool,
     MarketDataLookupTool,
     PerformanceCompareTool,
     RebalanceSuggestTool,
     SimulateTradesTool,
     StressTestTool,
     TaxEstimateTool,
+    UpdateInsiderRuleTool,
     ToolRegistry,
     PortfolioService,
     RulesService,
@@ -96,27 +108,37 @@ import { ResponseVerifierService } from './verification/response-verifier.servic
       inject: [
         AnalyzeRiskTool,
         ComplianceCheckTool,
+        CreateInsiderRuleTool,
+        DeleteInsiderRuleTool,
+        GetInsiderActivityTool,
         GetPortfolioSummaryTool,
         GetTransactionHistoryTool,
+        ListInsiderRulesTool,
         MarketDataLookupTool,
         PerformanceCompareTool,
         RebalanceSuggestTool,
         SimulateTradesTool,
         StressTestTool,
-        TaxEstimateTool
+        TaxEstimateTool,
+        UpdateInsiderRuleTool
       ],
       provide: AI_TOOL_DEFINITIONS_TOKEN,
       useFactory: (
         analyzeRiskTool,
         complianceCheckTool,
+        createInsiderRuleTool,
+        deleteInsiderRuleTool,
+        getInsiderActivityTool,
         getPortfolioSummaryTool,
         getTransactionHistoryTool,
+        listInsiderRulesTool,
         marketDataLookupTool,
         performanceCompareTool,
         rebalanceSuggestTool,
         simulateTradesTool,
         stressTestTool,
-        taxEstimateTool
+        taxEstimateTool,
+        updateInsiderRuleTool
       ) => {
         return [
           getPortfolioSummaryTool,
@@ -128,7 +150,12 @@ import { ResponseVerifierService } from './verification/response-verifier.servic
           complianceCheckTool,
           rebalanceSuggestTool,
           simulateTradesTool,
-          stressTestTool
+          stressTestTool,
+          getInsiderActivityTool,
+          createInsiderRuleTool,
+          listInsiderRulesTool,
+          updateInsiderRuleTool,
+          deleteInsiderRuleTool
         ];
       }
     },

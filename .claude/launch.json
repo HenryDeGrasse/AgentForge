@@ -3,9 +3,10 @@
   "configurations": [
     {
       "name": "api",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "start:server"],
-      "port": 3333
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["start-api-dev.sh"],
+      "port": 3334,
+      "autoPort": true
     },
     {
       "name": "client",
