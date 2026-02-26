@@ -1,5 +1,5 @@
 import { AgentGuardrailType } from '@ghostfolio/api/app/endpoints/ai/agent/react-agent.service';
-import type { ChartDataItem } from '@ghostfolio/common/interfaces';
+import type { ActionItem, ChartDataItem } from '@ghostfolio/common/interfaces';
 
 export type ConfidenceLevel = 'high' | 'low' | 'medium';
 
@@ -10,6 +10,8 @@ export type ResponseStatus = 'completed' | 'failed' | 'partial';
  * Every field is required so the frontend never sees undefined.
  */
 export interface VerifiedResponse {
+  /** Deterministic follow-up actions derived from tool results. */
+  actions: ActionItem[];
   /** Extracted chart data for inline rendering. */
   chartData: ChartDataItem[];
   /** Calibrated confidence based on status and tool usage. */
@@ -20,11 +22,13 @@ export interface VerifiedResponse {
   estimatedCostUsd: number;
   /** Which guardrail stopped the agent (undefined if none triggered). */
   guardrail?: AgentGuardrailType;
+  /** Tool names that were actually invoked (derived from executedTools). */
+  invokedToolNames: string[];
   /** Number of ReAct iterations the agent performed. */
   iterations: number;
   /** Verified, non-empty response text. */
   response: string;
-  /** Tool names that contributed to the response. */
+  /** Tool names that contributed to the response (requested/legacy). */
   sources: string[];
   /** Agent completion status after verification. */
   status: ResponseStatus;

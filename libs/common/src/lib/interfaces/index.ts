@@ -10,6 +10,8 @@ import type {
 } from './admin-market-data.interface';
 import type { AdminUser } from './admin-user.interface';
 import type {
+  ActionItem,
+  ActionType,
   AiChatConfidence,
   AiChatResponse,
   AiChatStatus,
@@ -19,6 +21,17 @@ import type {
   ConversationDetail,
   ConversationSummary
 } from './ai-chat-response.interface';
+import type {
+  SseDoneEvent,
+  SseErrorEvent,
+  SseEvent,
+  SseEventType,
+  SseHeartbeatEvent,
+  SseResponseChunkEvent,
+  SseThinkingEvent,
+  SseToolCallEvent,
+  SseToolResultEvent
+} from './ai-sse-events.interface';
 import type { AssetClassSelectorOption } from './asset-class-selector-option.interface';
 import type { AssetProfileIdentifier } from './asset-profile-identifier.interface';
 import type { BenchmarkProperty } from './benchmark-property.interface';
@@ -114,6 +127,8 @@ export {
   AccountBalancesResponse,
   AccountResponse,
   AccountsResponse,
+  ActionItem,
+  ActionType,
   ActivitiesResponse,
   Activity,
   ActivityError,
@@ -198,6 +213,15 @@ export {
   RuleSettings,
   ScraperConfiguration,
   Statistics,
+  SseDoneEvent,
+  SseErrorEvent,
+  SseEvent,
+  SseEventType,
+  SseHeartbeatEvent,
+  SseResponseChunkEvent,
+  SseThinkingEvent,
+  SseToolCallEvent,
+  SseToolResultEvent,
   SubscriptionOffer,
   SymbolItem,
   SymbolMetrics,

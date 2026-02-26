@@ -1,3 +1,4 @@
+import { ActionExtractorService } from '@ghostfolio/api/app/endpoints/ai/action-extractor.service';
 import {
   AGENT_ALLOWED_TOOL_NAMES,
   AGENT_DEFAULT_SYSTEM_PROMPT,
@@ -50,6 +51,7 @@ export class AiService {
   ];
 
   public constructor(
+    private readonly actionExtractorService: ActionExtractorService,
     private readonly chartDataExtractorService: ChartDataExtractorService,
     @Inject(LLM_CLIENT_TOKEN)
     private readonly llmClient: LLMClient,
@@ -204,6 +206,9 @@ export class AiService {
       result.executedTools ?? []
     );
     verified.chartData = chartData;
+
+    // 4c. Extract deterministic follow-up actions from invoked tools
+    verified.actions = this.actionExtractorService.extract(invokedToolNames);
 
     // 5. Normalise title (collapse whitespace, truncate)
     const title = message.replace(/\s+/g, ' ').trim().slice(0, 60);
@@ -583,10 +588,12 @@ export class AiService {
     userId: string;
   }): Promise<ChatResponse> {
     const verified: VerifiedResponse = {
+      actions: [],
       chartData: [],
       confidence: 'high',
       elapsedMs: 0,
       estimatedCostUsd: 0,
+      invokedToolNames: [],
       iterations: 0,
       response: refusalText,
       sources: [],

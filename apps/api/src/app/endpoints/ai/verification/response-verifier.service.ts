@@ -33,6 +33,7 @@ export class ResponseVerifierService {
       : SAFE_FALLBACK_RESPONSE;
 
     return {
+      actions: [],
       chartData: [],
       confidence,
       elapsedMs: result.elapsedMs,
@@ -40,6 +41,7 @@ export class ResponseVerifierService {
       ...(result.guardrail !== undefined
         ? { guardrail: result.guardrail }
         : {}),
+      invokedToolNames,
       iterations: result.iterations,
       response,
       sources,

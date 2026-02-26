@@ -34,8 +34,10 @@ const STUB_AGENT_RESULT = {
 
 const STUB_VERIFIED: VerifiedResponse = {
   ...STUB_AGENT_RESULT,
+  actions: [],
   chartData: [],
   confidence: 'high',
+  invokedToolNames: ['get_portfolio_summary'],
   warnings: []
 };
 
@@ -100,6 +102,7 @@ function buildService(
   verifierVerify = buildVerifier()
 ) {
   return new AiService(
+    { extract: jest.fn().mockReturnValue([]) } as any,
     { extract: jest.fn().mockReturnValue([]) } as any,
     { complete: jest.fn() } as LLMClient,
     { getDetails: jest.fn() } as any as PortfolioService,

@@ -67,6 +67,7 @@ function buildService({
 } = {}) {
   return new AiService(
     { extract: jest.fn().mockReturnValue([]) } as any,
+    { extract: jest.fn().mockReturnValue([]) } as any,
     { complete: llmComplete } as LLMClient,
     { getDetails: portfolioGetDetails } as any as PortfolioService,
     prismaService as any as PrismaService,
@@ -89,11 +90,14 @@ describe('AiService', () => {
 
     const verifier = { verify: jest.fn().mockImplementation((r) => r) };
 
+    const { ActionExtractorService } =
+      await import('@ghostfolio/api/app/endpoints/ai/action-extractor.service');
     const { ChartDataExtractorService } =
       await import('@ghostfolio/api/app/endpoints/ai/chart-data-extractor.service');
 
     const module = await Test.createTestingModule({
       providers: [
+        ActionExtractorService,
         AiService,
         ChartDataExtractorService,
         { provide: LLM_CLIENT_TOKEN, useValue: llmClient },
@@ -151,8 +155,10 @@ describe('AiService', () => {
 
     const verifiedResult: VerifiedResponse = {
       ...rawResult,
+      actions: [],
       chartData: [],
       confidence: 'high',
+      invokedToolNames: ['get_portfolio_summary'],
       sources: ['get_portfolio_summary'],
       warnings: []
     };

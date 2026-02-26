@@ -1,6 +1,15 @@
+export type ActionType = 'button' | 'chip';
 export type AiChatConfidence = 'high' | 'low' | 'medium';
 export type AiChatStatus = 'completed' | 'failed' | 'partial';
 export type ChartType = 'doughnut' | 'horizontalBar' | 'line' | 'table';
+
+export interface ActionItem {
+  actionType: ActionType;
+  icon?: string;
+  key: string;
+  label: string;
+  prompt: string;
+}
 
 export interface ChartDataItem {
   chartType: ChartType;
@@ -11,12 +20,14 @@ export interface ChartDataItem {
 
 /** Shape returned by POST /api/v1/ai/chat (mirrors VerifiedResponse). */
 export interface AiChatResponse {
+  actions?: ActionItem[];
   chartData: ChartDataItem[];
   confidence: AiChatConfidence;
   conversationId: string;
   elapsedMs: number;
   estimatedCostUsd: number;
   guardrail?: string;
+  invokedToolNames?: string[];
   iterations: number;
   response: string;
   sources: string[];
@@ -27,6 +38,7 @@ export interface AiChatResponse {
 
 /** A single message in the AI chat conversation history. */
 export interface ChatMessage {
+  actions?: ActionItem[];
   chartData?: ChartDataItem[];
   confidence?: AiChatConfidence;
   role: 'assistant' | 'user';

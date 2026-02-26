@@ -95,7 +95,10 @@ describe('Ai chat integration', () => {
 
     const { ChartDataExtractorService: ChartExtractor } =
       await import('@ghostfolio/api/app/endpoints/ai/chart-data-extractor.service');
+    const { ActionExtractorService: ActionExtractor } =
+      await import('@ghostfolio/api/app/endpoints/ai/action-extractor.service');
     const aiService = new AiService(
+      new ActionExtractor(),
       new ChartExtractor(),
       llmClient,
       {
