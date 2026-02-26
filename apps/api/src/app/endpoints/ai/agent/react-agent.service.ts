@@ -19,7 +19,12 @@ import { ToolResultEnvelope } from '@ghostfolio/api/app/endpoints/ai/tools/tool.
 
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 
-class AgentTimeoutError extends Error {}
+export class AgentTimeoutError extends Error {
+  constructor(message = 'The agent exceeded its timeout budget.') {
+    super(message);
+    this.name = 'AgentTimeoutError';
+  }
+}
 
 export type AgentGuardrailType =
   | 'CIRCUIT_BREAKER'

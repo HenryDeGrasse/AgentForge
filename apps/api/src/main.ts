@@ -18,6 +18,7 @@ import { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 
 import { AppModule } from './app/app.module';
+import { AllExceptionsFilter } from './app/core/filters/all-exceptions.filter';
 import { environment } from './environments/environment';
 
 async function bootstrap() {
@@ -60,6 +61,7 @@ async function bootstrap() {
       whitelist: true
     })
   );
+  app.useGlobalFilters(new AllExceptionsFilter());
 
   // Support 10mb csv/json files for importing activities
   app.useBodyParser('json', { limit: '10mb' });
