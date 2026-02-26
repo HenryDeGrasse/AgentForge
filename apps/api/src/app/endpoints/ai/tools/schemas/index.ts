@@ -29,6 +29,16 @@ export {
 } from './rebalance-suggest.schema';
 
 export {
+  SIMULATE_TRADES_INPUT_SCHEMA,
+  SIMULATE_TRADES_OUTPUT_SCHEMA
+} from './simulate-trades.schema';
+
+export {
+  STRESS_TEST_INPUT_SCHEMA,
+  STRESS_TEST_OUTPUT_SCHEMA
+} from './stress-test.schema';
+
+export {
   TAX_ESTIMATE_INPUT_SCHEMA,
   TAX_ESTIMATE_OUTPUT_SCHEMA
 } from './tax-estimate.schema';
