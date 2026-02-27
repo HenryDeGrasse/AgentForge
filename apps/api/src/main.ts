@@ -1,3 +1,5 @@
+// Load .env before any module initialization so process.env is populated
+// when BullModule.forRoot() and other eager consumers read it directly.
 import {
   DEFAULT_HOST,
   DEFAULT_PORT,
@@ -14,6 +16,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import 'dotenv/config';
 import { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 

@@ -129,7 +129,7 @@ run_seed_demo() {
     set +a
   fi
 
-  npx tsx prisma/seed-demo.mts
+  DATABASE_URL="$DATABASE_URL" npx tsx prisma/seed-demo.mts
 }
 
 get_demo_token() {
