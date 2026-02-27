@@ -30,6 +30,7 @@ import {
   Logger
 } from '@nestjs/common';
 import { StatusCodes, getReasonPhrase } from 'http-status-codes';
+import { randomUUID } from 'node:crypto';
 import type { ColumnDescriptor } from 'tablemark';
 
 export interface ChatResponse extends VerifiedResponse {
@@ -191,9 +192,11 @@ export class AiService {
     }
 
     // 3. Run the agent (outside any transaction — failure = no DB writes)
+    const requestId = randomUUID();
     const result = await this.reactAgentService.run({
       prompt: message,
       priorMessages,
+      requestId,
       systemPrompt: effectiveSystemPrompt,
       toolNames: sanitizedToolNames,
       userId
@@ -428,11 +431,13 @@ export class AiService {
 
     try {
       // 4. Run the streaming agent
+      const requestId = randomUUID();
       let agentResult: SseAgentDoneEvent['result'] | undefined;
 
       for await (const event of this.reactAgentService.runStreaming({
         priorMessages,
         prompt: message,
+        requestId,
         signal,
         systemPrompt: effectiveSystemPrompt,
         toolNames: sanitizedToolNames,

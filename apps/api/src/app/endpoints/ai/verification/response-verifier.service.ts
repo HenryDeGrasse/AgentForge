@@ -63,7 +63,15 @@ export class ResponseVerifierService {
     }
 
     // completed
-    return result.toolCalls > 0 ? 'high' : 'medium';
+    if (result.toolCalls > 0) {
+      const hasToolError = result.executedTools.some(
+        (entry) => entry.envelope.status !== 'success'
+      );
+
+      return hasToolError ? 'medium' : 'high';
+    }
+
+    return 'medium';
   }
 
   private collectWarnings(result: ReactAgentRunResult): string[] {

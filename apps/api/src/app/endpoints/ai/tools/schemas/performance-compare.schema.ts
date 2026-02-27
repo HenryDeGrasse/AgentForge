@@ -3,8 +3,15 @@ import type { ToolJsonSchema } from '@ghostfolio/api/app/endpoints/ai/tools/tool
 export const PERFORMANCE_COMPARE_INPUT_SCHEMA: ToolJsonSchema = {
   additionalProperties: false,
   properties: {
-    benchmarkSymbols: { items: { type: 'string' }, type: 'array' },
+    benchmarkSymbols: {
+      description:
+        'Benchmark ticker symbols to compare against (e.g. ["SPY", "QQQ"]).',
+      items: { type: 'string' },
+      type: 'array'
+    },
     dateRange: {
+      description:
+        'Time range for comparison. Options: 1d, wtd, mtd, ytd, 1y, 5y, max.',
       enum: ['1d', 'wtd', 'mtd', 'ytd', '1y', '5y', 'max'],
       type: 'string'
     }

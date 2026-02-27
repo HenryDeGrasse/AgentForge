@@ -172,6 +172,119 @@ describe('OpenAiClientService', () => {
     });
   });
 
+  // ─── retry behavior ─────────────────────────────────────────────────────
+
+  describe('retry on transient errors', () => {
+    const SUCCESSFUL_RESPONSE = {
+      choices: [
+        {
+          finish_reason: 'stop',
+          message: { content: 'OK', tool_calls: [] }
+        }
+      ]
+    };
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('retries once on 429 and succeeds', async () => {
+      const error429 = Object.assign(new Error('Rate limited'), {
+        status: 429
+      });
+      const create = jest
+        .fn()
+        .mockRejectedValueOnce(error429)
+        .mockResolvedValueOnce(SUCCESSFUL_RESPONSE);
+
+      const service = new OpenAiClientService({
+        chat: { completions: { create } }
+      } as any);
+
+      const promise = service.complete({
+        messages: [{ content: 'hello', role: 'user' }]
+      });
+
+      await jest.advanceTimersByTimeAsync(2000);
+
+      const response = await promise;
+
+      expect(create).toHaveBeenCalledTimes(2);
+      expect(response.text).toBe('OK');
+    });
+
+    it('retries on 500 server errors', async () => {
+      const error500 = Object.assign(new Error('Internal Server Error'), {
+        status: 500
+      });
+      const create = jest
+        .fn()
+        .mockRejectedValueOnce(error500)
+        .mockResolvedValueOnce(SUCCESSFUL_RESPONSE);
+
+      const service = new OpenAiClientService({
+        chat: { completions: { create } }
+      } as any);
+
+      const promise = service.complete({
+        messages: [{ content: 'hello', role: 'user' }]
+      });
+
+      await jest.advanceTimersByTimeAsync(2000);
+
+      const response = await promise;
+
+      expect(create).toHaveBeenCalledTimes(2);
+      expect(response.text).toBe('OK');
+    });
+
+    it('gives up after 3 total attempts', async () => {
+      const error429 = Object.assign(new Error('Rate limited'), {
+        status: 429
+      });
+      const create = jest.fn().mockRejectedValue(error429);
+
+      const service = new OpenAiClientService({
+        chat: { completions: { create } }
+      } as any);
+
+      const promise = service
+        .complete({ messages: [{ content: 'hello', role: 'user' }] })
+        .catch((e: Error) => e);
+
+      await jest.advanceTimersByTimeAsync(5000);
+
+      const result = await promise;
+
+      expect(result).toBeInstanceOf(Error);
+      expect((result as Error).message).toBe('Rate limited');
+      expect(create).toHaveBeenCalledTimes(3);
+    });
+
+    it('does NOT retry on 400 client errors', async () => {
+      const error400 = Object.assign(new Error('Bad request'), {
+        status: 400
+      });
+      const create = jest.fn().mockRejectedValue(error400);
+
+      const service = new OpenAiClientService({
+        chat: { completions: { create } }
+      } as any);
+
+      await expect(
+        service.complete({
+          messages: [{ content: 'hello', role: 'user' }]
+        })
+      ).rejects.toThrow('Bad request');
+
+      expect(create).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('throws if no injected client is present and OPENAI_API_KEY is missing', async () => {
     const originalOpenAiApiKey = process.env.OPENAI_API_KEY;
 

@@ -4,6 +4,8 @@ export const STRESS_TEST_INPUT_SCHEMA: ToolJsonSchema = {
   additionalProperties: false,
   properties: {
     customShocks: {
+      description:
+        'Custom shock array. Each entry applies a percentage shock to an asset class. Use instead of scenarioId.',
       items: {
         additionalProperties: false,
         properties: {
@@ -15,7 +17,11 @@ export const STRESS_TEST_INPUT_SCHEMA: ToolJsonSchema = {
       },
       type: 'array'
     },
-    scenarioId: { type: 'string' }
+    scenarioId: {
+      description:
+        'Predefined scenario: market_crash_2008, dot_com_bust, covid_crash, rising_rates, crypto_winter, or stagflation.',
+      type: 'string'
+    }
   },
   type: 'object'
 };

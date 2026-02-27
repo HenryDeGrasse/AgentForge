@@ -30,8 +30,8 @@ export class OpenAiClientService implements LLMClient {
   public async complete(
     request: LLMCompletionRequest
   ): Promise<LLMCompletionResponse> {
-    const response = await this.getClient().chat.completions.create(
-      this.buildRequestParams(request)
+    const response = await this.withRetry(() =>
+      this.getClient().chat.completions.create(this.buildRequestParams(request))
     );
 
     const firstChoice = response.choices?.[0];
@@ -56,11 +56,13 @@ export class OpenAiClientService implements LLMClient {
     request: LLMCompletionRequest,
     signal?: AbortSignal
   ): AsyncIterable<LLMStreamChunk> {
-    const stream = await this.getClient().chat.completions.create({
-      ...this.buildRequestParams(request),
-      stream: true as const,
-      stream_options: { include_usage: true }
-    });
+    const stream = await this.withRetry(() =>
+      this.getClient().chat.completions.create({
+        ...this.buildRequestParams(request),
+        stream: true as const,
+        stream_options: { include_usage: true }
+      })
+    );
 
     // Accumulate tool call deltas by index
     const toolCallAccumulator = new Map<
@@ -356,6 +358,15 @@ export class OpenAiClientService implements LLMClient {
     };
   }
 
+  private isRetryableError(error: unknown): boolean {
+    const status =
+      typeof error === 'object' && error !== null && 'status' in error
+        ? (error as { status: unknown }).status
+        : undefined;
+
+    return status === 429 || (typeof status === 'number' && status >= 500);
+  }
+
   private parseJsonObject(value: string): Record<string, unknown> {
     try {
       const parsedValue = JSON.parse(value);
@@ -370,5 +381,27 @@ export class OpenAiClientService implements LLMClient {
     } catch {}
 
     return {};
+  }
+
+  private async withRetry<T>(fn: () => Promise<T>): Promise<T> {
+    const maxAttempts = 3;
+    const baseDelayMs = 500;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await fn();
+      } catch (error) {
+        if (attempt === maxAttempts || !this.isRetryableError(error)) {
+          throw error;
+        }
+
+        await new Promise((resolve) => {
+          setTimeout(resolve, baseDelayMs * Math.pow(2, attempt - 1));
+        });
+      }
+    }
+
+    // Unreachable, but satisfies TypeScript
+    throw new Error('Retry loop exhausted');
   }
 }

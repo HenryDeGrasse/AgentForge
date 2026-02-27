@@ -4,6 +4,7 @@ export const PORTFOLIO_SUMMARY_INPUT_SCHEMA: ToolJsonSchema = {
   additionalProperties: false,
   properties: {
     topN: {
+      description: 'Number of top holdings to return (1–25). Default 10.',
       maximum: 25,
       minimum: 1,
       type: 'number'

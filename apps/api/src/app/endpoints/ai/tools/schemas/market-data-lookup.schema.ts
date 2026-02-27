@@ -3,10 +3,26 @@ import type { ToolJsonSchema } from '@ghostfolio/api/app/endpoints/ai/tools/tool
 export const MARKET_DATA_LOOKUP_INPUT_SCHEMA: ToolJsonSchema = {
   additionalProperties: false,
   properties: {
-    dataSource: { type: 'string' },
-    historyDays: { maximum: 365, minimum: 1, type: 'number' },
-    includeHistory: { type: 'boolean' },
-    symbol: { type: 'string' }
+    dataSource: {
+      description: 'Data provider (e.g. "YAHOO"). Auto-resolved if omitted.',
+      type: 'string'
+    },
+    historyDays: {
+      description:
+        'Number of days of price history to include (1–365). Only used when includeHistory is true.',
+      maximum: 365,
+      minimum: 1,
+      type: 'number'
+    },
+    includeHistory: {
+      description:
+        'If true, include daily historical prices for the last historyDays.',
+      type: 'boolean'
+    },
+    symbol: {
+      description: 'Ticker symbol to look up (e.g. "AAPL", "MSFT", "BTC-USD").',
+      type: 'string'
+    }
   },
   required: ['symbol'],
   type: 'object'

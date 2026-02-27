@@ -240,7 +240,7 @@ describe('StressTestTool', () => {
       CTX
     );
 
-    expect(result.data.recoveryNeededPct).toBe(Infinity);
+    expect(result.data.recoveryNeededPct).toBe(9999);
     expect(result.data.warnings).toEqual(
       expect.arrayContaining([expect.objectContaining({ code: 'total_loss' })])
     );

@@ -19,6 +19,7 @@ import { ToolResultEnvelope } from '@ghostfolio/api/app/endpoints/ai/tools/tool.
 import type { SseEvent } from '@ghostfolio/common/interfaces';
 
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 
 export class AgentTimeoutError extends Error {
   constructor(message = 'The agent exceeded its timeout budget.') {
@@ -46,6 +47,7 @@ export interface ReactAgentRunInput {
   guardrails?: Partial<ReactAgentGuardrails>;
   priorMessages?: LLMMessage[]; // rehydrated conversation history (already capped by caller)
   prompt: string;
+  requestId?: string;
   signal?: AbortSignal;
   systemPrompt?: string;
   toolNames?: string[];
@@ -121,6 +123,7 @@ export class ReactAgentService {
     input: ReactAgentRunInput
   ): AsyncIterable<AgentStreamEvent> {
     const guardrails = this.getGuardrails(input.guardrails);
+    const requestId = input.requestId ?? randomUUID();
     const startedAt = Date.now();
     const signal = input.signal;
 
@@ -163,9 +166,11 @@ export class ReactAgentService {
     );
     const executedToolResults: ExecutedToolEntry[] = [];
     let estimatedCostUsd = 0;
+    let consecutiveDuplicateToolCalls = 0;
     let escalationAttempted = false;
     let escalationPending = false;
     let iterationCount = 0;
+    let lastToolSignature: string | null = null;
     let toolCallsCount = 0;
 
     try {
@@ -291,6 +296,41 @@ export class ReactAgentService {
         if (completion.toolCalls.length > 0) {
           toolCallsCount += completion.toolCalls.length;
 
+          // Duplicate tool-call loop detection
+          const currentSignature = JSON.stringify(
+            completion.toolCalls.map((tc) => ({
+              args: tc.arguments,
+              name: tc.name
+            }))
+          );
+
+          if (currentSignature === lastToolSignature) {
+            consecutiveDuplicateToolCalls++;
+          } else {
+            consecutiveDuplicateToolCalls = 1;
+            lastToolSignature = currentSignature;
+          }
+
+          if (consecutiveDuplicateToolCalls >= 3) {
+            this.recordSuccess();
+
+            yield {
+              type: '_agent_done',
+              result: {
+                elapsedMs: Date.now() - startedAt,
+                estimatedCostUsd: this.roundCost(estimatedCostUsd),
+                executedTools: executedToolResults,
+                iterations: iterationCount,
+                response:
+                  'The assistant could not make progress and stopped to avoid repeating the same action.',
+                status: 'partial',
+                toolCalls: toolCallsCount
+              }
+            };
+
+            return;
+          }
+
           messages.push({
             content: completion.text ?? '',
             role: 'assistant',
@@ -324,6 +364,7 @@ export class ReactAgentService {
 
             const { envelope, message: toolMessage } =
               await this.executeToolCall({
+                requestId,
                 startedAt,
                 timeoutMs: guardrails.timeoutMs,
                 toolCall,
@@ -350,13 +391,6 @@ export class ReactAgentService {
 
         if (completion.text?.trim()) {
           const responseText = completion.text.trim();
-          const looksLikePortfolioClaim =
-            /\$[\d,]+/.test(responseText) ||
-            /\d+(\.\d+)?%/.test(responseText) ||
-            /\b[A-Z]{2,5}\b.*(?:shares?|units?|position)/i.test(responseText) ||
-            /\b(?:compliant|non-compliant|portfolio|holdings?|allocation|diversif|rebalanc|risk\s*(?:level|score|rating))\b/i.test(
-              responseText
-            );
           const looksLikeRefusal =
             /\b(?:can'?t|cannot|don'?t|unable to|not able to|outside.{0,20}scope|only help with)\b/i.test(
               responseText
@@ -366,7 +400,6 @@ export class ReactAgentService {
             toolDefinitions.length > 0 &&
             toolCallsCount === 0 &&
             !escalationAttempted &&
-            looksLikePortfolioClaim &&
             !looksLikeRefusal
           ) {
             escalationAttempted = true;
@@ -555,12 +588,14 @@ export class ReactAgentService {
   }
 
   private async executeToolCall({
+    requestId,
     startedAt,
     timeoutMs,
     toolCall,
     toolRegistry,
     userId
   }: {
+    requestId: string;
     startedAt: number;
     timeoutMs: number;
     toolCall: LLMToolCall;
@@ -571,6 +606,7 @@ export class ReactAgentService {
       const toolResponse = await this.withTimeout(
         toolRegistry.execute({
           context: {
+            requestId,
             userId
           },
           input: toolCall.arguments,
