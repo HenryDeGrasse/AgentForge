@@ -114,8 +114,6 @@ export class ReactAgentService {
       }
     }
 
-    this.emitTelemetry(result!, requestId);
-
     return result!;
   }
 
@@ -130,11 +128,20 @@ export class ReactAgentService {
     const requestId = input.requestId ?? randomUUID();
     const startedAt = Date.now();
     const signal = input.signal;
+    let finalResult: ReactAgentRunResult | undefined;
+
+    const doneEvent = (result: ReactAgentRunResult): SseAgentDoneEvent => {
+      finalResult = result;
+
+      return {
+        result,
+        type: '_agent_done'
+      };
+    };
 
     if (this.isCircuitBreakerOpen(guardrails, startedAt)) {
-      yield {
-        type: '_agent_done',
-        result: this.buildGuardrailResult({
+      yield doneEvent(
+        this.buildGuardrailResult({
           estimatedCostUsd: 0,
           executedTools: [],
           guardrail: 'CIRCUIT_BREAKER',
@@ -142,7 +149,7 @@ export class ReactAgentService {
           startedAt,
           toolCalls: 0
         })
-      };
+      );
 
       return;
     }
@@ -187,18 +194,15 @@ export class ReactAgentService {
 
         // Check abort signal before each iteration
         if (signal?.aborted) {
-          yield {
-            type: '_agent_done',
-            result: {
-              elapsedMs: Date.now() - startedAt,
-              estimatedCostUsd: this.roundCost(estimatedCostUsd),
-              executedTools: executedToolResults,
-              iterations: iterationCount,
-              response: 'Request was cancelled.',
-              status: 'partial',
-              toolCalls: toolCallsCount
-            }
-          };
+          yield doneEvent({
+            elapsedMs: Date.now() - startedAt,
+            estimatedCostUsd: this.roundCost(estimatedCostUsd),
+            executedTools: executedToolResults,
+            iterations: iterationCount,
+            response: 'Request was cancelled.',
+            status: 'partial',
+            toolCalls: toolCallsCount
+          });
 
           return;
         }
@@ -213,9 +217,8 @@ export class ReactAgentService {
         if (this.hasTimedOut(startedAt, guardrails.timeoutMs)) {
           this.recordSuccess();
 
-          yield {
-            type: '_agent_done',
-            result: this.buildGuardrailResult({
+          yield doneEvent(
+            this.buildGuardrailResult({
               estimatedCostUsd,
               executedTools: executedToolResults,
               guardrail: 'TIMEOUT',
@@ -223,7 +226,7 @@ export class ReactAgentService {
               startedAt,
               toolCalls: toolCallsCount
             })
-          };
+          );
 
           return;
         }
@@ -231,9 +234,8 @@ export class ReactAgentService {
         if (estimatedCostUsd >= guardrails.costLimitUsd) {
           this.recordSuccess();
 
-          yield {
-            type: '_agent_done',
-            result: this.buildGuardrailResult({
+          yield doneEvent(
+            this.buildGuardrailResult({
               estimatedCostUsd,
               executedTools: executedToolResults,
               guardrail: 'COST_LIMIT',
@@ -241,7 +243,7 @@ export class ReactAgentService {
               startedAt,
               toolCalls: toolCallsCount
             })
-          };
+          );
 
           return;
         }
@@ -282,9 +284,8 @@ export class ReactAgentService {
         if (estimatedCostUsd > guardrails.costLimitUsd) {
           this.recordSuccess();
 
-          yield {
-            type: '_agent_done',
-            result: this.buildGuardrailResult({
+          yield doneEvent(
+            this.buildGuardrailResult({
               estimatedCostUsd,
               executedTools: executedToolResults,
               guardrail: 'COST_LIMIT',
@@ -292,7 +293,7 @@ export class ReactAgentService {
               startedAt,
               toolCalls: toolCallsCount
             })
-          };
+          );
 
           return;
         }
@@ -318,19 +319,16 @@ export class ReactAgentService {
           if (consecutiveDuplicateToolCalls >= 3) {
             this.recordSuccess();
 
-            yield {
-              type: '_agent_done',
-              result: {
-                elapsedMs: Date.now() - startedAt,
-                estimatedCostUsd: this.roundCost(estimatedCostUsd),
-                executedTools: executedToolResults,
-                iterations: iterationCount,
-                response:
-                  'The assistant could not make progress and stopped to avoid repeating the same action.',
-                status: 'partial',
-                toolCalls: toolCallsCount
-              }
-            };
+            yield doneEvent({
+              elapsedMs: Date.now() - startedAt,
+              estimatedCostUsd: this.roundCost(estimatedCostUsd),
+              executedTools: executedToolResults,
+              iterations: iterationCount,
+              response:
+                'The assistant could not make progress and stopped to avoid repeating the same action.',
+              status: 'partial',
+              toolCalls: toolCallsCount
+            });
 
             return;
           }
@@ -343,18 +341,15 @@ export class ReactAgentService {
 
           // Check abort before tool execution
           if (signal?.aborted) {
-            yield {
-              type: '_agent_done',
-              result: {
-                elapsedMs: Date.now() - startedAt,
-                estimatedCostUsd: this.roundCost(estimatedCostUsd),
-                executedTools: executedToolResults,
-                iterations: iterationCount,
-                response: 'Request was cancelled.',
-                status: 'partial',
-                toolCalls: toolCallsCount
-              }
-            };
+            yield doneEvent({
+              elapsedMs: Date.now() - startedAt,
+              estimatedCostUsd: this.roundCost(estimatedCostUsd),
+              executedTools: executedToolResults,
+              iterations: iterationCount,
+              response: 'Request was cancelled.',
+              status: 'partial',
+              toolCalls: toolCallsCount
+            });
 
             return;
           }
@@ -436,18 +431,15 @@ export class ReactAgentService {
 
           this.recordSuccess();
 
-          yield {
-            type: '_agent_done',
-            result: {
-              elapsedMs: Date.now() - startedAt,
-              estimatedCostUsd: this.roundCost(estimatedCostUsd),
-              executedTools: executedToolResults,
-              iterations: iterationCount,
-              response: responseText,
-              status: 'completed',
-              toolCalls: toolCallsCount
-            }
-          };
+          yield doneEvent({
+            elapsedMs: Date.now() - startedAt,
+            estimatedCostUsd: this.roundCost(estimatedCostUsd),
+            executedTools: executedToolResults,
+            iterations: iterationCount,
+            response: responseText,
+            status: 'completed',
+            toolCalls: toolCallsCount
+          });
 
           return;
         }
@@ -455,9 +447,8 @@ export class ReactAgentService {
 
       this.recordSuccess();
 
-      yield {
-        type: '_agent_done',
-        result: this.buildGuardrailResult({
+      yield doneEvent(
+        this.buildGuardrailResult({
           estimatedCostUsd,
           executedTools: executedToolResults,
           guardrail: 'MAX_ITERATIONS',
@@ -465,14 +456,13 @@ export class ReactAgentService {
           startedAt,
           toolCalls: toolCallsCount
         })
-      };
+      );
     } catch (error) {
       if (error instanceof AgentTimeoutError) {
         this.recordSuccess();
 
-        yield {
-          type: '_agent_done',
-          result: this.buildGuardrailResult({
+        yield doneEvent(
+          this.buildGuardrailResult({
             estimatedCostUsd,
             executedTools: executedToolResults,
             guardrail: 'TIMEOUT',
@@ -480,7 +470,7 @@ export class ReactAgentService {
             startedAt,
             toolCalls: toolCallsCount
           })
-        };
+        );
 
         return;
       }
@@ -493,19 +483,20 @@ export class ReactAgentService {
 
       this.recordFailure(guardrails, Date.now());
 
-      yield {
-        type: '_agent_done',
-        result: {
-          elapsedMs: Date.now() - startedAt,
-          estimatedCostUsd: this.roundCost(estimatedCostUsd),
-          executedTools: executedToolResults,
-          iterations: iterationCount,
-          response:
-            'The AI assistant is temporarily unavailable. Please try again shortly.',
-          status: 'failed',
-          toolCalls: toolCallsCount
-        }
-      };
+      yield doneEvent({
+        elapsedMs: Date.now() - startedAt,
+        estimatedCostUsd: this.roundCost(estimatedCostUsd),
+        executedTools: executedToolResults,
+        iterations: iterationCount,
+        response:
+          'The AI assistant is temporarily unavailable. Please try again shortly.',
+        status: 'failed',
+        toolCalls: toolCallsCount
+      });
+    } finally {
+      if (finalResult) {
+        this.emitTelemetry(finalResult, requestId);
+      }
     }
   }
 

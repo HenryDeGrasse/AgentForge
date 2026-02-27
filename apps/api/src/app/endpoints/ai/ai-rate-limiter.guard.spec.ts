@@ -80,6 +80,19 @@ describe('AiRateLimiterGuard', () => {
     expect(guard.canActivate(buildContext('user-1'))).toBe(true);
   });
 
+  it('treats timestamps at exactly window boundary as expired', () => {
+    for (let i = 0; i < 20; i++) {
+      guard.canActivate(buildContext('user-1'));
+    }
+
+    // Boundary case: exactly 60,000ms later.
+    // Since the guard keeps timestamps strictly greater than windowStart,
+    // boundary entries should be evicted.
+    currentTime += 60_000;
+
+    expect(guard.canActivate(buildContext('user-1'))).toBe(true);
+  });
+
   it('evicts stale timestamps when the window rolls forward', () => {
     // Make 15 requests at t=0 (below the 20-request limit)
     for (let i = 0; i < 15; i++) {
@@ -111,5 +124,15 @@ describe('AiRateLimiterGuard', () => {
     } as unknown as ExecutionContext;
 
     expect(guard.canActivate(anonCtx)).toBe(true);
+  });
+
+  it('allows request when HTTP context returns undefined request object', () => {
+    const undefinedReqCtx = {
+      switchToHttp: () => ({
+        getRequest: () => undefined
+      })
+    } as unknown as ExecutionContext;
+
+    expect(guard.canActivate(undefinedReqCtx)).toBe(true);
   });
 });

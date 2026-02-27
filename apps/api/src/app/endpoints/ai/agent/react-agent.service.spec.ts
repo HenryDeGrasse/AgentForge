@@ -1422,4 +1422,40 @@ describe('Phase 5 structured telemetry', () => {
     const parsed = JSON.parse(telemetryMsg!);
     expect(parsed.guardrail).toBe('MAX_ITERATIONS');
   });
+
+  it('emits telemetry when runStreaming() is consumed directly', async () => {
+    const llm: LLMClient = {
+      complete: jest.fn().mockResolvedValue({
+        finishReason: 'stop',
+        text: 'stream done',
+        toolCalls: [],
+        usage: { estimatedCostUsd: 0.001 }
+      })
+    };
+
+    const agent = new ReactAgentService(llm, new ToolRegistry());
+
+    for await (const event of agent.runStreaming({
+      guardrails: {
+        circuitBreakerCooldownMs: 60_000,
+        circuitBreakerFailureThreshold: 3,
+        costLimitUsd: 1,
+        fallbackCostPer1kTokensUsd: 0.002,
+        maxIterations: 2,
+        timeoutMs: 30_000
+      },
+      prompt: 'stream request',
+      userId: 'stream-user'
+    })) {
+      // Drain stream until completion
+      void event;
+    }
+
+    const allMessages: string[] = logSpy.mock.calls.map((args) =>
+      typeof args[0] === 'string' ? args[0] : JSON.stringify(args[0])
+    );
+    const telemetryMsg = allMessages.find((m) => m.includes('"status"'));
+
+    expect(telemetryMsg).toBeDefined();
+  });
 });

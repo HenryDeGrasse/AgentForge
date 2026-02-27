@@ -118,6 +118,114 @@ describe('PerformanceCompareTool', () => {
     expect(result.warnings).toEqual([]);
   });
 
+  it('classifies negative portfolio return as underperforming even if benchmark ATH metric is lower', async () => {
+    const performanceCompareTool = new PerformanceCompareTool(
+      {
+        getPerformance: jest.fn().mockResolvedValue({
+          firstOrderDate: new Date('2023-05-01T00:00:00.000Z'),
+          hasErrors: false,
+          performance: {
+            currentNetWorth: 950,
+            currentValueInBaseCurrency: 1000,
+            netPerformance: -50,
+            netPerformancePercentage: -0.05,
+            netPerformancePercentageWithCurrencyEffect: -0.05,
+            netPerformanceWithCurrencyEffect: -50,
+            totalInvestment: 1000
+          }
+        })
+      } as any,
+      {
+        getBenchmarkTrends: jest.fn().mockResolvedValue({
+          trend200d: 'DOWN',
+          trend50d: 'DOWN'
+        }),
+        getBenchmarks: jest.fn().mockResolvedValue([
+          {
+            dataSource: 'YAHOO',
+            marketCondition: 'BEAR_MARKET',
+            name: 'VOO',
+            performances: {
+              allTimeHigh: {
+                date: new Date('2025-01-10T00:00:00.000Z'),
+                performancePercent: -0.08
+              }
+            },
+            symbol: 'VOO',
+            trend200d: 'DOWN',
+            trend50d: 'DOWN'
+          }
+        ])
+      } as any,
+      {
+        user: jest.fn().mockResolvedValue({
+          settings: { settings: { baseCurrency: 'USD' } }
+        })
+      } as any
+    );
+
+    const result = await performanceCompareTool.execute({}, { userId: 'u1' });
+
+    expect(result.comparison).toEqual({
+      outperformingBenchmarks: [],
+      underperformingBenchmarks: ['VOO']
+    });
+  });
+
+  it('classifies zero portfolio return as underperforming (requires strictly positive return)', async () => {
+    const performanceCompareTool = new PerformanceCompareTool(
+      {
+        getPerformance: jest.fn().mockResolvedValue({
+          firstOrderDate: new Date('2023-05-01T00:00:00.000Z'),
+          hasErrors: false,
+          performance: {
+            currentNetWorth: 1000,
+            currentValueInBaseCurrency: 1000,
+            netPerformance: 0,
+            netPerformancePercentage: 0,
+            netPerformancePercentageWithCurrencyEffect: 0,
+            netPerformanceWithCurrencyEffect: 0,
+            totalInvestment: 1000
+          }
+        })
+      } as any,
+      {
+        getBenchmarkTrends: jest.fn().mockResolvedValue({
+          trend200d: 'DOWN',
+          trend50d: 'DOWN'
+        }),
+        getBenchmarks: jest.fn().mockResolvedValue([
+          {
+            dataSource: 'YAHOO',
+            marketCondition: 'BEAR_MARKET',
+            name: 'VOO',
+            performances: {
+              allTimeHigh: {
+                date: new Date('2025-01-10T00:00:00.000Z'),
+                performancePercent: -0.01
+              }
+            },
+            symbol: 'VOO',
+            trend200d: 'DOWN',
+            trend50d: 'DOWN'
+          }
+        ])
+      } as any,
+      {
+        user: jest.fn().mockResolvedValue({
+          settings: { settings: { baseCurrency: 'USD' } }
+        })
+      } as any
+    );
+
+    const result = await performanceCompareTool.execute({}, { userId: 'u1' });
+
+    expect(result.comparison).toEqual({
+      outperformingBenchmarks: [],
+      underperformingBenchmarks: ['VOO']
+    });
+  });
+
   it('normalizes nullable dates to empty strings for schema-safe output', async () => {
     const performanceCompareTool = new PerformanceCompareTool(
       {
