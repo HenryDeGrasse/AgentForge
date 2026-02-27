@@ -140,11 +140,11 @@ export class AiChatChartComponent
 
     const data = this.chartItem.data;
     const items =
-      (data['items'] as Array<{
+      (data['items'] as {
         name?: string;
         date?: string;
         value: number;
-      }>) ?? [];
+      }[]) ?? [];
 
     switch (this.chartItem.chartType) {
       case 'doughnut':
@@ -154,12 +154,12 @@ export class AiChatChartComponent
         this.renderHorizontalBar(items);
         break;
       case 'line':
-        this.renderLine(items as Array<{ date: string; value: number }>);
+        this.renderLine(items as { date: string; value: number }[]);
         break;
     }
   }
 
-  private renderDoughnut(items: Array<{ name?: string; value: number }>): void {
+  private renderDoughnut(items: { name?: string; value: number }[]): void {
     this.chartInstance = new Chart(this.canvasRef.nativeElement, {
       type: 'doughnut',
       data: {
@@ -190,7 +190,7 @@ export class AiChatChartComponent
   }
 
   private renderHorizontalBar(
-    items: Array<{ name?: string; value: number }>
+    items: { name?: string; value: number }[]
   ): void {
     this.chartInstance = new Chart(this.canvasRef.nativeElement, {
       type: 'bar',
@@ -218,7 +218,7 @@ export class AiChatChartComponent
     });
   }
 
-  private renderLine(items: Array<{ date: string; value: number }>): void {
+  private renderLine(items: { date: string; value: number }[]): void {
     this.chartInstance = new Chart(this.canvasRef.nativeElement, {
       type: 'line',
       data: {

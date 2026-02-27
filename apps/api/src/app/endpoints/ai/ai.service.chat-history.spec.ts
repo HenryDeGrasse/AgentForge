@@ -104,6 +104,7 @@ function buildService(
   return new AiService(
     { extract: jest.fn().mockReturnValue([]) } as any,
     { extract: jest.fn().mockReturnValue([]) } as any,
+    { evaluateRulesForBriefing: jest.fn().mockResolvedValue([]) } as any,
     { complete: jest.fn() } as LLMClient,
     { getDetails: jest.fn() } as any as PortfolioService,
     prismaService,

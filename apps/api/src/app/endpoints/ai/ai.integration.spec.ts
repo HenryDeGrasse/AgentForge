@@ -100,6 +100,7 @@ describe('Ai chat integration', () => {
     const aiService = new AiService(
       new ActionExtractor(),
       new ChartExtractor(),
+      { evaluateRulesForBriefing: jest.fn().mockResolvedValue([]) } as any,
       llmClient,
       {
         getDetails: jest.fn()
