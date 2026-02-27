@@ -40,6 +40,7 @@ import { SymbolProfileModule } from '@ghostfolio/api/services/symbol-profile/sym
 import { Module } from '@nestjs/common';
 
 import { ActionExtractorService } from './action-extractor.service';
+import { AiRateLimiterGuard } from './ai-rate-limiter.guard';
 import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
 import { ChartDataExtractorService } from './chart-data-extractor.service';
@@ -70,6 +71,7 @@ import { ResponseVerifierService } from './verification/response-verifier.servic
     AccountBalanceService,
     AccountService,
     ActionExtractorService,
+    AiRateLimiterGuard,
     AiService,
     ChartDataExtractorService,
     ChatConversationService,

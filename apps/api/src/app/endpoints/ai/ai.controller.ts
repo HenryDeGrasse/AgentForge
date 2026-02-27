@@ -24,6 +24,7 @@ import { REQUEST } from '@nestjs/core';
 import { AuthGuard } from '@nestjs/passport';
 import type { Request, Response } from 'express';
 
+import { AiRateLimiterGuard } from './ai-rate-limiter.guard';
 import { AiService } from './ai.service';
 import { ChatConversationService } from './chat-conversation.service';
 import { ChatDto } from './chat.dto';
@@ -44,7 +45,7 @@ export class AiController {
 
   @Post('chat')
   @HasPermission(permissions.accessAssistant)
-  @UseGuards(AuthGuard('jwt'), HasPermissionGuard)
+  @UseGuards(AuthGuard('jwt'), HasPermissionGuard, AiRateLimiterGuard)
   public chat(
     @Body() { conversationId, message, systemPrompt, toolNames }: ChatDto
   ) {
@@ -59,7 +60,7 @@ export class AiController {
 
   @Post('chat/stream')
   @HasPermission(permissions.accessAssistant)
-  @UseGuards(AuthGuard('jwt'), HasPermissionGuard)
+  @UseGuards(AuthGuard('jwt'), HasPermissionGuard, AiRateLimiterGuard)
   public async chatStream(
     @Body() { conversationId, message, systemPrompt, toolNames }: ChatDto,
     @Req() req: Request,

@@ -21,7 +21,7 @@ Everything under `apps/api/src/app/endpoints/ai/` is new. The upstream Ghostfoli
 | **Phase 1** | Bug fixes — chart data extraction, benchmark comparison, memory leak                | ✅ Done    |
 | **Phase 2** | Agent reliability — parallel tool calls, context guard, escalation, cost estimation | ✅ Done    |
 | **Phase 3** | Eval coverage expansion — chart extractor tests, multi-turn evals, injection evals  | ✅ Done    |
-| **Phase 4** | Security hardening — rate limiting, scope gate, output sanitization                 | 🔜 Planned |
+| **Phase 4** | Security hardening — rate limiting, scope gate, output sanitization                 | ✅ Done    |
 | **Phase 5** | Operational improvements — structured telemetry, heartbeat tuning                   | 🔜 Planned |
 
 #### Phase 1 Bug Fixes
@@ -69,6 +69,20 @@ New test file: `apps/api/test/ai/phase3-evals.spec.ts`
    - Verifies the agent passes tool output (including attacker-controlled fields) to the LLM without pre-sanitising it — the LLM must see the injection text to decide how to handle it.
    - Verifies the final `response` does not echo injection text when the LLM correctly ignores it.
    - Verifies the context-window guard truncates oversized injection payloads before they enter the LLM context.
+
+#### Phase 4 Security Hardening
+
+1. **Per-user rate limiter** (`ai-rate-limiter.guard.ts`):
+   - `AiRateLimiterGuard` implements a sliding-window rate limit: 20 requests per user per 60-second window.
+   - Applied to both `POST /ai/chat` and `POST /ai/chat/stream`. Excess requests receive HTTP 429.
+   - Guard is `@Injectable()` and registered in `AiModule`; stale timestamps are evicted lazily on each access to prevent unbounded memory growth.
+   - 8 tests cover: single request, at-limit, over-limit, HTTP 429 status, per-user isolation, window expiry, stale eviction, unauthenticated pass-through.
+
+2. **Scope gate keyword-stuffing tests** (`ai.service.spec.ts`):
+   - Added 3 regression tests to pin the out-of-scope-before-financial-relevance ordering:
+     - "write a poem about my stock portfolio" → rejected ("write a poem" matches before "stock")
+     - "predict the future price of my ETF" → rejected ("predict the future" matches before "ETF")
+     - "use my portfolio returns to buy lottery tickets" → rejected ("lottery" matches before "portfolio")
 
 > **Known pre-existing issue**: A worker process does not exit gracefully after the test suite (upstream NestJS/BullMQ module teardown). This manifests as a warning but does not affect test correctness. Fixing it requires closing Redis/BullMQ connections in `afterAll` hooks for the modules that import `RedisCacheModule` / `PortfolioSnapshotQueueModule`.
 

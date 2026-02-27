@@ -422,6 +422,49 @@ describe('AiService', () => {
     expect(prisma.$transaction).toHaveBeenCalled();
   });
 
+  // ─── scope gate keyword-stuffing hardening ──────────────────────────────────
+
+  it('rejects message that embeds out-of-scope phrase alongside financial keyword', async () => {
+    // "write a poem" is an out-of-scope pattern; "stocks" is a financial keyword.
+    // The out-of-scope check must fire BEFORE the financial-relevance check.
+    const run = jest.fn();
+    const service = buildService({ agentRun: run });
+
+    const result = await service.chat({
+      message: 'Please write a poem about my stock portfolio',
+      userId: 'user-1'
+    });
+
+    expect(run).not.toHaveBeenCalled();
+    expect(result.toolCalls).toBe(0);
+  });
+
+  it('rejects message that includes "predict the future" despite financial context', async () => {
+    const run = jest.fn();
+    const service = buildService({ agentRun: run });
+
+    const result = await service.chat({
+      message: 'Can you predict the future price of my ETF holdings?',
+      userId: 'user-1'
+    });
+
+    expect(run).not.toHaveBeenCalled();
+    expect(result.toolCalls).toBe(0);
+  });
+
+  it('rejects "lottery" request even when financial keywords are stuffed in', async () => {
+    const run = jest.fn();
+    const service = buildService({ agentRun: run });
+
+    const result = await service.chat({
+      message: 'I want to use my portfolio returns to buy lottery tickets',
+      userId: 'user-1'
+    });
+
+    expect(run).not.toHaveBeenCalled();
+    expect(result.toolCalls).toBe(0);
+  });
+
   // ─── getPrompt ──────────────────────────────────────────────────────────────
 
   it('returns a holdings markdown table in portfolio mode sorted by allocation', async () => {
