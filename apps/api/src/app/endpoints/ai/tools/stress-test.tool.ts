@@ -338,7 +338,7 @@ export class StressTestTool implements ToolDefinition<
     let recoveryNeededPct: number;
 
     if (totalStressedValue === 0 && totalCurrentValue > 0) {
-      recoveryNeededPct = Infinity;
+      recoveryNeededPct = 9999;
       warnings.push({
         code: 'total_loss',
         message:

@@ -249,6 +249,27 @@ export class ToolRegistry {
       };
     }
 
+    // Detect objects with an 'error' key but no 'status' — these are
+    // unstructured error responses that should not be treated as success.
+    if ('error' in response) {
+      const errObj = response as Record<string, unknown>;
+      const message =
+        typeof errObj.error === 'string'
+          ? errObj.error
+          : typeof errObj.message === 'string'
+            ? errObj.message
+            : `Tool "${toolName}" returned an unstructured error.`;
+
+      return {
+        data: errObj,
+        error: {
+          code: 'tool_execution_failed',
+          message
+        },
+        status: 'error'
+      };
+    }
+
     return {
       data: response as Record<string, unknown>,
       status: 'success'
