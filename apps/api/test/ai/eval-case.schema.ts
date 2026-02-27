@@ -25,6 +25,9 @@ export type EvalSubcategory =
   | 'guardrail-iterations'
   | 'guardrail-timeout'
   | 'insider-activity'
+  | 'insider-allowed'
+  | 'insider-rules'
+  | 'insider-unknown-symbol'
   | 'malformed-query'
   | 'market-data'
   | 'multi-tool-orchestration'
@@ -134,6 +137,9 @@ const VALID_SUBCATEGORIES: ReadonlySet<string> = new Set<EvalSubcategory>([
   'guardrail-iterations',
   'guardrail-timeout',
   'insider-activity',
+  'insider-allowed',
+  'insider-rules',
+  'insider-unknown-symbol',
   'malformed-query',
   'market-data',
   'multi-tool-orchestration',
