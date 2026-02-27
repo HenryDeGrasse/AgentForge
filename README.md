@@ -19,7 +19,7 @@ Everything under `apps/api/src/app/endpoints/ai/` is new. The upstream Ghostfoli
 | Phase       | Description                                                                         | Status     |
 | ----------- | ----------------------------------------------------------------------------------- | ---------- |
 | **Phase 1** | Bug fixes — chart data extraction, benchmark comparison, memory leak                | ✅ Done    |
-| **Phase 2** | Agent reliability — parallel tool calls, context guard, escalation, cost estimation | 🔜 Planned |
+| **Phase 2** | Agent reliability — parallel tool calls, context guard, escalation, cost estimation | ✅ Done    |
 | **Phase 3** | Eval coverage expansion — chart extractor tests, multi-turn evals, injection evals  | 🔜 Planned |
 | **Phase 4** | Security hardening — rate limiting, scope gate, output sanitization                 | 🔜 Planned |
 | **Phase 5** | Operational improvements — structured telemetry, heartbeat tuning                   | 🔜 Planned |
@@ -40,6 +40,21 @@ Everything under `apps/api/src/app/endpoints/ai/` is new. The upstream Ghostfoli
 
 3. **`lookupNegativeCache` — memory leak fixed** (`market-data-lookup.tool.ts`):
    - Expired entries are now deleted on access instead of just skipped. Previously, the in-memory `Map` grew indefinitely in long-running server processes.
+
+#### Phase 2 Agent Reliability
+
+1. **Parallel tool execution** (`react-agent.service.ts`):
+   - All tool calls returned in a single LLM turn are now executed with `Promise.all()` instead of sequentially. Worst-case latency drops from `n × tool_time` to `max(tool_time)`.
+   - Individual tool failures are caught and wrapped in error envelopes — one failing tool no longer blocks the others.
+
+2. **Context window guard** (`react-agent.service.ts` + `agent.constants.ts`):
+   - Tool outputs exceeding `AGENT_TOOL_OUTPUT_MAX_CHARS` (32,000 chars ≈ 8k tokens) are truncated with a visible `[TRUNCATED]` notice before being injected into the LLM conversation. Previously a large tool response could silently overflow the context window.
+
+3. **Escalation hardening** (`react-agent.service.ts`):
+   - When tools are available but the LLM answers directly on the first turn without calling any tool (and the answer isn't a clear refusal), the agent injects an escalation prompt and sets `toolChoice: 'required'` for the next turn. This was already present but tests were added to pin the behaviour.
+
+4. **Cost estimation fallback** (`react-agent.service.ts`):
+   - When `estimatedCostUsd` is absent from the LLM response, cost is estimated from `totalTokens` (or `promptTokens + completionTokens`) and `fallbackCostPer1kTokensUsd`. Tests were added to pin all three fallback paths.
 
 > **Known pre-existing issue**: A worker process does not exit gracefully after the test suite (upstream NestJS/BullMQ module teardown). This manifests as a warning but does not affect test correctness. Fixing it requires closing Redis/BullMQ connections in `afterAll` hooks for the modules that import `RedisCacheModule` / `PortfolioSnapshotQueueModule`.
 

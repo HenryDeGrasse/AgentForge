@@ -1,4 +1,14 @@
 export const AGENT_CIRCUIT_BREAKER_COOLDOWN_MS = 60_000;
+
+/**
+ * Maximum character length for a single tool-result message injected into the
+ * LLM context. Tool outputs that exceed this limit are truncated with a clear
+ * notice so the context window never silently overflows.
+ *
+ * ~32k chars ≈ ~8k tokens at 4 chars/token — conservative headroom for gpt-4o's
+ * 128k context window when multiple tool calls are in flight.
+ */
+export const AGENT_TOOL_OUTPUT_MAX_CHARS = 32_000;
 export const AGENT_CIRCUIT_BREAKER_FAILURE_THRESHOLD = 3;
 export const AGENT_COST_LIMIT_USD = 0.25;
 export const AGENT_DEFAULT_SYSTEM_PROMPT = [

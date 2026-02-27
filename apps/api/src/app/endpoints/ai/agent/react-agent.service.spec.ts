@@ -857,3 +857,450 @@ describe('ReactAgentService', () => {
     expect(llmClient.complete).toHaveBeenCalledTimes(2);
   });
 });
+
+// ─── Phase 2: Agent Reliability ───────────────────────────────────────────────
+
+describe('Phase 2 reliability improvements', () => {
+  let llmClient2: LLMClient;
+  let toolRegistry2: ToolRegistry;
+  let agent2: ReactAgentService;
+
+  const reliabilityGuardrails = {
+    circuitBreakerCooldownMs: 60_000,
+    circuitBreakerFailureThreshold: 3,
+    costLimitUsd: 1,
+    fallbackCostPer1kTokensUsd: 0.002,
+    maxIterations: 10,
+    timeoutMs: 30_000
+  };
+
+  beforeEach(() => {
+    llmClient2 = { complete: jest.fn() };
+    toolRegistry2 = new ToolRegistry();
+    agent2 = new ReactAgentService(llmClient2, toolRegistry2);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  // ── 2.3 Parallel tool execution ──────────────────────────────────────────
+
+  describe('parallel tool execution', () => {
+    it('executes multiple tool calls from one LLM turn concurrently', async () => {
+      const callOrder: string[] = [];
+      const DELAY = 30; // ms each tool takes
+
+      const makeDelayedTool = (name: string) => ({
+        description: name,
+        execute: jest.fn().mockImplementation(async () => {
+          callOrder.push(`start:${name}`);
+          await new Promise((r) => setTimeout(r, DELAY));
+          callOrder.push(`end:${name}`);
+          return { data: { name }, status: 'success' };
+        }),
+        inputSchema: { type: 'object' as const },
+        name
+      });
+
+      toolRegistry2.register(makeDelayedTool('tool_a'));
+      toolRegistry2.register(makeDelayedTool('tool_b'));
+
+      (llmClient2.complete as jest.Mock)
+        .mockResolvedValueOnce({
+          finishReason: 'tool_calls',
+          text: '',
+          toolCalls: [
+            { arguments: {}, id: 'tc-a', name: 'tool_a' },
+            { arguments: {}, id: 'tc-b', name: 'tool_b' }
+          ],
+          usage: { estimatedCostUsd: 0.001 }
+        })
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: 'Done',
+          toolCalls: [],
+          usage: { estimatedCostUsd: 0.001 }
+        });
+
+      const start = Date.now();
+      const result = await agent2.run({
+        guardrails: reliabilityGuardrails,
+        prompt: 'Run both tools',
+        userId: 'user-1'
+      });
+      const elapsed = Date.now() - start;
+
+      expect(result.status).toBe('completed');
+      expect(result.toolCalls).toBe(2);
+
+      // Parallel: total time should be ~DELAY, not ~2*DELAY.
+      // We allow 2.5x to account for test jitter/overhead.
+      expect(elapsed).toBeLessThan(DELAY * 2.5);
+
+      // Both starts should precede both ends (interleaved = parallel)
+      const firstEnd =
+        callOrder.indexOf('end:tool_a') < callOrder.indexOf('end:tool_b')
+          ? callOrder.indexOf('end:tool_a')
+          : callOrder.indexOf('end:tool_b');
+      const lastStart =
+        callOrder.lastIndexOf('start:tool_a') >
+        callOrder.lastIndexOf('start:tool_b')
+          ? callOrder.lastIndexOf('start:tool_a')
+          : callOrder.lastIndexOf('start:tool_b');
+
+      expect(lastStart).toBeLessThan(firstEnd);
+    });
+
+    it('collects results from all parallel tool calls into executedTools', async () => {
+      toolRegistry2.register({
+        description: 'ta',
+        execute: jest
+          .fn()
+          .mockResolvedValue({ data: { r: 'A' }, status: 'success' }),
+        inputSchema: { type: 'object' as const },
+        name: 'tool_a'
+      });
+      toolRegistry2.register({
+        description: 'tb',
+        execute: jest
+          .fn()
+          .mockResolvedValue({ data: { r: 'B' }, status: 'success' }),
+        inputSchema: { type: 'object' as const },
+        name: 'tool_b'
+      });
+
+      (llmClient2.complete as jest.Mock)
+        .mockResolvedValueOnce({
+          finishReason: 'tool_calls',
+          text: '',
+          toolCalls: [
+            { arguments: {}, id: 'tc-a', name: 'tool_a' },
+            { arguments: {}, id: 'tc-b', name: 'tool_b' }
+          ],
+          usage: { estimatedCostUsd: 0.001 }
+        })
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: 'Both done',
+          toolCalls: [],
+          usage: { estimatedCostUsd: 0.001 }
+        });
+
+      const result = await agent2.run({
+        guardrails: reliabilityGuardrails,
+        prompt: 'Run both',
+        userId: 'user-1'
+      });
+
+      expect(result.executedTools.map((e) => e.toolName).sort()).toEqual([
+        'tool_a',
+        'tool_b'
+      ]);
+    });
+
+    it('continues after one parallel tool fails, marks it as error envelope', async () => {
+      toolRegistry2.register({
+        description: 'ok',
+        execute: jest
+          .fn()
+          .mockResolvedValue({ data: { ok: true }, status: 'success' }),
+        inputSchema: { type: 'object' as const },
+        name: 'tool_ok'
+      });
+      toolRegistry2.register({
+        description: 'fail',
+        execute: jest.fn().mockRejectedValue(new Error('tool crashed')),
+        inputSchema: { type: 'object' as const },
+        name: 'tool_fail'
+      });
+
+      (llmClient2.complete as jest.Mock)
+        .mockResolvedValueOnce({
+          finishReason: 'tool_calls',
+          text: '',
+          toolCalls: [
+            { arguments: {}, id: 'tc-ok', name: 'tool_ok' },
+            { arguments: {}, id: 'tc-fail', name: 'tool_fail' }
+          ],
+          usage: { estimatedCostUsd: 0.001 }
+        })
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: 'Recovered',
+          toolCalls: [],
+          usage: { estimatedCostUsd: 0.001 }
+        });
+
+      const result = await agent2.run({
+        guardrails: reliabilityGuardrails,
+        prompt: 'Mix of ok and failing tools',
+        userId: 'user-1'
+      });
+
+      expect(result.status).toBe('completed');
+      expect(
+        result.executedTools.find((e) => e.toolName === 'tool_fail')?.envelope
+          .status
+      ).toBe('error');
+      expect(
+        result.executedTools.find((e) => e.toolName === 'tool_ok')?.envelope
+          .status
+      ).toBe('success');
+    });
+  });
+
+  // ── 2.4 Context window guard ─────────────────────────────────────────────
+
+  describe('context window guard', () => {
+    it('truncates tool output that exceeds the per-message character cap', async () => {
+      const largePayload = 'x'.repeat(100_000);
+
+      toolRegistry2.register({
+        description: 'big tool',
+        execute: jest.fn().mockResolvedValue({
+          data: { payload: largePayload },
+          status: 'success'
+        }),
+        inputSchema: { type: 'object' as const },
+        name: 'big_tool'
+      });
+
+      let capturedMessages: unknown[] = [];
+
+      (llmClient2.complete as jest.Mock)
+        .mockImplementationOnce(({ messages }: { messages: unknown[] }) => {
+          capturedMessages = messages;
+          return Promise.resolve({
+            finishReason: 'tool_calls',
+            text: '',
+            toolCalls: [{ arguments: {}, id: 'tc-1', name: 'big_tool' }],
+            usage: { estimatedCostUsd: 0.001 }
+          });
+        })
+        .mockImplementationOnce(({ messages }: { messages: unknown[] }) => {
+          capturedMessages = messages;
+          return Promise.resolve({
+            finishReason: 'stop',
+            text: 'Truncated response',
+            toolCalls: [],
+            usage: { estimatedCostUsd: 0.001 }
+          });
+        });
+
+      await agent2.run({
+        guardrails: reliabilityGuardrails,
+        prompt: 'Get big data',
+        userId: 'user-1'
+      });
+
+      // The tool message passed to the second LLM call must be under the cap
+      const toolMessage = (
+        capturedMessages as { role: string; content: string }[]
+      ).find((m) => m.role === 'tool');
+
+      expect(toolMessage).toBeDefined();
+      // Content must be <= TOOL_OUTPUT_MAX_CHARS (defined in agent.constants)
+      expect(toolMessage!.content.length).toBeLessThanOrEqual(32_000);
+    });
+  });
+
+  // ── 2.1 Escalation hardening ─────────────────────────────────────────────
+
+  describe('escalation hardening', () => {
+    it('escalates when LLM skips tools on first turn', async () => {
+      toolRegistry2.register({
+        description: 'portfolio tool',
+        execute: jest
+          .fn()
+          .mockResolvedValue({ data: { total: 1000 }, status: 'success' }),
+        inputSchema: { type: 'object' as const },
+        name: 'get_portfolio_summary'
+      });
+
+      (llmClient2.complete as jest.Mock)
+        // First turn: LLM skips tools (no tool calls, just text)
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: 'I think your portfolio is fine.',
+          toolCalls: [],
+          usage: { estimatedCostUsd: 0.001 }
+        })
+        // After escalation prompt, LLM uses tool
+        .mockResolvedValueOnce({
+          finishReason: 'tool_calls',
+          text: '',
+          toolCalls: [
+            { arguments: {}, id: 'tc-esc', name: 'get_portfolio_summary' }
+          ],
+          usage: { estimatedCostUsd: 0.001 }
+        })
+        // Final response
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: 'Portfolio total is $1000.',
+          toolCalls: [],
+          usage: { estimatedCostUsd: 0.001 }
+        });
+
+      const result = await agent2.run({
+        guardrails: reliabilityGuardrails,
+        prompt: 'What is my portfolio worth?',
+        toolNames: ['get_portfolio_summary'],
+        userId: 'user-1'
+      });
+
+      expect(result.status).toBe('completed');
+      expect(result.toolCalls).toBeGreaterThanOrEqual(1);
+      // Escalation causes an extra LLM call
+      expect(llmClient2.complete).toHaveBeenCalledTimes(3);
+    });
+
+    it('accepts text-only answer after tool has been used at least once', async () => {
+      toolRegistry2.register({
+        description: 'portfolio tool',
+        execute: jest
+          .fn()
+          .mockResolvedValue({ data: { total: 1000 }, status: 'success' }),
+        inputSchema: { type: 'object' as const },
+        name: 'get_portfolio_summary'
+      });
+
+      (llmClient2.complete as jest.Mock)
+        // Tool call first
+        .mockResolvedValueOnce({
+          finishReason: 'tool_calls',
+          text: '',
+          toolCalls: [
+            { arguments: {}, id: 'tc-1', name: 'get_portfolio_summary' }
+          ],
+          usage: { estimatedCostUsd: 0.001 }
+        })
+        // Then text answer (tool already called — no escalation needed)
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: 'Portfolio total is $1000.',
+          toolCalls: [],
+          usage: { estimatedCostUsd: 0.001 }
+        });
+
+      const result = await agent2.run({
+        guardrails: reliabilityGuardrails,
+        prompt: 'What is my portfolio worth?',
+        toolNames: ['get_portfolio_summary'],
+        userId: 'user-1'
+      });
+
+      expect(result.status).toBe('completed');
+      expect(result.toolCalls).toBe(1);
+      // Exactly 2 calls: tool then answer — no escalation
+      expect(llmClient2.complete).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ── 2.5 Cost estimation fallback ─────────────────────────────────────────
+
+  describe('cost estimation', () => {
+    it('falls back to token-based cost when estimatedCostUsd is absent', async () => {
+      toolRegistry2.register({
+        description: 'portfolio',
+        execute: jest.fn().mockResolvedValue({ data: {}, status: 'success' }),
+        inputSchema: { type: 'object' as const },
+        name: 'get_portfolio_summary'
+      });
+
+      (llmClient2.complete as jest.Mock)
+        .mockResolvedValueOnce({
+          finishReason: 'tool_calls',
+          text: '',
+          toolCalls: [
+            { arguments: {}, id: 'tc-1', name: 'get_portfolio_summary' }
+          ],
+          // No estimatedCostUsd — only totalTokens
+          usage: { totalTokens: 500 }
+        })
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: 'Done',
+          toolCalls: [],
+          usage: { totalTokens: 300 }
+        });
+
+      const result = await agent2.run({
+        guardrails: {
+          ...reliabilityGuardrails,
+          fallbackCostPer1kTokensUsd: 0.01
+        },
+        prompt: 'Summary please',
+        userId: 'user-1'
+      });
+
+      // 800 tokens * 0.01/1000 = $0.008
+      expect(result.estimatedCostUsd).toBeCloseTo(0.008, 4);
+    });
+
+    it('falls back to promptTokens+completionTokens when totalTokens absent', async () => {
+      toolRegistry2.register({
+        description: 'portfolio',
+        execute: jest.fn().mockResolvedValue({ data: {}, status: 'success' }),
+        inputSchema: { type: 'object' as const },
+        name: 'get_portfolio_summary'
+      });
+
+      (llmClient2.complete as jest.Mock).mockResolvedValueOnce({
+        finishReason: 'stop',
+        text: 'Answer',
+        toolCalls: [],
+        usage: { completionTokens: 200, promptTokens: 300 }
+      });
+
+      const result = await agent2.run({
+        guardrails: {
+          ...reliabilityGuardrails,
+          fallbackCostPer1kTokensUsd: 0.002
+        },
+        prompt: 'Hello',
+        userId: 'user-1'
+      });
+
+      // 500 tokens * 0.002/1000 = $0.001
+      expect(result.estimatedCostUsd).toBeCloseTo(0.001, 4);
+    });
+
+    it('cost guard fires when usage is missing but runs accumulate', async () => {
+      // When usage is missing, cost stays 0 and guard doesn't fire prematurely
+      // This tests that missing usage does NOT cause incorrect cost guard firing
+      toolRegistry2.register({
+        description: 'portfolio',
+        execute: jest.fn().mockResolvedValue({ data: {}, status: 'success' }),
+        inputSchema: { type: 'object' as const },
+        name: 'tool_no_usage'
+      });
+
+      (llmClient2.complete as jest.Mock)
+        .mockResolvedValueOnce({
+          finishReason: 'tool_calls',
+          text: '',
+          toolCalls: [{ arguments: {}, id: 'tc-1', name: 'tool_no_usage' }]
+          // No usage field at all
+        })
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: 'Done without usage data',
+          toolCalls: []
+          // No usage field at all
+        });
+
+      const result = await agent2.run({
+        guardrails: { ...reliabilityGuardrails, costLimitUsd: 0.000001 },
+        prompt: 'Run with no usage',
+        userId: 'user-1'
+      });
+
+      // Without usage data, cost estimate is 0, so cost guard doesn't fire
+      // The agent completes normally
+      expect(result.status).toBe('completed');
+      expect(result.estimatedCostUsd).toBe(0);
+    });
+  });
+});

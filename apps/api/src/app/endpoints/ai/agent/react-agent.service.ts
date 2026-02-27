@@ -4,7 +4,8 @@ import {
   AGENT_COST_LIMIT_USD,
   AGENT_FALLBACK_COST_PER_1K_TOKENS_USD,
   AGENT_MAX_ITERATIONS,
-  AGENT_TIMEOUT_MS
+  AGENT_TIMEOUT_MS,
+  AGENT_TOOL_OUTPUT_MAX_CHARS
 } from '@ghostfolio/api/app/endpoints/ai/agent/agent.constants';
 import {
   LLM_CLIENT_TOKEN,
@@ -337,40 +338,55 @@ export class ReactAgentService {
             toolCalls: completion.toolCalls
           });
 
+          // Check abort before tool execution
+          if (signal?.aborted) {
+            yield {
+              type: '_agent_done',
+              result: {
+                elapsedMs: Date.now() - startedAt,
+                estimatedCostUsd: this.roundCost(estimatedCostUsd),
+                executedTools: executedToolResults,
+                iterations: iterationCount,
+                response: 'Request was cancelled.',
+                status: 'partial',
+                toolCalls: toolCallsCount
+              }
+            };
+
+            return;
+          }
+
+          // Emit tool_call events for all tools before starting parallel execution
           for (const toolCall of completion.toolCalls) {
-            // Check abort before tool execution
-            if (signal?.aborted) {
-              yield {
-                type: '_agent_done',
-                result: {
-                  elapsedMs: Date.now() - startedAt,
-                  estimatedCostUsd: this.roundCost(estimatedCostUsd),
-                  executedTools: executedToolResults,
-                  iterations: iterationCount,
-                  response: 'Request was cancelled.',
-                  status: 'partial',
-                  toolCalls: toolCallsCount
-                }
-              };
-
-              return;
-            }
-
             yield {
               type: 'tool_call',
               toolName: toolCall.name,
               iteration
             };
+          }
 
-            const { envelope, message: toolMessage } =
-              await this.executeToolCall({
+          // Execute all tool calls from this LLM turn in parallel.
+          // Individual tool errors are caught inside executeToolCall and
+          // returned as error envelopes so that one failing tool does not
+          // prevent the others from running.
+          const toolResults = await Promise.all(
+            completion.toolCalls.map((toolCall) =>
+              this.executeToolCall({
                 requestId,
                 startedAt,
                 timeoutMs: guardrails.timeoutMs,
                 toolCall,
                 toolRegistry,
                 userId: input.userId
-              });
+              })
+            )
+          );
+
+          // Collect results: push tool messages, accumulate executed tools,
+          // emit tool_result events (order matches the original toolCalls order).
+          for (let i = 0; i < completion.toolCalls.length; i++) {
+            const toolCall = completion.toolCalls[i];
+            const { envelope, message: toolMessage } = toolResults[i];
 
             messages.push(toolMessage);
             executedToolResults.push({
@@ -626,10 +642,25 @@ export class ReactAgentService {
               status: 'success'
             };
 
+      // Context-window guard: truncate oversized tool output before injecting
+      // it into the LLM conversation. Without this a single large response
+      // (e.g. a full transaction history) can silently overflow the context
+      // window, causing the LLM to error or produce garbled answers.
+      const TRUNCATION_SUFFIX =
+        '\n[TRUNCATED: tool output exceeded the context window limit]';
+      const rawContent = JSON.stringify(toolResponse);
+      const content =
+        rawContent.length > AGENT_TOOL_OUTPUT_MAX_CHARS
+          ? rawContent.slice(
+              0,
+              AGENT_TOOL_OUTPUT_MAX_CHARS - TRUNCATION_SUFFIX.length
+            ) + TRUNCATION_SUFFIX
+          : rawContent;
+
       return {
         envelope,
         message: {
-          content: JSON.stringify(toolResponse),
+          content,
           name: toolCall.name,
           role: 'tool',
           toolCallId: toolCall.id
