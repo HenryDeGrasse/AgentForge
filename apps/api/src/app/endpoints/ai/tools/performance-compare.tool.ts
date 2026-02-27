@@ -224,7 +224,15 @@ export class PerformanceCompareTool implements ToolDefinition<
         const benchmarkMetric =
           benchmark.performances.allTimeHigh.performancePercent;
 
-        if (portfolio.netPerformancePercentage >= benchmarkMetric) {
+        // Outperformance requires the portfolio to have positive returns AND
+        // to exceed the benchmark's ATH-drawdown metric. This prevents a
+        // portfolio with negative returns from being classified as
+        // "outperforming" simply because it lost less than the benchmark's
+        // drawdown from its all-time-high.
+        if (
+          portfolio.netPerformancePercentage > 0 &&
+          portfolio.netPerformancePercentage >= benchmarkMetric
+        ) {
           response.outperformingBenchmarks.push(benchmark.symbol);
         } else {
           response.underperformingBenchmarks.push(benchmark.symbol);
@@ -242,7 +250,10 @@ export class PerformanceCompareTool implements ToolDefinition<
 
     return {
       assumptions: [
-        'Benchmark comparison uses all-time-high drawdown as benchmark metric, not period return.'
+        'Benchmark comparison uses all-time-high drawdown as benchmark metric, not period return. ' +
+          'Outperformance is reported only when the portfolio has positive net returns AND exceeds the ' +
+          'benchmark ATH-drawdown value. For direct period-return comparisons, use a data provider ' +
+          'that exposes benchmark period returns directly.'
       ],
       baseCurrency:
         user?.settings?.settings?.baseCurrency?.toString() ?? DEFAULT_CURRENCY,

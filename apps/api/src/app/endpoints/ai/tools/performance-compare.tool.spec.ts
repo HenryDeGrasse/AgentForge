@@ -111,10 +111,9 @@ describe('PerformanceCompareTool', () => {
       underperformingBenchmarks: []
     });
 
-    expect(result.assumptions).toEqual(
-      expect.arrayContaining([
-        'Benchmark comparison uses all-time-high drawdown as benchmark metric, not period return.'
-      ])
+    expect(result.assumptions.length).toBeGreaterThan(0);
+    expect(result.assumptions[0]).toContain(
+      'Benchmark comparison uses all-time-high drawdown as benchmark metric, not period return.'
     );
     expect(result.warnings).toEqual([]);
   });

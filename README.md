@@ -14,6 +14,37 @@ AgentForge is a fork of [Ghostfolio](https://ghostfol.io) that adds a full AI ag
 
 Everything under `apps/api/src/app/endpoints/ai/` is new. The upstream Ghostfolio codebase is otherwise unchanged.
 
+### Improvement Log
+
+| Phase       | Description                                                                         | Status     |
+| ----------- | ----------------------------------------------------------------------------------- | ---------- |
+| **Phase 1** | Bug fixes — chart data extraction, benchmark comparison, memory leak                | ✅ Done    |
+| **Phase 2** | Agent reliability — parallel tool calls, context guard, escalation, cost estimation | 🔜 Planned |
+| **Phase 3** | Eval coverage expansion — chart extractor tests, multi-turn evals, injection evals  | 🔜 Planned |
+| **Phase 4** | Security hardening — rate limiting, scope gate, output sanitization                 | 🔜 Planned |
+| **Phase 5** | Operational improvements — structured telemetry, heartbeat tuning                   | 🔜 Planned |
+
+#### Phase 1 Bug Fixes
+
+1. **`ChartDataExtractorService` — 5 silent chart bugs fixed** (`chart-data-extractor.service.ts`):
+   - `analyze_risk`: asset-class and sector exposure charts now read from `data.exposures.*` instead of non-existent top-level fields. Previously, no risk charts were ever generated.
+   - `market_data_lookup`: line-chart values now use `marketPrice` (the actual field name) instead of `close`/`price`. Previously all data points were 0.
+   - `rebalance_suggest`: table columns now use `currentPct`/`targetPct`/`driftPct`. Previously all percentage cells were empty strings.
+   - `tax_estimate`: table cells now show `netInBaseCurrency` numeric values instead of `[object Object]`.
+   - `compliance_check`: rule names now read from `ruleName` instead of `name`. Previously all rule rows had blank first columns.
+   - Added `chart-data-extractor.service.spec.ts` with 38 tests covering all 10 tool extractors.
+
+2. **`performance_compare` — benchmark comparison made honest** (`performance-compare.tool.ts`):
+   - Comparison now requires the portfolio to have **positive** net returns to classify as "outperforming". Previously a portfolio at -5% could appear to "outperform" a benchmark at -10% from ATH — these are different metrics being compared.
+   - Assumption text updated to explain the limitation (ATH drawdown vs period return).
+
+3. **`lookupNegativeCache` — memory leak fixed** (`market-data-lookup.tool.ts`):
+   - Expired entries are now deleted on access instead of just skipped. Previously, the in-memory `Map` grew indefinitely in long-running server processes.
+
+> **Known pre-existing issue**: A worker process does not exit gracefully after the test suite (upstream NestJS/BullMQ module teardown). This manifests as a warning but does not affect test correctness. Fixing it requires closing Redis/BullMQ connections in `afterAll` hooks for the modules that import `RedisCacheModule` / `PortfolioSnapshotQueueModule`.
+
+---
+
 ### AI Chat Endpoint
 
 `POST /api/v1/ai/chat` accepts a message and optional `toolNames` list. The server streams a Server-Sent Events (SSE) response with thinking steps, tool calls, and a final verified answer. A traditional JSON response (`/api/v1/ai/chat` without streaming) is also supported.
