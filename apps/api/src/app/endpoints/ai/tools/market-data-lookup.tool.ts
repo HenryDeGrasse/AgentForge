@@ -57,6 +57,19 @@ const DEFAULT_HISTORY_DAYS = 30;
 const MAX_HISTORY_DAYS = 365;
 const MIN_HISTORY_DAYS = 1;
 
+/**
+ * Yahoo Finance (unofficial API) imposes undocumented rate limits.
+ * In practice, ~2,000 requests/hour is a safe upper bound for a single IP.
+ * The `symbolService.get()` path is protected by the Redis quote cache, so
+ * only cold-cache or symbol-resolution lookups hit Yahoo directly.
+ *
+ * We defend against 429s with a simple exponential-backoff retry, and we
+ * cache failed-lookup results in-memory so a repeated unknown symbol does
+ * not burn extra quota.
+ */
+const LOOKUP_NOT_FOUND_TTL_MS = 5 * 60 * 1000; // 5 min negative-result cache
+const lookupNegativeCache = new Map<string, number>(); // query → expiry epoch
+
 @Injectable()
 export class MarketDataLookupTool implements ToolDefinition<
   MarketDataLookupInput,
@@ -214,7 +227,10 @@ export class MarketDataLookupTool implements ToolDefinition<
           const absoluteChange = lastPoint.marketPrice - firstPoint.marketPrice;
 
           priceChange.absoluteChange = absoluteChange;
-          priceChange.percentChange = absoluteChange / firstPoint.marketPrice;
+          // Multiply by 100 so the value is a whole-number percentage (e.g. 5.3 = +5.3%)
+          // consistent with the schema description and all other *Pct fields in the AI layer.
+          priceChange.percentChange =
+            (absoluteChange / firstPoint.marketPrice) * 100;
           priceChange.periodDays = historyDays;
         }
       }
@@ -297,32 +313,70 @@ export class MarketDataLookupTool implements ToolDefinition<
       }
     | undefined
   > {
+    // Negative cache: skip Yahoo lookup for recently-unresolved queries to
+    // avoid burning rate-limit quota on repeated unknown symbols.
+    const cacheKey = `${userId}:${query.toLowerCase()}`;
+    const negExpiry = lookupNegativeCache.get(cacheKey);
+
+    if (negExpiry !== undefined && Date.now() < negExpiry) {
+      return undefined;
+    }
+
     const user = await this.userService.user({ id: userId });
 
     if (!user) {
       return undefined;
     }
 
-    try {
-      const lookupResponse = await this.symbolService.lookup({
-        includeIndices: false,
-        query,
-        user
-      });
+    // Retry loop: Yahoo Finance returns HTTP 429 when rate-limited.
+    // We retry up to 3 times with exponential backoff (500ms, 1s, 2s).
+    const MAX_RETRIES = 3;
+    const BASE_DELAY_MS = 500;
 
-      const lookupItem = lookupResponse.items?.[0];
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        const lookupResponse = await this.symbolService.lookup({
+          includeIndices: false,
+          query,
+          user
+        });
 
-      if (!lookupItem) {
+        const lookupItem = lookupResponse.items?.[0];
+
+        if (!lookupItem) {
+          // Cache negative result to avoid repeat quota burn
+          lookupNegativeCache.set(
+            cacheKey,
+            Date.now() + LOOKUP_NOT_FOUND_TTL_MS
+          );
+
+          return undefined;
+        }
+
+        return {
+          dataSource: lookupItem.dataSource.toString(),
+          symbol: lookupItem.symbol
+        };
+      } catch (error: unknown) {
+        const status =
+          (error as { code?: number })?.code ??
+          (error as { status?: number })?.status;
+
+        if (status === 429 && attempt < MAX_RETRIES - 1) {
+          // Rate limited — wait with exponential backoff then retry
+          await new Promise((resolve) =>
+            setTimeout(resolve, BASE_DELAY_MS * 2 ** attempt)
+          );
+
+          continue;
+        }
+
+        // Non-429 error or final retry exhausted — give up gracefully
         return undefined;
       }
-
-      return {
-        dataSource: lookupItem.dataSource.toString(),
-        symbol: lookupItem.symbol
-      };
-    } catch {
-      return undefined;
     }
+
+    return undefined;
   }
 
   private toIsoString(value: Date | string) {
