@@ -514,14 +514,19 @@ describe('AiService.chat() — toolNames validation', () => {
     expect(agentRun.mock.calls[0][0].toolNames).toEqual([
       'analyze_risk',
       'compliance_check',
+      'create_insider_monitoring_rule',
+      'delete_insider_monitoring_rule',
+      'get_insider_activity',
       'get_portfolio_summary',
       'get_transaction_history',
+      'list_insider_monitoring_rules',
       'market_data_lookup',
       'performance_compare',
       'rebalance_suggest',
       'simulate_trades',
       'stress_test',
-      'tax_estimate'
+      'tax_estimate',
+      'update_insider_monitoring_rule'
     ]);
   });
 

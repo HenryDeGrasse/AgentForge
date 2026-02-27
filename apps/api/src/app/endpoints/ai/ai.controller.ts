@@ -137,9 +137,7 @@ export class AiController {
   @Get('observability/runs')
   @HasPermission(permissions.accessAssistant)
   @UseGuards(AuthGuard('jwt'), HasPermissionGuard)
-  public async getObservabilityRuns(
-    @Query('limit') limitStr?: string
-  ) {
+  public async getObservabilityRuns(@Query('limit') limitStr?: string) {
     const limit = limitStr ? parseInt(limitStr, 10) : 50;
     return this.aiService.getRecentRuns({ limit });
   }

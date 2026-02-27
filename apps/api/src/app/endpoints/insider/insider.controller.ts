@@ -33,7 +33,10 @@ export class InsiderController {
     @Query('days') daysStr?: string
   ) {
     const symbols = symbolsStr
-      ? symbolsStr.split(',').map((s) => s.trim()).filter(Boolean)
+      ? symbolsStr
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
       : [];
     const days = daysStr ? parseInt(daysStr, 10) : 30;
 
@@ -125,7 +128,10 @@ export class InsiderController {
     @Query('days') daysStr?: string
   ) {
     const symbols = symbolsStr
-      ? symbolsStr.split(',').map((s) => s.trim()).filter(Boolean)
+      ? symbolsStr
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
       : [];
     const days = daysStr ? parseInt(daysStr, 10) : 30;
 

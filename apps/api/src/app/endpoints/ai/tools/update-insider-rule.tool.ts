@@ -1,5 +1,3 @@
-import { InsiderService } from '@ghostfolio/api/app/endpoints/insider/insider.service';
-
 import {
   UPDATE_INSIDER_RULE_INPUT_SCHEMA,
   UPDATE_INSIDER_RULE_OUTPUT_SCHEMA
@@ -10,6 +8,7 @@ import {
   ToolJsonSchema,
   ToolResultEnvelope
 } from '@ghostfolio/api/app/endpoints/ai/tools/tool.types';
+import { InsiderService } from '@ghostfolio/api/app/endpoints/insider/insider.service';
 
 import { Injectable } from '@nestjs/common';
 
@@ -30,17 +29,20 @@ interface UpdateInsiderRuleOutput {
 }
 
 @Injectable()
-export class UpdateInsiderRuleTool
-  implements ToolDefinition<UpdateInsiderRuleInput, UpdateInsiderRuleOutput>
-{
+export class UpdateInsiderRuleTool implements ToolDefinition<
+  UpdateInsiderRuleInput,
+  UpdateInsiderRuleOutput
+> {
   public readonly description =
     'Update an existing insider monitoring rule. Can change scope, side, minimum value threshold, symbols, or activate/deactivate the rule.';
 
-  public readonly inputSchema: ToolJsonSchema = UPDATE_INSIDER_RULE_INPUT_SCHEMA;
+  public readonly inputSchema: ToolJsonSchema =
+    UPDATE_INSIDER_RULE_INPUT_SCHEMA;
 
   public readonly name = 'update_insider_monitoring_rule';
 
-  public readonly outputSchema: ToolJsonSchema = UPDATE_INSIDER_RULE_OUTPUT_SCHEMA;
+  public readonly outputSchema: ToolJsonSchema =
+    UPDATE_INSIDER_RULE_OUTPUT_SCHEMA;
 
   public constructor(private readonly insiderService: InsiderService) {}
 

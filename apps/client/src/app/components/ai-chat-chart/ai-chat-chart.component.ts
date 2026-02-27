@@ -189,9 +189,7 @@ export class AiChatChartComponent
     });
   }
 
-  private renderHorizontalBar(
-    items: { name?: string; value: number }[]
-  ): void {
+  private renderHorizontalBar(items: { name?: string; value: number }[]): void {
     this.chartInstance = new Chart(this.canvasRef.nativeElement, {
       type: 'bar',
       data: {

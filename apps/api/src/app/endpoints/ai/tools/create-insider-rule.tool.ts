@@ -1,5 +1,3 @@
-import { InsiderService } from '@ghostfolio/api/app/endpoints/insider/insider.service';
-
 import {
   CREATE_INSIDER_RULE_INPUT_SCHEMA,
   CREATE_INSIDER_RULE_OUTPUT_SCHEMA
@@ -10,6 +8,7 @@ import {
   ToolJsonSchema,
   ToolResultEnvelope
 } from '@ghostfolio/api/app/endpoints/ai/tools/tool.types';
+import { InsiderService } from '@ghostfolio/api/app/endpoints/insider/insider.service';
 
 import { Injectable } from '@nestjs/common';
 
@@ -37,17 +36,20 @@ interface CreateInsiderRuleOutput {
 }
 
 @Injectable()
-export class CreateInsiderRuleTool
-  implements ToolDefinition<CreateInsiderRuleInput, CreateInsiderRuleOutput>
-{
+export class CreateInsiderRuleTool implements ToolDefinition<
+  CreateInsiderRuleInput,
+  CreateInsiderRuleOutput
+> {
   public readonly description =
     'Create an insider monitoring rule to track insider buys/sells for portfolio holdings or specific symbols. Rules are evaluated at the start of each chat session.';
 
-  public readonly inputSchema: ToolJsonSchema = CREATE_INSIDER_RULE_INPUT_SCHEMA;
+  public readonly inputSchema: ToolJsonSchema =
+    CREATE_INSIDER_RULE_INPUT_SCHEMA;
 
   public readonly name = 'create_insider_monitoring_rule';
 
-  public readonly outputSchema: ToolJsonSchema = CREATE_INSIDER_RULE_OUTPUT_SCHEMA;
+  public readonly outputSchema: ToolJsonSchema =
+    CREATE_INSIDER_RULE_OUTPUT_SCHEMA;
 
   public constructor(private readonly insiderService: InsiderService) {}
 

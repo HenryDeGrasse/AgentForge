@@ -1,5 +1,3 @@
-import { InsiderService } from '@ghostfolio/api/app/endpoints/insider/insider.service';
-
 import {
   LIST_INSIDER_RULES_INPUT_SCHEMA,
   LIST_INSIDER_RULES_OUTPUT_SCHEMA
@@ -10,6 +8,7 @@ import {
   ToolJsonSchema,
   ToolResultEnvelope
 } from '@ghostfolio/api/app/endpoints/ai/tools/tool.types';
+import { InsiderService } from '@ghostfolio/api/app/endpoints/insider/insider.service';
 
 import { Injectable } from '@nestjs/common';
 
@@ -31,9 +30,10 @@ interface ListInsiderRulesOutput {
 }
 
 @Injectable()
-export class ListInsiderRulesTool
-  implements ToolDefinition<Record<string, never>, ListInsiderRulesOutput>
-{
+export class ListInsiderRulesTool implements ToolDefinition<
+  Record<string, never>,
+  ListInsiderRulesOutput
+> {
   public readonly description =
     'List all insider monitoring rules for the current user. Shows rule configuration, status, and last check/notify timestamps.';
 
@@ -41,7 +41,8 @@ export class ListInsiderRulesTool
 
   public readonly name = 'list_insider_monitoring_rules';
 
-  public readonly outputSchema: ToolJsonSchema = LIST_INSIDER_RULES_OUTPUT_SCHEMA;
+  public readonly outputSchema: ToolJsonSchema =
+    LIST_INSIDER_RULES_OUTPUT_SCHEMA;
 
   public constructor(private readonly insiderService: InsiderService) {}
 

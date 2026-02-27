@@ -139,8 +139,7 @@ export class InsiderService {
 
       return holdings
         .sort(
-          (a, b) =>
-            (b.valueInBaseCurrency ?? 0) - (a.valueInBaseCurrency ?? 0)
+          (a, b) => (b.valueInBaseCurrency ?? 0) - (a.valueInBaseCurrency ?? 0)
         )
         .slice(0, topN)
         .map((h) => h.symbol);
@@ -215,21 +214,13 @@ export class InsiderService {
     return this.prismaService.insiderMonitoringRule.updateMany({
       data: {
         ...updates,
-        symbols: updates.symbols
-          ? JSON.stringify(updates.symbols)
-          : undefined
+        symbols: updates.symbols ? JSON.stringify(updates.symbols) : undefined
       },
       where: { id, userId }
     });
   }
 
-  public async deleteRule({
-    id,
-    userId
-  }: {
-    id: string;
-    userId: string;
-  }) {
+  public async deleteRule({ id, userId }: { id: string; userId: string }) {
     return this.prismaService.insiderMonitoringRule.deleteMany({
       where: { id, userId }
     });

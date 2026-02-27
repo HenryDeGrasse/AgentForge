@@ -5,6 +5,7 @@ import {
   LLMClient
 } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
 import { ResponseVerifierService } from '@ghostfolio/api/app/endpoints/ai/verification/response-verifier.service';
+import { InsiderService } from '@ghostfolio/api/app/endpoints/insider/insider.service';
 import { PortfolioService } from '@ghostfolio/api/app/portfolio/portfolio.service';
 import { PrismaService } from '@ghostfolio/api/services/prisma/prisma.service';
 
@@ -102,6 +103,12 @@ describe('AiService', () => {
         AiService,
         ChartDataExtractorService,
         { provide: LLM_CLIENT_TOKEN, useValue: llmClient },
+        {
+          provide: InsiderService,
+          useValue: {
+            evaluateRulesForBriefing: jest.fn().mockResolvedValue([])
+          }
+        },
         { provide: PortfolioService, useValue: { getDetails: jest.fn() } },
         { provide: PrismaService, useValue: buildPrismaStub() },
         { provide: ReactAgentService, useValue: { run: jest.fn() } },

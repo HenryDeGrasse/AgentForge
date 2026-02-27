@@ -35,14 +35,15 @@ Add an **Insider Monitoring** capability to Ghostfolio:
 
 Agent tools for full rule management:
 
-| Tool | Purpose |
-|------|---------|
+| Tool                             | Purpose                                                  |
+| -------------------------------- | -------------------------------------------------------- |
 | `create_insider_monitoring_rule` | Create rules (scope: `all_holdings`, `symbols`, `top_n`) |
-| `list_insider_monitoring_rules` | List user's rules with lifecycle state |
-| `update_insider_monitoring_rule` | Modify rule config or activate/deactivate |
-| `delete_insider_monitoring_rule` | Remove a rule |
+| `list_insider_monitoring_rules`  | List user's rules with lifecycle state                   |
+| `update_insider_monitoring_rule` | Modify rule config or activate/deactivate                |
+| `delete_insider_monitoring_rule` | Remove a rule                                            |
 
 Rules support:
+
 - **Scope:** `all_holdings`, `symbols` (specific list), `top_n` (dynamic from portfolio)
 - **Side:** `buy`, `sell`, `any`
 - **Threshold:** `minValueUsd` filter
@@ -100,13 +101,13 @@ Three Prisma models added:
 
 5 new golden-set cases in `apps/api/test/ai/golden-sets.json`:
 
-| ID | Category | What it tests |
-|----|----------|--------------|
-| `insider-activity-query` | single-tool | Agent calls `get_insider_activity` for a symbol |
-| `insider-unknown-symbol` | edge-case | Unknown symbol → partial result + warning |
-| `insider-rule-crud` | single-tool | Agent creates a rule via tool |
-| `insider-list-rules` | single-tool | Agent lists rules via tool |
-| `insider-scope-gate` | scope-gate | Insider question passes scope gate, tool invoked |
+| ID                       | Category    | What it tests                                    |
+| ------------------------ | ----------- | ------------------------------------------------ |
+| `insider-activity-query` | single-tool | Agent calls `get_insider_activity` for a symbol  |
+| `insider-unknown-symbol` | edge-case   | Unknown symbol → partial result + warning        |
+| `insider-rule-crud`      | single-tool | Agent creates a rule via tool                    |
+| `insider-list-rules`     | single-tool | Agent lists rules via tool                       |
+| `insider-scope-gate`     | scope-gate  | Insider question passes scope gate, tool invoked |
 
 ### Observability
 

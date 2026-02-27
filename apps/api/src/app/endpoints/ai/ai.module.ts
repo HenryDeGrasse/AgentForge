@@ -17,9 +17,9 @@ import { RebalanceSuggestTool } from '@ghostfolio/api/app/endpoints/ai/tools/reb
 import { SimulateTradesTool } from '@ghostfolio/api/app/endpoints/ai/tools/simulate-trades.tool';
 import { StressTestTool } from '@ghostfolio/api/app/endpoints/ai/tools/stress-test.tool';
 import { TaxEstimateTool } from '@ghostfolio/api/app/endpoints/ai/tools/tax-estimate.tool';
-import { UpdateInsiderRuleTool } from '@ghostfolio/api/app/endpoints/ai/tools/update-insider-rule.tool';
 import { ToolRegistry } from '@ghostfolio/api/app/endpoints/ai/tools/tool.registry';
 import { AI_TOOL_DEFINITIONS_TOKEN } from '@ghostfolio/api/app/endpoints/ai/tools/tool.types';
+import { UpdateInsiderRuleTool } from '@ghostfolio/api/app/endpoints/ai/tools/update-insider-rule.tool';
 import { InsiderModule } from '@ghostfolio/api/app/endpoints/insider/insider.module';
 import { OrderModule } from '@ghostfolio/api/app/order/order.module';
 import { PortfolioCalculatorFactory } from '@ghostfolio/api/app/portfolio/calculator/portfolio-calculator.factory';
