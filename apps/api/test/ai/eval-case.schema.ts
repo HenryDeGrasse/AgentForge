@@ -34,6 +34,8 @@ export type EvalSubcategory =
   | 'rebalance'
   | 'risk-analysis'
   | 'schema-safety'
+  | 'simulate-trades'
+  | 'stress-test'
   | 'tax'
   | 'transaction-history'
   | 'user-scoping';
@@ -142,6 +144,8 @@ const VALID_SUBCATEGORIES: ReadonlySet<string> = new Set<EvalSubcategory>([
   'rebalance',
   'risk-analysis',
   'schema-safety',
+  'simulate-trades',
+  'stress-test',
   'tax',
   'transaction-history',
   'user-scoping'
@@ -157,6 +161,13 @@ const VALID_CONFIDENCE_LEVELS: ReadonlySet<string> = new Set([
   'high',
   'low',
   'medium'
+]);
+
+const VALID_GUARDRAILS: ReadonlySet<string> = new Set<AgentGuardrailType>([
+  'CIRCUIT_BREAKER',
+  'COST_LIMIT',
+  'MAX_ITERATIONS',
+  'TIMEOUT'
 ]);
 
 // ─── Runtime Validator ─────────────────────────────────────────────────────────
@@ -232,6 +243,19 @@ export function validateEvalCase(
     exp.mustNotIncludeAny,
     `${prefix}.expect.mustNotIncludeAny`
   );
+  if (exp.maxToolCalls !== undefined) {
+    assertNumber(exp.maxToolCalls, `${prefix}.expect.maxToolCalls`);
+  }
+  if (exp.maxElapsedMs !== undefined) {
+    assertNumber(exp.maxElapsedMs, `${prefix}.expect.maxElapsedMs`);
+  }
+  if (exp.expectedGuardrail !== undefined) {
+    assertInSet(
+      exp.expectedGuardrail as string,
+      VALID_GUARDRAILS,
+      `${prefix}.expect.expectedGuardrail`
+    );
+  }
 
   if (
     exp.status === 'completed' &&

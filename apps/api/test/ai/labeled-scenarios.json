@@ -107,7 +107,7 @@
       "status": "completed",
       "minConfidence": "high",
       "minToolCalls": 1,
-      "requiredTools": [],
+      "requiredTools": ["market_data_lookup"],
       "mustIncludeAny": ["price", "market"],
       "mustNotIncludeAny": ["technical issue"]
     },
@@ -275,7 +275,7 @@
       "status": "completed",
       "minConfidence": "high",
       "minToolCalls": 2,
-      "requiredTools": [],
+      "requiredTools": ["get_portfolio_summary", "tax_estimate"],
       "mustIncludeAny": ["portfolio", "tax"],
       "mustNotIncludeAny": ["technical issue"]
     },
@@ -299,7 +299,7 @@
       "status": "completed",
       "minConfidence": "high",
       "minToolCalls": 2,
-      "requiredTools": [],
+      "requiredTools": ["analyze_risk", "compliance_check"],
       "mustIncludeAny": ["risk", "complian"],
       "mustNotIncludeAny": ["technical issue"]
     },
@@ -327,7 +327,7 @@
       "status": "completed",
       "minConfidence": "high",
       "minToolCalls": 2,
-      "requiredTools": [],
+      "requiredTools": ["get_portfolio_summary", "analyze_risk"],
       "mustIncludeAny": ["portfolio", "risk"],
       "mustNotIncludeAny": ["technical issue"]
     },
@@ -547,7 +547,7 @@
       "status": "completed",
       "minConfidence": "high",
       "minToolCalls": 2,
-      "requiredTools": [],
+      "requiredTools": ["get_portfolio_summary", "analyze_risk"],
       "mustIncludeAny": ["portfolio", "performance", "risk"],
       "mustNotIncludeAny": ["technical issue"]
     },
@@ -653,6 +653,54 @@
       "subcategory": "tax",
       "difficulty": "basic",
       "description": "Total realized gains inquiry"
+    }
+  },
+  {
+    "id": "labeled-rich-simulate-trades",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Simulate selling some SYM-A and buying more SYM-B",
+      "toolNames": ["simulate_trades"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredTools": ["simulate_trades"],
+      "mustIncludeAny": ["simulate", "trade", "allocation"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "single-tool",
+      "subcategory": "simulate-trades",
+      "difficulty": "intermediate",
+      "description": "Trade simulation scenario"
+    }
+  },
+  {
+    "id": "labeled-rich-stress-test",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Run a stress test on my portfolio for a market crash scenario",
+      "toolNames": ["stress_test"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredTools": ["stress_test"],
+      "mustIncludeAny": ["stress", "scenario", "loss"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "single-tool",
+      "subcategory": "stress-test",
+      "difficulty": "intermediate",
+      "description": "Stress test scenario evaluation"
     }
   },
   {

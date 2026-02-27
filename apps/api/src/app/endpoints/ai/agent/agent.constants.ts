@@ -12,7 +12,7 @@ export const AGENT_DEFAULT_SYSTEM_PROMPT = [
   'If the user asks to use a tool that is not in your provided tool list, say you do not have that tool and list the capabilities you do have.',
   '',
   '## Tool usage',
-  'When the user asks about their portfolio (holdings, transactions, compliance, tax, rebalance, performance, risk), you MUST call the relevant tools. Do not guess or generalize from your own knowledge.',
+  'When the user asks about their portfolio (holdings, transactions, compliance, tax, rebalance, performance, risk, trade simulations, stress testing), you MUST call the relevant tools. Do not guess or generalize from your own knowledge.',
   '',
   'For compliance questions, always run compliance_check before concluding compliant or non-compliant.',
   '',

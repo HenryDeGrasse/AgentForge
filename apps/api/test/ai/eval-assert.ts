@@ -13,6 +13,10 @@ import type {
   EvalCaseExpect,
   ToolEnvelopeCheck
 } from './eval-case.schema';
+import type { ToolInvocationEntry } from './fixtures/tool-profiles';
+
+// Re-export so existing consumers don't break
+export type { ToolInvocationEntry } from './fixtures/tool-profiles';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -22,19 +26,13 @@ export interface VerifiedResponseLike {
   elapsedMs: number;
   estimatedCostUsd: number;
   guardrail?: string;
+  invokedToolNames: string[];
   iterations: number;
   response: string;
   sources: string[];
   status: string;
   toolCalls: number;
   warnings: string[];
-}
-
-/** Invocation log entry recorded by tool stubs in the fast tier */
-export interface ToolInvocationEntry {
-  input: unknown;
-  toolName: string;
-  userId: string;
 }
 
 // ─── Confidence Ranking ────────────────────────────────────────────────────────
@@ -52,6 +50,7 @@ const REQUIRED_RESPONSE_FIELDS = [
   'confidence',
   'response',
   'sources',
+  'invokedToolNames',
   'toolCalls',
   'elapsedMs'
 ] as const;
@@ -94,6 +93,13 @@ export function assertEvalInvariants(
     expect(response.toolCalls).toBeLessThanOrEqual(expected.maxToolCalls);
   }
 
+  // Required tools (live + fast tiers via invokedToolNames)
+  if (expected.requiredTools.length > 0) {
+    for (const requiredTool of expected.requiredTools) {
+      expect(response.invokedToolNames).toContain(requiredTool);
+    }
+  }
+
   // Confidence
   expect(Object.keys(confidenceRank)).toContain(response.confidence);
   expect(
@@ -115,11 +121,24 @@ export function assertEvalInvariants(
       return normalizedResponse.includes(phrase.toLowerCase());
     });
 
-    expect(found).toBe(true);
+    if (!found) {
+      const truncated =
+        normalizedResponse.length > 200
+          ? normalizedResponse.slice(0, 200) + '…'
+          : normalizedResponse;
+
+      throw new Error(
+        `mustIncludeAny: none of [${expected.mustIncludeAny.join(', ')}] found in response: "${truncated}"`
+      );
+    }
   }
 
   for (const forbiddenPhrase of expected.mustNotIncludeAny) {
     expect(normalizedResponse).not.toContain(forbiddenPhrase.toLowerCase());
+  }
+
+  if (expected.maxElapsedMs !== undefined) {
+    expect(response.elapsedMs).toBeLessThanOrEqual(expected.maxElapsedMs);
   }
 }
 
@@ -145,7 +164,15 @@ export function assertToolCallCounts(
       return entry.toolName === requiredTool;
     });
 
-    expect(found).toBe(true);
+    if (!found) {
+      const actualTools = [
+        ...new Set(invocationLog.map((e) => e.toolName))
+      ].join(', ');
+
+      throw new Error(
+        `Required tool "${requiredTool}" was not invoked. Actual tools called: [${actualTools}]`
+      );
+    }
   }
 }
 
@@ -245,10 +272,8 @@ export function extractActualToolsCalled(
 
 /**
  * For live tiers where invocationLog isn't available.
- * Asserts sources.length > 0 as a UI smoke check only.
- * Uses toolCalls >= minToolCalls as the primary gating signal (done in assertEvalInvariants).
- *
- * TODO: Tighten once backend exposes actually-invoked tool names in the response.
+ * Validates that sources and invokedToolNames are populated,
+ * and that requiredTools appear in the invokedToolNames list.
  */
 export function assertLiveSources(
   response: VerifiedResponseLike,
@@ -256,6 +281,15 @@ export function assertLiveSources(
 ) {
   if (evalCase.expect.minToolCalls > 0) {
     expect(response.sources.length).toBeGreaterThan(0);
+    expect(response.invokedToolNames.length).toBeGreaterThan(0);
+  }
+
+  for (const requiredTool of evalCase.expect.requiredTools) {
+    if (!response.invokedToolNames.includes(requiredTool)) {
+      throw new Error(
+        `Live sources: required tool "${requiredTool}" not in invokedToolNames: [${response.invokedToolNames.join(', ')}]`
+      );
+    }
   }
 }
 

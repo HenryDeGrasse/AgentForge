@@ -26,6 +26,7 @@ import { join } from 'node:path';
 import {
   assertAuthScoping,
   assertEvalInvariants,
+  extractActualToolsCalled,
   assertToolCallCounts,
   assertToolEnvelopes,
   type ToolInvocationEntry
@@ -119,7 +120,8 @@ describe('Golden Sets (fast)', () => {
         userId: EVAL_USER_ID
       });
 
-      const verified = verifier.verify(result, evalCase.request.toolNames);
+      const invokedToolNames = extractActualToolsCalled(invocationLog);
+      const verified = verifier.verify(result, invokedToolNames);
 
       // Standard structural checks (status, confidence, content, guardrail)
       assertEvalInvariants(evalCase, verified);
@@ -194,10 +196,10 @@ describe('Golden Sets (fast)', () => {
       userId: EVAL_USER_ID
     });
 
-    const verified = new ResponseVerifierService().verify(
-      result,
-      timeoutCase.request.toolNames
-    );
+    const invokedTools = [
+      ...new Set((result.executedTools ?? []).map((t) => t.toolName))
+    ];
+    const verified = new ResponseVerifierService().verify(result, invokedTools);
 
     assertEvalInvariants(timeoutCase, verified);
   });
@@ -267,9 +269,12 @@ describe('Golden Sets (fast)', () => {
       userId: EVAL_USER_ID
     });
 
+    const invokedCbTools = [
+      ...new Set((secondResult.executedTools ?? []).map((t) => t.toolName))
+    ];
     const verified = new ResponseVerifierService().verify(
       secondResult,
-      cbCase.request.toolNames
+      invokedCbTools
     );
 
     assertEvalInvariants(cbCase, verified);
@@ -277,6 +282,114 @@ describe('Golden Sets (fast)', () => {
     // Verify circuit breaker specific behavior
     expect(verified.guardrail).toBe('CIRCUIT_BREAKER');
     expect(verified.status).toBe('partial');
+  });
+
+  // ─── Custom: Out-of-Scope (no tools provided) ──────────────────────────
+
+  it('[scope-gate] out-of-scope-crystal-ball', async () => {
+    const oosCase = allCases.find((c) => c.id === 'out-of-scope-crystal-ball');
+
+    if (!oosCase) {
+      throw new Error(
+        'out-of-scope-crystal-ball case not found in golden-sets.json'
+      );
+    }
+
+    const invocationLog: ToolInvocationEntry[] = [];
+    const tools = buildToolsForProfile(oosCase.profile, invocationLog);
+    const toolRegistry = new ToolRegistry();
+
+    for (const tool of tools) {
+      toolRegistry.register(tool);
+    }
+
+    const llmSequence = loadLlmSequence(oosCase.id);
+    const llmClient = buildSequencedMock(llmSequence);
+
+    const agent = new ReactAgentService(llmClient, toolRegistry);
+
+    // No toolNames in request — agent should decline without calling any tools
+    const result = await agent.run({
+      guardrails: defaultGuardrails,
+      prompt: oosCase.request.message,
+      toolNames: oosCase.request.toolNames,
+      userId: EVAL_USER_ID
+    });
+
+    const verified = new ResponseVerifierService().verify(
+      result,
+      oosCase.request.toolNames ?? []
+    );
+
+    assertEvalInvariants(oosCase, verified);
+
+    // Zero tool calls — the agent should refuse without using portfolio tools
+    expect(invocationLog.length).toBe(0);
+    expect(verified.toolCalls).toBe(0);
+  });
+
+  // ─── Custom: Tool Execution Exception ───────────────────────────────────
+
+  it('[adversarial] schema-tool-execution-exception', async () => {
+    const exCase = allCases.find(
+      (c) => c.id === 'schema-tool-execution-exception'
+    );
+
+    if (!exCase) {
+      throw new Error(
+        'schema-tool-execution-exception case not found in golden-sets.json'
+      );
+    }
+
+    const invocationLog: ToolInvocationEntry[] = [];
+    const tools = buildToolsForProfile(exCase.profile, invocationLog);
+    const toolRegistry = new ToolRegistry();
+
+    // Register a throwing tool stub for get_portfolio_summary
+    const throwingTool: ToolDefinition = {
+      description: 'Return portfolio totals (throws for testing).',
+      execute: (_input, context) => {
+        invocationLog.push({
+          input: _input,
+          toolName: 'get_portfolio_summary',
+          userId: context.userId
+        });
+
+        throw new Error('Database connection failed');
+      },
+      inputSchema: PORTFOLIO_SUMMARY_INPUT_SCHEMA,
+      name: 'get_portfolio_summary',
+      outputSchema: PORTFOLIO_SUMMARY_OUTPUT_SCHEMA
+    };
+
+    toolRegistry.register(throwingTool);
+
+    for (const tool of tools) {
+      if (tool.name !== 'get_portfolio_summary') {
+        toolRegistry.register(tool);
+      }
+    }
+
+    const llmSequence = loadLlmSequence(exCase.id);
+    const llmClient = buildSequencedMock(llmSequence);
+
+    const agent = new ReactAgentService(llmClient, toolRegistry);
+    const result = await agent.run({
+      guardrails: defaultGuardrails,
+      prompt: exCase.request.message,
+      toolNames: exCase.request.toolNames,
+      userId: EVAL_USER_ID
+    });
+
+    const invokedToolNames = extractActualToolsCalled(invocationLog);
+    const verified = verifier.verify(result, invokedToolNames);
+
+    assertEvalInvariants(exCase, verified);
+
+    // Verify the tool envelope shows tool_execution_failed
+    if (exCase.expect.toolEnvelopeChecks) {
+      assertToolEnvelopes(exCase.expect.toolEnvelopeChecks, llmClient);
+    }
   });
 });
 
