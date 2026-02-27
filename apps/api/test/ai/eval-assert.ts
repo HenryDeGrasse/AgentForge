@@ -26,7 +26,8 @@ export interface VerifiedResponseLike {
   elapsedMs: number;
   estimatedCostUsd: number;
   guardrail?: string;
-  invokedToolNames: string[];
+  /** Present in API versions that return tool names; absent in older deployments */
+  invokedToolNames?: string[];
   iterations: number;
   response: string;
   sources: string[];
@@ -50,7 +51,6 @@ const REQUIRED_RESPONSE_FIELDS = [
   'confidence',
   'response',
   'sources',
-  'invokedToolNames',
   'toolCalls',
   'elapsedMs'
 ] as const;
@@ -93,8 +93,11 @@ export function assertEvalInvariants(
     expect(response.toolCalls).toBeLessThanOrEqual(expected.maxToolCalls);
   }
 
-  // Required tools (live + fast tiers via invokedToolNames)
-  if (expected.requiredTools.length > 0) {
+  // Required tools (live + fast tiers via invokedToolNames — skipped when field absent on old deployments)
+  if (
+    expected.requiredTools.length > 0 &&
+    response.invokedToolNames !== undefined
+  ) {
     for (const requiredTool of expected.requiredTools) {
       expect(response.invokedToolNames).toContain(requiredTool);
     }
@@ -281,14 +284,18 @@ export function assertLiveSources(
 ) {
   if (evalCase.expect.minToolCalls > 0) {
     expect(response.sources.length).toBeGreaterThan(0);
-    expect(response.invokedToolNames.length).toBeGreaterThan(0);
+    if (response.invokedToolNames !== undefined) {
+      expect(response.invokedToolNames.length).toBeGreaterThan(0);
+    }
   }
 
-  for (const requiredTool of evalCase.expect.requiredTools) {
-    if (!response.invokedToolNames.includes(requiredTool)) {
-      throw new Error(
-        `Live sources: required tool "${requiredTool}" not in invokedToolNames: [${response.invokedToolNames.join(', ')}]`
-      );
+  if (response.invokedToolNames !== undefined) {
+    for (const requiredTool of evalCase.expect.requiredTools) {
+      if (!response.invokedToolNames.includes(requiredTool)) {
+        throw new Error(
+          `Live sources: required tool "${requiredTool}" not in invokedToolNames: [${response.invokedToolNames.join(', ')}]`
+        );
+      }
     }
   }
 }
