@@ -2,6 +2,7 @@ import { ActionExtractorService } from '@ghostfolio/api/app/endpoints/ai/action-
 import {
   AGENT_ALLOWED_TOOL_NAMES,
   AGENT_DEFAULT_SYSTEM_PROMPT,
+  AGENT_HEARTBEAT_INTERVAL_MS,
   AGENT_MAX_HISTORY_PAIRS
 } from '@ghostfolio/api/app/endpoints/ai/agent/agent.constants';
 import {
@@ -423,11 +424,10 @@ export class AiService {
     }
 
     // 3. Start heartbeat timer (top-level, not inside agent)
-    const HEARTBEAT_INTERVAL_MS = 15_000;
     const heartbeatQueue: SseEvent[] = [];
     const heartbeatTimer = setInterval(() => {
       heartbeatQueue.push({ type: 'heartbeat' });
-    }, HEARTBEAT_INTERVAL_MS);
+    }, AGENT_HEARTBEAT_INTERVAL_MS);
 
     try {
       // 4. Run the streaming agent

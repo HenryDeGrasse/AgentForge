@@ -9,6 +9,18 @@ export const AGENT_CIRCUIT_BREAKER_COOLDOWN_MS = 60_000;
  * 128k context window when multiple tool calls are in flight.
  */
 export const AGENT_TOOL_OUTPUT_MAX_CHARS = 32_000;
+
+/**
+ * SSE heartbeat interval for streaming chat responses (milliseconds).
+ *
+ * A heartbeat event is sent periodically to keep long-running HTTP connections
+ * alive through proxies and load balancers that close idle connections.
+ *
+ * 15s is chosen to sit well below the typical 30–60s proxy idle timeout while
+ * avoiding unnecessary noise in client logs. Tune down for stricter proxy
+ * environments or up to reduce heartbeat overhead on high-traffic deployments.
+ */
+export const AGENT_HEARTBEAT_INTERVAL_MS = 15_000;
 export const AGENT_CIRCUIT_BREAKER_FAILURE_THRESHOLD = 3;
 export const AGENT_COST_LIMIT_USD = 0.25;
 export const AGENT_DEFAULT_SYSTEM_PROMPT = [

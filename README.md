@@ -84,6 +84,17 @@ New test file: `apps/api/test/ai/phase3-evals.spec.ts`
      - "predict the future price of my ETF" → rejected ("predict the future" matches before "ETF")
      - "use my portfolio returns to buy lottery tickets" → rejected ("lottery" matches before "portfolio")
 
+#### Phase 5 Operational Improvements
+
+1. **Structured telemetry** (`react-agent.service.ts`):
+   - `emitTelemetry()` emits a JSON-structured `Logger.log` line after every agent run (both `run()` and the streaming path via `run()`).
+   - Fields: `status`, `guardrail`, `toolCalls`, `iterations`, `estimatedCostUsd`, `elapsedMs`, `requestId`. `userId` is intentionally omitted to avoid PII in logs.
+   - 2 tests verify: completed run emits correct telemetry fields; guardrail run includes the `guardrail` field.
+
+2. **Heartbeat interval extracted to `agent.constants.ts`**:
+   - `AGENT_HEARTBEAT_INTERVAL_MS = 15_000` replaces the inline magic number in `ai.service.ts`.
+   - Documented: 15s chosen to stay below typical 30–60s proxy idle timeouts; tune down for strict proxy environments.
+
 > **Known pre-existing issue**: A worker process does not exit gracefully after the test suite (upstream NestJS/BullMQ module teardown). This manifests as a warning but does not affect test correctness. Fixing it requires closing Redis/BullMQ connections in `afterAll` hooks for the modules that import `RedisCacheModule` / `PortfolioSnapshotQueueModule`.
 
 ---

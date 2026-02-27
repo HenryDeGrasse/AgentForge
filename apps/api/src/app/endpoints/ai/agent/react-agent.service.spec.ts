@@ -1304,3 +1304,122 @@ describe('Phase 2 reliability improvements', () => {
     });
   });
 });
+
+// ─── Phase 5: Structured Telemetry ────────────────────────────────────────────
+
+describe('Phase 5 structured telemetry', () => {
+  let logSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    const { Logger } = require('@nestjs/common');
+    logSpy = jest.spyOn(Logger, 'log').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    logSpy.mockRestore();
+  });
+
+  it('emits a structured telemetry log on completed run', async () => {
+    const registry = new ToolRegistry();
+    registry.register({
+      description: 'portfolio',
+      execute: jest.fn().mockResolvedValue({ data: {}, status: 'success' }),
+      inputSchema: { type: 'object' as const },
+      name: 'get_portfolio_summary'
+    });
+
+    const llm: LLMClient = {
+      complete: jest
+        .fn()
+        .mockResolvedValueOnce({
+          finishReason: 'tool_calls',
+          text: '',
+          toolCalls: [
+            { arguments: {}, id: 'tc-tel', name: 'get_portfolio_summary' }
+          ],
+          usage: { estimatedCostUsd: 0.002 }
+        })
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: 'Portfolio analysed.',
+          toolCalls: [],
+          usage: { estimatedCostUsd: 0.001 }
+        })
+    };
+
+    const agent = new ReactAgentService(llm, registry);
+    const result = await agent.run({
+      guardrails: {
+        circuitBreakerCooldownMs: 60_000,
+        circuitBreakerFailureThreshold: 3,
+        costLimitUsd: 1,
+        fallbackCostPer1kTokensUsd: 0.002,
+        maxIterations: 10,
+        timeoutMs: 30_000
+      },
+      prompt: 'Analyse my portfolio',
+      userId: 'telemetry-user'
+    });
+
+    expect(result.status).toBe('completed');
+
+    // At least one structured telemetry log must have been emitted
+    expect(logSpy).toHaveBeenCalled();
+
+    const allMessages: string[] = logSpy.mock.calls.map((args) =>
+      typeof args[0] === 'string' ? args[0] : JSON.stringify(args[0])
+    );
+
+    const telemetryMsg = allMessages.find((m) => m.includes('"status"'));
+    expect(telemetryMsg).toBeDefined();
+
+    const parsed = JSON.parse(telemetryMsg!);
+    expect(parsed).toMatchObject({
+      elapsedMs: expect.any(Number),
+      estimatedCostUsd: expect.any(Number),
+      iterations: expect.any(Number),
+      status: 'completed',
+      toolCalls: 1
+    });
+  });
+
+  it('includes guardrail field in telemetry when a guardrail fires', async () => {
+    const llm: LLMClient = {
+      complete: jest.fn().mockResolvedValue({
+        finishReason: 'tool_calls',
+        text: '',
+        toolCalls: [{ arguments: {}, id: 'tc-loop', name: 'noop' }]
+      })
+    };
+    const registry = new ToolRegistry();
+    registry.register({
+      description: 'noop',
+      execute: jest.fn().mockResolvedValue({ status: 'success' }),
+      inputSchema: { type: 'object' as const },
+      name: 'noop'
+    });
+
+    const agent = new ReactAgentService(llm, registry);
+    await agent.run({
+      guardrails: {
+        circuitBreakerCooldownMs: 60_000,
+        circuitBreakerFailureThreshold: 3,
+        costLimitUsd: 1,
+        fallbackCostPer1kTokensUsd: 0.002,
+        maxIterations: 2,
+        timeoutMs: 30_000
+      },
+      prompt: 'Loop',
+      userId: 'tel-user'
+    });
+
+    const allMessages: string[] = logSpy.mock.calls.map((args) =>
+      typeof args[0] === 'string' ? args[0] : JSON.stringify(args[0])
+    );
+    const telemetryMsg = allMessages.find((m) => m.includes('"guardrail"'));
+
+    expect(telemetryMsg).toBeDefined();
+    const parsed = JSON.parse(telemetryMsg!);
+    expect(parsed.guardrail).toBe('MAX_ITERATIONS');
+  });
+});

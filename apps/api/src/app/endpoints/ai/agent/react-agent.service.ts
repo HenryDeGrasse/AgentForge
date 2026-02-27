@@ -105,13 +105,16 @@ export class ReactAgentService {
    * Single execution path — no logic drift.
    */
   public async run(input: ReactAgentRunInput): Promise<ReactAgentRunResult> {
+    const requestId = input.requestId ?? randomUUID();
     let result: ReactAgentRunResult | undefined;
 
-    for await (const event of this.runStreaming(input)) {
+    for await (const event of this.runStreaming({ ...input, requestId })) {
       if (event.type === '_agent_done') {
         result = (event as SseAgentDoneEvent).result;
       }
     }
+
+    this.emitTelemetry(result!, requestId);
 
     return result!;
   }
@@ -830,6 +833,34 @@ export class ReactAgentService {
       openedAt: 0,
       state: 'closed'
     };
+  }
+
+  /**
+   * Emits a structured JSON telemetry log after every agent run.
+   *
+   * Log fields:
+   *  - status / guardrail  — outcome classification
+   *  - toolCalls / iterations — reasoning depth
+   *  - estimatedCostUsd / elapsedMs — cost & latency
+   *  - requestId — correlation ID for log tracing
+   *
+   * userId is intentionally omitted from telemetry to avoid PII in logs.
+   */
+  private emitTelemetry(result: ReactAgentRunResult, requestId: string): void {
+    const record: Record<string, unknown> = {
+      elapsedMs: result.elapsedMs,
+      estimatedCostUsd: result.estimatedCostUsd,
+      iterations: result.iterations,
+      requestId,
+      status: result.status,
+      toolCalls: result.toolCalls
+    };
+
+    if (result.guardrail) {
+      record['guardrail'] = result.guardrail;
+    }
+
+    Logger.log(JSON.stringify(record), 'ReactAgentService');
   }
 
   private summarizeToolResult(
