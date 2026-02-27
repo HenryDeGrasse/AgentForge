@@ -128,7 +128,7 @@ describe('MarketDataLookupTool', () => {
 
     expect(result.priceChange).toEqual({
       absoluteChange: 25,
-      percentChange: 0.25,
+      percentChange: 25, // whole-number percentage: 25/100 * 100 = 25%
       periodDays: 30
     });
 

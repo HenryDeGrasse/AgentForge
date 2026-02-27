@@ -76,6 +76,7 @@ interface SimulateTradesOutput {
 }
 
 const CONCENTRATION_THRESHOLD = 0.35;
+const ALLOCATION_CHANGE_THRESHOLD = 0.0001; // filter out noise (<0.01 pp)
 
 const DISCLAIMERS = [
   'Simulation only; does not execute trades.',
@@ -311,13 +312,24 @@ export class SimulateTradesTool implements ToolDefinition<
       (a, b) => b.valueInBaseCurrency - a.valueInBaseCurrency
     );
 
-    // Concentration warnings
+    // Build a lookup of pre-existing concentrations (before any trades)
+    const preExistingConcentrated = new Set<string>(
+      positionsBefore
+        .filter((p) => p.allocationPct > CONCENTRATION_THRESHOLD)
+        .map((p) => p.symbol)
+    );
+
+    // Concentration warnings — tag whether the issue pre-existed the simulation
     const concentrationWarnings: string[] = [];
 
     for (const pos of hypotheticalPositions) {
       if (pos.allocationPct > CONCENTRATION_THRESHOLD) {
+        const prefix = preExistingConcentrated.has(pos.symbol)
+          ? '(pre-existing) '
+          : '(new) ';
+
         concentrationWarnings.push(
-          `${pos.symbol} would be ${(pos.allocationPct * 100).toFixed(1)}% of portfolio (threshold: ${(CONCENTRATION_THRESHOLD * 100).toFixed(0)}%).`
+          `${prefix}${pos.symbol} is ${(pos.allocationPct * 100).toFixed(1)}% of portfolio after simulation (threshold: ${(CONCENTRATION_THRESHOLD * 100).toFixed(0)}%).`
         );
       }
     }
@@ -333,19 +345,24 @@ export class SimulateTradesTool implements ToolDefinition<
       allSymbols.add(p.symbol);
     }
 
-    const allocationChanges = Array.from(allSymbols).map((symbol) => {
-      const before = positionsBefore.find((p) => p.symbol === symbol);
-      const after = hypotheticalPositions.find((p) => p.symbol === symbol);
-      const currentPct = before?.allocationPct ?? 0;
-      const newPct = after?.allocationPct ?? 0;
+    const allocationChanges = Array.from(allSymbols)
+      .map((symbol) => {
+        const before = positionsBefore.find((p) => p.symbol === symbol);
+        const after = hypotheticalPositions.find((p) => p.symbol === symbol);
+        const currentPct = before?.allocationPct ?? 0;
+        const newPct = after?.allocationPct ?? 0;
 
-      return {
-        changePct: newPct - currentPct,
-        currentPct,
-        newPct,
-        symbol
-      };
-    });
+        return {
+          changePct: newPct - currentPct,
+          currentPct,
+          newPct,
+          symbol
+        };
+      })
+      // Only surface positions where the allocation actually shifted meaningfully.
+      // Filtering out near-zero rows prevents the LLM from presenting a table that
+      // implies every holding was affected by the simulation.
+      .filter((c) => Math.abs(c.changePct) > ALLOCATION_CHANGE_THRESHOLD);
 
     // Determine overall status
     let status: 'partial' | 'success' = 'success';

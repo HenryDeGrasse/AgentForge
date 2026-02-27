@@ -570,25 +570,33 @@ function buildRichProfileTools(log: ToolInvocationEntry[]): ToolDefinition[] {
               name: 'Asset A',
               symbol: 'SYM-A',
               targetPct: 0.25,
-              targetValueInBaseCurrency: 2500
+              targetValueInBaseCurrency: 2500,
+              tradeAction: 'SELL' as const,
+              tradeSuggested: true
             },
             {
               name: 'Asset B',
               symbol: 'SYM-B',
               targetPct: 0.25,
-              targetValueInBaseCurrency: 2500
+              targetValueInBaseCurrency: 2500,
+              tradeAction: 'SELL' as const,
+              tradeSuggested: true
             },
             {
               name: 'Asset C',
               symbol: 'SYM-C',
               targetPct: 0.25,
-              targetValueInBaseCurrency: 2500
+              targetValueInBaseCurrency: 2500,
+              tradeAction: 'BUY' as const,
+              tradeSuggested: true
             },
             {
               name: 'Asset D',
               symbol: 'SYM-D',
               targetPct: 0.25,
-              targetValueInBaseCurrency: 2500
+              targetValueInBaseCurrency: 2500,
+              tradeAction: 'BUY' as const,
+              tradeSuggested: true
             }
           ],
           warnings: []

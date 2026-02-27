@@ -38,7 +38,11 @@ export const PERFORMANCE_COMPARE_OUTPUT_SCHEMA: ToolJsonSchema = {
                 additionalProperties: false,
                 properties: {
                   date: { type: 'string' },
-                  performancePercent: { type: 'number' }
+                  performancePercent: {
+                    description:
+                      'Whole-number percentage return (e.g. 12.4 = +12.4%). Already multiplied by 100; display as-is.',
+                    type: 'number'
+                  }
                 },
                 required: ['date', 'performancePercent'],
                 type: 'object'
@@ -91,8 +95,16 @@ export const PERFORMANCE_COMPARE_OUTPUT_SCHEMA: ToolJsonSchema = {
         firstOrderDate: { type: 'string' },
         hasErrors: { type: 'boolean' },
         netPerformance: { type: 'number' },
-        netPerformancePercentage: { type: 'number' },
-        netPerformancePercentageWithCurrencyEffect: { type: 'number' },
+        netPerformancePercentage: {
+          description:
+            'Whole-number percentage net return (e.g. 8.2 = +8.2%). Already multiplied by 100; display as-is.',
+          type: 'number'
+        },
+        netPerformancePercentageWithCurrencyEffect: {
+          description:
+            'Same as netPerformancePercentage but adjusted for currency effects. Already multiplied by 100.',
+          type: 'number'
+        },
         netPerformanceWithCurrencyEffect: { type: 'number' },
         totalInvestment: { type: 'number' }
       },

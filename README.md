@@ -1,237 +1,253 @@
 <div align="center">
 
-[<img src="https://avatars.githubusercontent.com/u/82473144?s=200" width="100" alt="Ghostfolio logo">](https://ghostfol.io)
+# AgentForge
 
-# Ghostfolio
-
-**Open Source Wealth Management Software**
-
-[**Ghostfol.io**](https://ghostfol.io) | [**Live Demo**](https://ghostfol.io/en/demo) | [**Ghostfolio Premium**](https://ghostfol.io/en/pricing) | [**FAQ**](https://ghostfol.io/en/faq) |
-[**Blog**](https://ghostfol.io/en/blog) | [**LinkedIn**](https://www.linkedin.com/company/ghostfolio) | [**Slack**](https://join.slack.com/t/ghostfolio/shared_invite/zt-vsaan64h-F_I0fEo5M0P88lP9ibCxFg) | [**X**](https://x.com/ghostfolio_)
-
-[![Shield: Buy me a coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-Support-yellow?logo=buymeacoffee)](https://www.buymeacoffee.com/ghostfolio)
-[![Shield: Contributions Welcome](https://img.shields.io/badge/Contributions-Welcome-limegreen.svg)](#contributing) [![Shield: Docker Pulls](https://img.shields.io/docker/pulls/ghostfolio/ghostfolio?label=Docker%20Pulls)](https://hub.docker.com/r/ghostfolio/ghostfolio)
-[![Shield: License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-orange.svg)](https://www.gnu.org/licenses/agpl-3.0)
+**AI-powered portfolio intelligence — built on [Ghostfolio](https://ghostfol.io)**
 
 </div>
 
-**Ghostfolio** is an open source wealth management software built with web technology. The application empowers busy people to keep track of stocks, ETFs or cryptocurrencies and make solid, data-driven investment decisions. The software is designed for personal use in continuous operation.
+AgentForge is a fork of [Ghostfolio](https://ghostfol.io) that adds a full AI agent layer on top of the existing wealth management platform. Users can ask natural-language questions about their portfolio and get grounded, data-driven answers powered by a ReAct agent that calls real portfolio tools.
 
-<div align="center">
+---
 
-[<img src="./apps/client/src/assets/images/video-preview.jpg" width="600" alt="Preview image of the Ghostfolio video trailer">](https://www.youtube.com/watch?v=yY6ObSQVJZk)
+## What's New in This Fork
 
-</div>
+Everything under `apps/api/src/app/endpoints/ai/` is new. The upstream Ghostfolio codebase is otherwise unchanged.
 
-## Ghostfolio Premium
+### AI Chat Endpoint
 
-Our official **[Ghostfolio Premium](https://ghostfol.io/en/pricing)** cloud offering is the easiest way to get started. Due to the time it saves, this will be the best option for most people. Revenue is used to cover operational costs for the hosting infrastructure and professional data providers, and to fund ongoing development.
+`POST /api/v1/ai/chat` accepts a message and optional `toolNames` list. The server streams a Server-Sent Events (SSE) response with thinking steps, tool calls, and a final verified answer. A traditional JSON response (`/api/v1/ai/chat` without streaming) is also supported.
 
-If you prefer to run Ghostfolio on your own infrastructure, please find further instructions in the [Self-hosting](#self-hosting) section.
+### ReAct Agent (`react-agent.service.ts`)
 
-## Why Ghostfolio?
+A **Reasoning + Acting** loop that:
 
-Ghostfolio is for you if you are...
+1. Sends the user message + tool definitions to the LLM
+2. Executes any tool calls the LLM requests against the user's live portfolio data
+3. Validates tool outputs against JSON schemas before returning them to the LLM
+4. Repeats until the LLM produces a final text answer (or a guardrail fires)
 
-- 💼 trading stocks, ETFs or cryptocurrencies on multiple platforms
-- 🏦 pursuing a buy & hold strategy
-- 🎯 interested in getting insights of your portfolio composition
-- 👻 valuing privacy and data ownership
-- 🧘 into minimalism
-- 🧺 caring about diversifying your financial resources
-- 🆓 interested in financial independence
-- 🙅 saying no to spreadsheets
-- 😎 still reading this list
+Built-in guardrails:
 
-## Features
+- **Max iterations** — prevents infinite tool-call loops (default: 15)
+- **Cost limit** — aborts if estimated LLM spend exceeds threshold (default: $0.25)
+- **Circuit breaker** — backs off after repeated tool failures
+- **Request timeout** — per-turn deadline (default: 30 s)
 
-- ✅ Create, update and delete transactions
-- ✅ Multi account management
-- ✅ Portfolio performance: Return on Average Investment (ROAI) for `Today`, `WTD`, `MTD`, `YTD`, `1Y`, `5Y`, `Max`
-- ✅ Various charts
-- ✅ Static analysis to identify potential risks in your portfolio
-- ✅ Import and export transactions
-- ✅ Dark Mode
-- ✅ Zen Mode
-- ✅ Progressive Web App (PWA) with a mobile-first design
+### Response Verifier (`response-verifier.service.ts`)
 
-<div align="center">
+After the agent finishes, a second LLM call grades the response on a `LOW / MEDIUM / HIGH` confidence scale by checking:
 
-<img src="./apps/client/src/assets/images/screenshot.png" width="300" alt="Image of a phone showing the Ghostfolio app open">
+- Did the agent call at least one tool?
+- Does the response cite specific figures from tool outputs?
+- Are tool outputs schema-valid?
 
-</div>
+The confidence level is returned with every response so callers can show uncertainty signals in the UI.
+
+---
+
+## AI Tools (10 total)
+
+All tools are defined in `apps/api/src/app/endpoints/ai/tools/` with strict JSON input/output schemas. Every schema field has a `description` annotation so the LLM knows exactly how to interpret each value (including whether `*Pct` fields are 0–1 fractions or already-multiplied whole-number percentages).
+
+| Tool                      | Description                                                                  |
+| ------------------------- | ---------------------------------------------------------------------------- |
+| `get_portfolio_summary`   | Total value, allocation breakdown, top holdings, base currency               |
+| `get_transaction_history` | Filtered transaction list with pagination                                    |
+| `analyze_risk`            | Concentration, sector, currency, and volatility risk metrics                 |
+| `market_data_lookup`      | Current quote, profile metadata, and optional price history for any symbol   |
+| `performance_compare`     | Time-series return comparison for up to 3 symbols or benchmarks              |
+| `compliance_check`        | Rule-based compliance gate (max position size, max sector, cash floor, etc.) |
+| `rebalance_suggest`       | Target-allocation suggestions with `tradeSuggested` flag per position        |
+| `simulate_trades`         | What-if simulation — applies hypothetical trades to a portfolio snapshot     |
+| `stress_test`             | Applies predefined or custom market shocks and shows impact per position     |
+| `tax_estimate`            | Short/long-term gain estimates and unrealised gain breakdown                 |
+
+### Notable tool behaviours
+
+**`rebalance_suggest`** — Every entry in `targetAllocations` carries `tradeSuggested: boolean` and an optional `tradeAction: 'BUY' | 'SELL'`. Positions blocked by a turnover cap or max-trades constraint get `tradeSuggested: false`, which prevents the LLM from rendering a table that implies all positions will be rebalanced when only a subset have actual trades.
+
+**`simulate_trades`** — `allocationChanges` only includes positions where allocation shifted by more than 0.01 percentage points. Untouched positions are omitted so the LLM cannot list unchanged holdings as if they were affected. `concentrationWarnings` are tagged `(pre-existing)` or `(new)` so the LLM can distinguish warnings caused by the simulation from those that already existed.
+
+**`market_data_lookup`** — Queries go through Ghostfolio's Redis quote cache (populated by the scheduled data-gathering jobs), so most lookups never hit Yahoo Finance directly. When a symbol isn't in the cache, the tool falls back to a Yahoo Finance lookup with **exponential-backoff retry** on HTTP 429 (500 ms → 1 s → 2 s, 3 attempts) and a **5-minute negative-result cache** so the same unresolvable symbol cannot drain rate-limit quota across repeated questions.
+
+---
+
+## Yahoo Finance Rate Limits
+
+Yahoo Finance is an **unofficial, undocumented API**. In practice, a single IP is rate-limited at roughly 2,000 requests/hour before 429s appear.
+
+How this repo stays within limits:
+
+| Layer                      | Mechanism                                                                                     |
+| -------------------------- | --------------------------------------------------------------------------------------------- |
+| Quote fetches              | Served from Redis (populated by background gather jobs). Yahoo is only hit on cache miss.     |
+| Symbol search / resolution | 5-minute in-memory negative-result cache. 429s trigger exponential backoff (up to 3 retries). |
+| Historical data            | Read from the `MarketData` Postgres table — **no live Yahoo call**.                           |
+| LLM tool calls             | Tools are single-symbol per call; the agent typically calls 1–3 tools per session.            |
+
+If you run many users concurrently, consider adding a dedicated data provider (CoinGecko for crypto, Financial Modeling Prep for equities) to reduce reliance on Yahoo.
+
+---
+
+## Eval Framework
+
+The AI layer ships with a four-tier evaluation framework. See [docs/AI_EVAL_RESULTS.md](./docs/AI_EVAL_RESULTS.md) for full results.
+
+| Tier                 | Suite                | Gate                     | LLM                       | Cases | Budget   |
+| -------------------- | -------------------- | ------------------------ | ------------------------- | ----- | -------- |
+| **Fast (CI)**        | `golden-sets-fast`   | None — runs every commit | Mocked scripted sequences | 27    | < 30 s   |
+| **Live (pre-merge)** | `golden-sets` (live) | `RUN_GOLDEN_EVALS=1`     | Real LLM                  | 12    | < 5 min  |
+| **MVP**              | `mvp-evals`          | `RUN_MVP_EVALS=1`        | Real LLM                  | 5     | < 4 min  |
+| **Nightly**          | `labeled-scenarios`  | `RUN_LABELED_EVALS=1`    | Real LLM                  | 31    | < 15 min |
+
+Each eval case in `apps/api/test/ai/golden-sets.json` specifies the user message, tool set, expected status, minimum confidence, and minimum tool-call count. The fast tier uses scripted LLM responses from `apps/api/test/ai/fixtures/llm-sequences/` and deterministic tool stubs from `apps/api/test/ai/fixtures/tool-profiles.ts` — all schemas are imported from production so fixture drift is impossible.
+
+### Run evals locally
+
+```bash
+# Fast tier (mocked — runs in <30s, no env needed)
+npx nx test api
+
+# Live golden sets against local API
+RUN_GOLDEN_EVALS=1 MVP_EVAL_BASE_URL=http://127.0.0.1:3333/api/v1 \
+  npx dotenv-cli -e .env -- npx nx test api \
+  --testPathPattern='golden-sets.spec' --runInBand
+```
+
+---
+
+## Local Development
+
+### Prerequisites
+
+- Node 22 (use `nvm use 22`)
+- Docker (for Postgres + Redis)
+
+### Quick start
+
+```bash
+# Copy and edit environment file
+cp .env.example .env
+# Edit .env — replace all ${VAR} references with literal values for DATABASE_URL
+
+# Start dependencies + build + serve API at http://127.0.0.1:3333
+./dev.sh up
+
+# Seed a rich demo portfolio
+./dev.sh seed
+
+# Get a fresh JWT for the demo user
+./dev.sh token
+```
+
+The `dev.sh` commands:
+
+| Command          | Action                                                |
+| ---------------- | ----------------------------------------------------- |
+| `up` / `restart` | Build + start API (also starts Docker deps if needed) |
+| `stop`           | Stop the API process                                  |
+| `status`         | Show process info and `/health` check                 |
+| `seed`           | Seed demo user + 10-stock portfolio (idempotent)      |
+| `token`          | Print a fresh JWT for the demo user                   |
+| `test`           | Run focused AI test suite                             |
+| `coverage`       | Run AI test suite with coverage                       |
+| `eval`           | Run MVP evals (`RUN_MVP_EVALS=1` required)            |
+
+### Environment variables
+
+The full set of upstream Ghostfolio env vars is still supported. The AI-specific additions are:
+
+| Name             | Type     | Default  | Description                                               |
+| ---------------- | -------- | -------- | --------------------------------------------------------- |
+| `OPENAI_API_KEY` | `string` | —        | OpenAI API key (used for the ReAct agent and verifier)    |
+| `OPENAI_MODEL`   | `string` | `gpt-4o` | Model to use for agent turns                              |
+| `EVAL_API_URL`   | `string` | —        | Base URL for live eval runs in CI (`pre-merge-evals` job) |
+
+Standard Ghostfolio env vars:
+
+| Name                     | Type                | Default | Description                                                                      |
+| ------------------------ | ------------------- | ------- | -------------------------------------------------------------------------------- |
+| `ACCESS_TOKEN_SALT`      | `string`            | —       | Salt for access tokens                                                           |
+| `API_KEY_COINGECKO_DEMO` | `string` (optional) | —       | CoinGecko Demo API key                                                           |
+| `API_KEY_COINGECKO_PRO`  | `string` (optional) | —       | CoinGecko Pro API key                                                            |
+| `DATABASE_URL`           | `string`            | —       | PostgreSQL connection string — use literal values, not shell variable references |
+| `JWT_SECRET_KEY`         | `string`            | —       | Secret for JWT signing                                                           |
+| `PORT`                   | `number` (optional) | `3333`  | API port                                                                         |
+| `REDIS_HOST`             | `string`            | —       | Redis host                                                                       |
+| `REDIS_PASSWORD`         | `string`            | —       | Redis password                                                                   |
+| `REDIS_PORT`             | `number`            | —       | Redis port                                                                       |
+
+---
 
 ## Technology Stack
 
-Ghostfolio is a modern web application written in [TypeScript](https://www.typescriptlang.org) and organized as an [Nx](https://nx.dev) workspace.
+AgentForge inherits the Ghostfolio stack and adds:
 
-### Backend
+| Layer             | Technology                                                                       |
+| ----------------- | -------------------------------------------------------------------------------- |
+| Backend framework | [NestJS](https://nestjs.com)                                                     |
+| Database          | [PostgreSQL](https://www.postgresql.org) + [Prisma](https://www.prisma.io)       |
+| Cache             | [Redis](https://redis.io) (quote cache + BullMQ job queue)                       |
+| Frontend          | [Angular](https://angular.dev) + [Angular Material](https://material.angular.io) |
+| AI / LLM          | OpenAI API (`gpt-4o`)                                                            |
+| Market data       | Yahoo Finance (via `yahoo-finance2`) · CoinGecko                                 |
+| Monorepo tooling  | [Nx](https://nx.dev)                                                             |
 
-The backend is based on [NestJS](https://nestjs.com) using [PostgreSQL](https://www.postgresql.org) as a database together with [Prisma](https://www.prisma.io) and [Redis](https://redis.io) for caching.
+---
 
-### Frontend
-
-The frontend is built with [Angular](https://angular.dev) and uses [Angular Material](https://material.angular.io) with utility classes from [Bootstrap](https://getbootstrap.com).
-
-## Self-hosting
-
-We provide official container images hosted on [Docker Hub](https://hub.docker.com/r/ghostfolio/ghostfolio) for `linux/amd64`, `linux/arm/v7` and `linux/arm64`.
-
-<div align="center">
-
-[<img src="./apps/client/src/assets/images/button-buy-me-a-coffee.png" width="150" alt="Buy me a coffee button"/>](https://www.buymeacoffee.com/ghostfolio)
-
-</div>
-
-### Supported Environment Variables
-
-| Name                        | Type                  | Default Value         | Description                                                                                                                         |
-| --------------------------- | --------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `ACCESS_TOKEN_SALT`         | `string`              |                       | A random string used as salt for access tokens                                                                                      |
-| `API_KEY_COINGECKO_DEMO`    | `string` (optional)   |                       | The _CoinGecko_ Demo API key                                                                                                        |
-| `API_KEY_COINGECKO_PRO`     | `string` (optional)   |                       | The _CoinGecko_ Pro API key                                                                                                         |
-| `DATABASE_URL`              | `string`              |                       | The database connection URL, e.g. `postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}?sslmode=prefer` |
-| `ENABLE_FEATURE_AUTH_TOKEN` | `boolean` (optional)  | `true`                | Enables authentication via security token                                                                                           |
-| `HOST`                      | `string` (optional)   | `0.0.0.0`             | The host where the Ghostfolio application will run on                                                                               |
-| `JWT_SECRET_KEY`            | `string`              |                       | A random string used for _JSON Web Tokens_ (JWT)                                                                                    |
-| `LOG_LEVELS`                | `string[]` (optional) |                       | The logging levels for the Ghostfolio application, e.g. `["debug","error","log","warn"]`                                            |
-| `PORT`                      | `number` (optional)   | `3333`                | The port where the Ghostfolio application will run on                                                                               |
-| `POSTGRES_DB`               | `string`              |                       | The name of the _PostgreSQL_ database                                                                                               |
-| `POSTGRES_PASSWORD`         | `string`              |                       | The password of the _PostgreSQL_ database                                                                                           |
-| `POSTGRES_USER`             | `string`              |                       | The user of the _PostgreSQL_ database                                                                                               |
-| `REDIS_DB`                  | `number` (optional)   | `0`                   | The database index of _Redis_                                                                                                       |
-| `REDIS_HOST`                | `string`              |                       | The host where _Redis_ is running                                                                                                   |
-| `REDIS_PASSWORD`            | `string`              |                       | The password of _Redis_                                                                                                             |
-| `REDIS_PORT`                | `number`              |                       | The port where _Redis_ is running                                                                                                   |
-| `REQUEST_TIMEOUT`           | `number` (optional)   | `2000`                | The timeout of network requests to data providers in milliseconds                                                                   |
-| `ROOT_URL`                  | `string` (optional)   | `http://0.0.0.0:3333` | The root URL of the Ghostfolio application, used for generating callback URLs and external links.                                   |
-
-#### OpenID Connect OIDC (Experimental)
-
-| Name                       | Type                  | Default Value                        | Description                                                                                          |
-| -------------------------- | --------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| `ENABLE_FEATURE_AUTH_OIDC` | `boolean` (optional)  | `false`                              | Enables authentication via _OpenID Connect_                                                          |
-| `OIDC_AUTHORIZATION_URL`   | `string` (optional)   |                                      | Manual override for the OIDC authorization endpoint (falls back to the discovery from the issuer)    |
-| `OIDC_CALLBACK_URL`        | `string` (optional)   | `${ROOT_URL}/api/auth/oidc/callback` | The OIDC callback URL                                                                                |
-| `OIDC_CLIENT_ID`           | `string`              |                                      | The OIDC client ID                                                                                   |
-| `OIDC_CLIENT_SECRET`       | `string`              |                                      | The OIDC client secret                                                                               |
-| `OIDC_ISSUER`              | `string`              |                                      | The OIDC issuer URL, used to discover the OIDC configuration via `/.well-known/openid-configuration` |
-| `OIDC_SCOPE`               | `string[]` (optional) | `["openid"]`                         | The OIDC scope to request, e.g. `["email","openid","profile"]`                                       |
-| `OIDC_TOKEN_URL`           | `string` (optional)   |                                      | Manual override for the OIDC token endpoint (falls back to the discovery from the issuer)            |
-| `OIDC_USER_INFO_URL`       | `string` (optional)   |                                      | Manual override for the OIDC user info endpoint (falls back to the discovery from the issuer)        |
-
-### Run with Docker Compose
-
-#### Prerequisites
-
-- Basic knowledge of Docker
-- Installation of [Docker](https://www.docker.com/products/docker-desktop)
-- Create a local copy of this Git repository (clone)
-- Copy the file `.env.example` to `.env` and populate it with your data (`cp .env.example .env`)
-
-#### a. Run environment
-
-Run the following command to start the Docker images from [Docker Hub](https://hub.docker.com/r/ghostfolio/ghostfolio):
+## Docker Compose (self-hosting)
 
 ```bash
 docker compose -f docker/docker-compose.yml up -d
 ```
 
-#### b. Build and run environment
-
-Run the following commands to build and start the Docker images:
+Or build locally:
 
 ```bash
 docker compose -f docker/docker-compose.build.yml build
 docker compose -f docker/docker-compose.build.yml up -d
 ```
 
-#### Setup
+After starting, open `http://localhost:3333` and create an admin user via **Get Started**.
 
-1. Open http://localhost:3333 in your browser
-1. Create a new user via _Get Started_ (this first user will get the role `ADMIN`)
+---
 
-#### Upgrade Version
+## Public API (upstream)
 
-1. Update the _Ghostfolio_ Docker image
-   - Increase the version of the `ghostfolio/ghostfolio` Docker image in `docker/docker-compose.yml`
-   - Run the following command if `ghostfolio:latest` is set:
-     ```bash
-     docker compose -f docker/docker-compose.yml pull
-     ```
+### Authentication
 
-1. Run the following command to start the new Docker image:
-   ```bash
-   docker compose -f docker/docker-compose.yml up -d
-   ```
-   The container will automatically apply any required database schema migrations during startup.
-
-### Home Server Systems (Community)
-
-Ghostfolio is available for various home server systems, including [CasaOS](https://github.com/bigbeartechworld/big-bear-casaos), [Home Assistant](https://github.com/lildude/ha-addon-ghostfolio), [Runtipi](https://www.runtipi.io/docs/apps-available), [TrueCharts](https://truecharts.org/charts/stable/ghostfolio), [Umbrel](https://apps.umbrel.com/app/ghostfolio), and [Unraid](https://unraid.net/community/apps?q=ghostfolio).
-
-## AI Agent Eval Results
-
-For detailed AI agent evaluation results, test coverage, and how to run evals locally, see [docs/AI_EVAL_RESULTS.md](./docs/AI_EVAL_RESULTS.md).
-
-## Development
-
-For detailed information on the environment setup and development process, please refer to [DEVELOPMENT.md](./DEVELOPMENT.md).
-
-## Public API
-
-### Authorization: Bearer Token
-
-Set the header for each request as follows:
-
-```
-"Authorization": "Bearer eyJh..."
+```http
+Authorization: Bearer <jwt>
 ```
 
-You can get the _Bearer Token_ via `POST http://localhost:3333/api/v1/auth/anonymous` (Body: `{ "accessToken": "<INSERT_SECURITY_TOKEN_OF_ACCOUNT>" }`)
+Obtain a JWT:
 
-Deprecated: `GET http://localhost:3333/api/v1/auth/anonymous/<INSERT_SECURITY_TOKEN_OF_ACCOUNT>` or `curl -s http://localhost:3333/api/v1/auth/anonymous/<INSERT_SECURITY_TOKEN_OF_ACCOUNT>`.
-
-### Health Check (experimental)
-
-#### Request
-
-`GET http://localhost:3333/api/v1/health`
-
-**Info:** No Bearer Token is required for health check
-
-#### Response
-
-##### Success
-
-`200 OK`
-
-```
-{
-  "status": "OK"
-}
+```bash
+curl -s http://localhost:3333/api/v1/auth/anonymous/<ACCESS_TOKEN>
 ```
 
-### Import Activities
-
-#### Prerequisites
-
-[Bearer Token](#authorization-bearer-token) for authorization
-
-#### Request
-
-`POST http://localhost:3333/api/v1/import`
-
-#### Body
+### Health check
 
 ```
+GET http://localhost:3333/api/v1/health
+→ { "status": "OK" }
+```
+
+### Import activities
+
+```
+POST http://localhost:3333/api/v1/import
+```
+
+```json
 {
   "activities": [
     {
       "currency": "USD",
       "dataSource": "YAHOO",
       "date": "2021-09-15T00:00:00.000Z",
-      "fee": 19,
+      "fee": 0,
       "quantity": 5,
       "symbol": "MSFT",
       "type": "BUY",
@@ -241,100 +257,9 @@ Deprecated: `GET http://localhost:3333/api/v1/auth/anonymous/<INSERT_SECURITY_TO
 }
 ```
 
-| Field        | Type                | Description                                                         |
-| ------------ | ------------------- | ------------------------------------------------------------------- |
-| `accountId`  | `string` (optional) | Id of the account                                                   |
-| `comment`    | `string` (optional) | Comment of the activity                                             |
-| `currency`   | `string`            | `CHF` \| `EUR` \| `USD` etc.                                        |
-| `dataSource` | `string`            | `COINGECKO` \| `GHOSTFOLIO` [^1] \| `MANUAL` \| `YAHOO`             |
-| `date`       | `string`            | Date in the format `ISO-8601`                                       |
-| `fee`        | `number`            | Fee of the activity                                                 |
-| `quantity`   | `number`            | Quantity of the activity                                            |
-| `symbol`     | `string`            | Symbol of the activity (suitable for `dataSource`)                  |
-| `type`       | `string`            | `BUY` \| `DIVIDEND` \| `FEE` \| `INTEREST` \| `LIABILITY` \| `SELL` |
-| `unitPrice`  | `number`            | Price per unit of the activity                                      |
-
-#### Response
-
-##### Success
-
-`201 Created`
-
-##### Error
-
-`400 Bad Request`
-
-```
-{
-  "error": "Bad Request",
-  "message": [
-    "activities.1 is a duplicate activity"
-  ]
-}
-```
-
-### Portfolio (experimental)
-
-#### Prerequisites
-
-Grant access of type _Public_ in the _Access_ tab of _My Ghostfolio_.
-
-#### Request
-
-`GET http://localhost:3333/api/v1/public/<INSERT_ACCESS_ID>/portfolio`
-
-**Info:** No Bearer Token is required for authorization
-
-#### Response
-
-##### Success
-
-```
-{
-  "performance": {
-    "1d": {
-      "relativeChange": 0 // normalized from -1 to 1
-    };
-    "ytd": {
-      "relativeChange": 0 // normalized from -1 to 1
-    },
-    "max": {
-      "relativeChange": 0 // normalized from -1 to 1
-    }
-  }
-}
-```
-
-## Community Projects
-
-Discover a variety of community projects for Ghostfolio: https://github.com/topics/ghostfolio
-
-Are you building your own project? Add the `ghostfolio` topic to your _GitHub_ repository to get listed as well. [Learn more →](https://docs.github.com/en/articles/classifying-your-repository-with-topics)
-
-## Contributing
-
-Ghostfolio is **100% free** and **open source**. We encourage and support an active and healthy community that accepts contributions from the public - including you.
-
-Not sure what to work on? We have [some ideas](https://github.com/ghostfolio/ghostfolio/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22%20no%3Aassignee), even for [newcomers](https://github.com/ghostfolio/ghostfolio/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22%20no%3Aassignee). Please join the Ghostfolio [Slack](https://join.slack.com/t/ghostfolio/shared_invite/zt-vsaan64h-F_I0fEo5M0P88lP9ibCxFg) channel or post to [@ghostfolio\_](https://x.com/ghostfolio_) on _X_. We would love to hear from you.
-
-If you like to support this project, become a [**Sponsor**](https://github.com/sponsors/ghostfolio), get [**Ghostfolio Premium**](https://ghostfol.io/en/pricing) or [**Buy me a coffee**](https://www.buymeacoffee.com/ghostfolio).
-
-## Sponsors
-
-<div align="center">
-  <a href="https://www.testmuai.com?utm_medium=sponsor&utm_source=ghostfolio" target="_blank" title="TestMu AI - AI Powered Testing Tool">
-    <img alt="TestMu AI Logo" height="45" src="https://assets.testmuai.com/resources/images/logos/logo.svg" />
-  </a>
-</div>
-
-## Analytics
-
-![Alt](https://repobeats.axiom.co/api/embed/281a80b2d0c4af1162866c24c803f1f18e5ed60e.svg 'Repobeats analytics image')
+---
 
 ## License
 
-© 2021 - 2026 [Ghostfolio](https://ghostfol.io)
-
+© 2021 – 2026 [Ghostfolio](https://ghostfol.io) and contributors  
 Licensed under the [AGPLv3 License](https://www.gnu.org/licenses/agpl-3.0.html).
-
-[^1]: Available with [**Ghostfolio Premium**](https://ghostfol.io/en/pricing).

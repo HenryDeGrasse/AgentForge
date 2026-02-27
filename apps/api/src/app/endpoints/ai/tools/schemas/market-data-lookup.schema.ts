@@ -65,7 +65,11 @@ export const MARKET_DATA_LOOKUP_OUTPUT_SCHEMA: ToolJsonSchema = {
       additionalProperties: false,
       properties: {
         absoluteChange: { type: 'number' },
-        percentChange: { type: 'number' },
+        percentChange: {
+          description:
+            'Whole-number percentage change over the period (e.g. 5.3 = +5.3%). Already multiplied by 100; display as-is.',
+          type: 'number'
+        },
         periodDays: { type: 'number' }
       },
       required: ['absoluteChange', 'percentChange', 'periodDays'],
