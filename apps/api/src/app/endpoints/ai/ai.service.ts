@@ -17,6 +17,7 @@ import {
   LLMMessage
 } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
 import { ResponseVerifierService } from '@ghostfolio/api/app/endpoints/ai/verification/response-verifier.service';
+import { InsiderService } from '@ghostfolio/api/app/endpoints/insider/insider.service';
 import { PortfolioService } from '@ghostfolio/api/app/portfolio/portfolio.service';
 import { PrismaService } from '@ghostfolio/api/services/prisma/prisma.service';
 import { Filter } from '@ghostfolio/common/interfaces';
@@ -62,6 +63,7 @@ export class AiService {
   public constructor(
     private readonly actionExtractorService: ActionExtractorService,
     private readonly chartDataExtractorService: ChartDataExtractorService,
+    private readonly insiderService: InsiderService,
     @Inject(LLM_CLIENT_TOKEN)
     private readonly llmClient: LLMClient,
     private readonly portfolioService: PortfolioService,
@@ -74,6 +76,62 @@ export class AiService {
     return {
       status: getReasonPhrase(StatusCodes.OK)
     };
+  }
+
+  public async getRecentRuns({ limit = 50 }: { limit?: number }) {
+    return this.prismaService.aiRunLog.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(limit, 200)
+    });
+  }
+
+  public async logRun({
+    cacheHitCount = 0,
+    cacheMissCount = 0,
+    conversationId,
+    elapsedMs,
+    estimatedCostUsd,
+    guardrail,
+    invokedToolNames,
+    providerLatencyMs,
+    providerName,
+    userId,
+    warnings
+  }: {
+    cacheHitCount?: number;
+    cacheMissCount?: number;
+    conversationId?: string;
+    elapsedMs?: number;
+    estimatedCostUsd?: number;
+    guardrail?: string;
+    invokedToolNames: string[];
+    providerLatencyMs?: number;
+    providerName?: string;
+    userId: string;
+    warnings?: string[];
+  }) {
+    try {
+      await this.prismaService.aiRunLog.create({
+        data: {
+          cacheHitCount,
+          cacheMissCount,
+          conversationId,
+          elapsedMs,
+          estimatedCostUsd,
+          guardrail,
+          invokedToolNames: JSON.stringify(invokedToolNames),
+          providerLatencyMs,
+          providerName,
+          userId,
+          warnings: warnings ? JSON.stringify(warnings) : undefined
+        }
+      });
+    } catch (error) {
+      Logger.warn(
+        `Failed to log AI run: ${error instanceof Error ? error.message : error}`,
+        'AiService'
+      );
+    }
   }
 
   public async generateText({ prompt }: { prompt: string }) {
@@ -190,6 +248,14 @@ export class AiService {
       // Last response was portfolio-related — allow the follow-up through
     }
 
+    // 2c. Session briefing injection (new conversations only)
+    if (!conversationId) {
+      const briefing = await this.buildInsiderBriefing(userId);
+      if (briefing) {
+        effectiveSystemPrompt = `${effectiveSystemPrompt}\n\n${briefing}`;
+      }
+    }
+
     // 3. Run the agent (outside any transaction — failure = no DB writes)
     const result = await this.reactAgentService.run({
       prompt: message,
@@ -218,6 +284,17 @@ export class AiService {
 
     // 4c. Extract deterministic follow-up actions from invoked tools
     verified.actions = this.actionExtractorService.extract(invokedToolNames);
+
+    // 4d. Log run for observability (fire-and-forget)
+    this.logRun({
+      conversationId,
+      elapsedMs: verified.elapsedMs,
+      estimatedCostUsd: verified.estimatedCostUsd,
+      guardrail: verified.guardrail,
+      invokedToolNames,
+      userId,
+      warnings: verified.warnings
+    });
 
     // 5. Normalise title (collapse whitespace, truncate)
     const title = message.replace(/\s+/g, ' ').trim().slice(0, 60);
@@ -419,6 +496,14 @@ export class AiService {
       }
     }
 
+    // 2c. Session briefing injection (new conversations only)
+    if (!conversationId) {
+      const briefing = await this.buildInsiderBriefing(userId);
+      if (briefing) {
+        effectiveSystemPrompt = `${effectiveSystemPrompt}\n\n${briefing}`;
+      }
+    }
+
     // 3. Start heartbeat timer (top-level, not inside agent)
     const HEARTBEAT_INTERVAL_MS = 15_000;
     const heartbeatQueue: SseEvent[] = [];
@@ -472,6 +557,17 @@ export class AiService {
         agentResult.executedTools ?? []
       );
       verified.actions = this.actionExtractorService.extract(invokedToolNames);
+
+      // 5b. Log run for observability (fire-and-forget)
+      this.logRun({
+        conversationId,
+        elapsedMs: verified.elapsedMs,
+        estimatedCostUsd: verified.estimatedCostUsd,
+        guardrail: verified.guardrail,
+        invokedToolNames,
+        userId,
+        warnings: verified.warnings
+      });
 
       // 6. Persist before emitting done (critical ordering)
       const title = message.replace(/\s+/g, ' ').trim().slice(0, 60);
@@ -677,6 +773,57 @@ export class AiService {
     ].join('\n');
   }
 
+  // ─── Insider session briefing ─────────────────────────────────────────────
+
+  /**
+   * Evaluates active insider monitoring rules and builds a briefing string
+   * to inject into the system prompt for new conversations.
+   */
+  private async buildInsiderBriefing(
+    userId: string
+  ): Promise<string | undefined> {
+    try {
+      const { briefingItems, rulesEvaluated } =
+        await this.insiderService.evaluateRulesForBriefing({ userId });
+
+      if (rulesEvaluated === 0 || briefingItems.length === 0) {
+        return undefined;
+      }
+
+      const rows = briefingItems
+        .map(
+          (item) =>
+            `| ${item.symbol} | ${item.insiderName} | ${item.side} | ${item.valueUsd ? `$${item.valueUsd.toLocaleString()}` : 'N/A'} | ${item.txDate} |`
+        )
+        .join('\n');
+
+      // Mark rules as notified
+      const ruleIds = [...new Set(briefingItems.map((item) => item.ruleId))];
+      await this.insiderService.markRulesNotified({
+        notes: `Briefing delivered with ${briefingItems.length} trigger(s)`,
+        ruleIds,
+        userId
+      });
+
+      return [
+        '## Monitoring Briefing',
+        `Your insider monitoring rules detected ${briefingItems.length} trigger(s):`,
+        '',
+        '| Symbol | Insider | Side | Value | Date |',
+        '| --- | --- | --- | --- | --- |',
+        rows,
+        '',
+        'Proactively mention this monitoring update to the user at the start of the conversation. This is not investment advice — encourage verification via source URLs.'
+      ].join('\n');
+    } catch (error) {
+      Logger.warn(
+        `Failed to build insider briefing: ${error instanceof Error ? error.message : error}`,
+        'AiService'
+      );
+      return undefined;
+    }
+  }
+
   // ─── Deterministic scope gate ──────────────────────────────────────────────
 
   /**
@@ -782,7 +929,14 @@ export class AiService {
     /what.if/i,
     /hypothetical/i,
     /stress.test/i,
-    /scenario/i
+    /scenario/i,
+    /insider/i,
+    /form\s*4/i,
+    /sec\s*filing/i,
+    /insider\s*(?:buy|sell|trad)/i,
+    /monitor(?:ing)?\s*rule/i,
+    /alert/i,
+    /briefing/i
   ];
 
   /**
@@ -808,10 +962,10 @@ export class AiService {
     /\b(?:can.t help|cannot help|only help with|outside.{0,20}scope|can only help|portfolio.related questions)\b/i;
 
   private static readonly AMBIGUOUS_CLARIFICATION_RESPONSE =
-    "Could you be more specific about what you'd like to do? I can help with: portfolio summaries, risk analysis, compliance checks, transaction history, market data lookups, performance comparisons, rebalancing suggestions, tax estimates, trade simulations (what-if analysis), or portfolio stress testing.";
+    "Could you be more specific about what you'd like to do? I can help with: portfolio summaries, risk analysis, compliance checks, transaction history, market data lookups, performance comparisons, rebalancing suggestions, tax estimates, trade simulations (what-if analysis), portfolio stress testing, insider activity monitoring, and insider monitoring rules.";
 
   private static readonly SCOPE_REFUSAL_RESPONSE =
-    "I can't help with that request. I'm a portfolio analysis assistant and can only help with: portfolio summaries, transaction history, risk analysis, compliance checks, market data lookups, performance comparisons, rebalancing suggestions, tax estimates, trade simulations, and stress testing. Please ask me about your portfolio and I'll be happy to help!";
+    "I can't help with that request. I'm a portfolio analysis assistant and can only help with: portfolio summaries, transaction history, risk analysis, compliance checks, market data lookups, performance comparisons, rebalancing suggestions, tax estimates, trade simulations, stress testing, and insider activity monitoring. Please ask me about your portfolio and I'll be happy to help!";
 
   /**
    * Deterministic request router. Classifies the message into one of:
