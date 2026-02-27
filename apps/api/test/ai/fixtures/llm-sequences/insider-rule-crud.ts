@@ -12,7 +12,7 @@ export const insiderRuleCrud: LLMCompletionResponse[] = [
       {
         arguments: {
           minValueUsd: 100000,
-          scope: 'portfolio',
+          scope: 'top_n',
           side: 'sell',
           topN: 3
         },
