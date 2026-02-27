@@ -7,6 +7,11 @@ import { guardrailCircuitBreaker } from './guardrail-circuit-breaker';
 import { guardrailCostLimit } from './guardrail-cost-limit';
 import { guardrailMaxIterations } from './guardrail-max-iterations';
 import { guardrailTimeout } from './guardrail-timeout';
+import { insiderActivityQuery } from './insider-activity-query';
+import { insiderListRules } from './insider-list-rules';
+import { insiderRuleCrud } from './insider-rule-crud';
+import { insiderScopeGate } from './insider-scope-gate';
+import { insiderUnknownSymbol } from './insider-unknown-symbol';
 import { multiToolParallel } from './multi-tool-parallel';
 import { multiToolSequential } from './multi-tool-sequential';
 import { richCompliance } from './rich-compliance';
@@ -34,6 +39,11 @@ export const LLM_SEQUENCES: Record<string, LLMCompletionResponse[]> = {
   'guardrail-cost-limit': guardrailCostLimit,
   'guardrail-max-iterations': guardrailMaxIterations,
   'guardrail-timeout': guardrailTimeout,
+  'insider-activity-query': insiderActivityQuery,
+  'insider-list-rules': insiderListRules,
+  'insider-rule-crud': insiderRuleCrud,
+  'insider-scope-gate': insiderScopeGate,
+  'insider-unknown-symbol': insiderUnknownSymbol,
   'multi-tool-parallel': multiToolParallel,
   'multi-tool-sequential': multiToolSequential,
   'rich-compliance': richCompliance,
