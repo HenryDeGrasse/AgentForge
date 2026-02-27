@@ -34,6 +34,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: '.nvmrc'
+          cache: 'npm'
       - run: npm ci
       - run: npx nx test api --testPathPattern='golden-sets-fast'
 
@@ -71,6 +72,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: '.nvmrc'
+          cache: 'npm'
       - run: npm ci
       - run: npx nx test api --testPathPattern='golden-sets.spec' --runInBand
 
@@ -88,6 +90,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: '.nvmrc'
+          cache: 'npm'
       - run: npm ci
       - run: npx nx test api --testPathPattern='labeled-scenarios' --runInBand
       - run: npx ts-node -P apps/api/tsconfig.spec.json apps/api/test/ai/coverage-matrix.ts --output=markdown > coverage-matrix.md
