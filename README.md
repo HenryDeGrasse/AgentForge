@@ -20,7 +20,7 @@ Everything under `apps/api/src/app/endpoints/ai/` is new. The upstream Ghostfoli
 | ----------- | ----------------------------------------------------------------------------------- | ---------- |
 | **Phase 1** | Bug fixes — chart data extraction, benchmark comparison, memory leak                | ✅ Done    |
 | **Phase 2** | Agent reliability — parallel tool calls, context guard, escalation, cost estimation | ✅ Done    |
-| **Phase 3** | Eval coverage expansion — chart extractor tests, multi-turn evals, injection evals  | 🔜 Planned |
+| **Phase 3** | Eval coverage expansion — chart extractor tests, multi-turn evals, injection evals  | ✅ Done    |
 | **Phase 4** | Security hardening — rate limiting, scope gate, output sanitization                 | 🔜 Planned |
 | **Phase 5** | Operational improvements — structured telemetry, heartbeat tuning                   | 🔜 Planned |
 
@@ -55,6 +55,20 @@ Everything under `apps/api/src/app/endpoints/ai/` is new. The upstream Ghostfoli
 
 4. **Cost estimation fallback** (`react-agent.service.ts`):
    - When `estimatedCostUsd` is absent from the LLM response, cost is estimated from `totalTokens` (or `promptTokens + completionTokens`) and `fallbackCostPer1kTokensUsd`. Tests were added to pin all three fallback paths.
+
+#### Phase 3 Eval Coverage
+
+New test file: `apps/api/test/ai/phase3-evals.spec.ts`
+
+1. **Multi-turn conversation rehydration** (3 tests):
+   - Verifies `priorMessages` are injected into the LLM conversation in the correct order (prior user → prior assistant → new user prompt).
+   - Verifies cold start (no `priorMessages`) works identically to the explicit empty-array case.
+   - Regression guard for conversation history ordering.
+
+2. **Indirect prompt injection via tool output** (3 tests):
+   - Verifies the agent passes tool output (including attacker-controlled fields) to the LLM without pre-sanitising it — the LLM must see the injection text to decide how to handle it.
+   - Verifies the final `response` does not echo injection text when the LLM correctly ignores it.
+   - Verifies the context-window guard truncates oversized injection payloads before they enter the LLM context.
 
 > **Known pre-existing issue**: A worker process does not exit gracefully after the test suite (upstream NestJS/BullMQ module teardown). This manifests as a warning but does not affect test correctness. Fixing it requires closing Redis/BullMQ connections in `afterAll` hooks for the modules that import `RedisCacheModule` / `PortfolioSnapshotQueueModule`.
 
