@@ -273,8 +273,9 @@ describe('SimulateTradesTool', () => {
     expect(result.data.tradeResults[0].costInBaseCurrency).toBeCloseTo(5000, 0);
   });
 
-  it('warns when cash goes negative (partial status)', async () => {
-    const smallCashSummary = { cash: 100, totalValueInBaseCurrency: 10100 };
+  it('caps buy quantity at available cash when cost exceeds balance', async () => {
+    // Cash is 1000, AAPL price is 150, trying to buy 100 shares ($15,000)
+    const smallCashSummary = { cash: 1000, totalValueInBaseCurrency: 11000 };
     const tool = createTool(MOCK_HOLDINGS, smallCashSummary);
     const result = await tool.execute(
       { trades: [{ action: 'buy', quantity: 100, symbol: 'AAPL' }] },
@@ -282,12 +283,30 @@ describe('SimulateTradesTool', () => {
     );
 
     expect(result.status).toBe('partial');
-    expect(result.data.status).toBe('partial');
-    expect(result.data.warnings).toEqual(
+    expect(result.data.tradeResults[0].status).toBe('capped');
+    expect(result.data.tradeResults[0].requestedQuantity).toBe(100);
+    // Capped to 1000/150 ≈ 6.666 shares
+    expect(result.data.tradeResults[0].acceptedQuantity).toBeCloseTo(6.6667, 2);
+    expect(result.data.tradeResults[0].costInBaseCurrency).toBeCloseTo(1000, 0);
+    expect(result.data.tradeResults[0].warnings).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ code: 'insufficient_cash_assumed_margin' })
+        expect.objectContaining({ code: 'buy_capped_insufficient_cash' })
       ])
     );
-    expect(result.data.hypotheticalPortfolio.cashBalance).toBeLessThan(0);
+    // Cash should be ~0, not negative
+    expect(result.data.hypotheticalPortfolio.cashBalance).toBeCloseTo(0, 0);
+  });
+
+  it('executes buy fully when cash is sufficient', async () => {
+    const tool = createTool(MOCK_HOLDINGS, MOCK_SUMMARY);
+    const result = await tool.execute(
+      { trades: [{ action: 'buy', quantity: 10, symbol: 'AAPL' }] },
+      CTX
+    );
+
+    // 10 * 150 = 1500, cash is 50000 — plenty
+    expect(result.data.tradeResults[0].status).toBe('executed');
+    expect(result.data.tradeResults[0].acceptedQuantity).toBe(10);
+    expect(result.data.hypotheticalPortfolio.cashBalance).toBe(48500);
   });
 });

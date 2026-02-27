@@ -177,6 +177,7 @@ describe('AiService', () => {
     expect(run).toHaveBeenCalledWith({
       priorMessages: [],
       prompt: 'What changed in my portfolio this week?',
+      requestId: expect.any(String),
       systemPrompt: 'be concise',
       toolNames: ['get_portfolio_summary'],
       userId: 'user-1'

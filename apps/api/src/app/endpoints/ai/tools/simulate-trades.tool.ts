@@ -242,6 +242,21 @@ export class SimulateTradesTool implements ToolDefinition<
         }
       }
 
+      // Validate buys against available cash
+      if (trade.action === 'buy') {
+        const maxAffordable = cashAfter / price;
+
+        if (acceptedQuantity > maxAffordable && maxAffordable > 0) {
+          const originalQuantity = acceptedQuantity;
+          acceptedQuantity = maxAffordable;
+          tradeStatus = 'capped';
+          tradeWarnings.push({
+            code: 'buy_capped_insufficient_cash',
+            message: `Buy quantity for ${trade.symbol} capped from ${originalQuantity} to ${acceptedQuantity.toFixed(4)} shares (insufficient cash).`
+          });
+        }
+      }
+
       const cost = acceptedQuantity * price;
 
       // Apply trade to hypothetical portfolio
@@ -332,8 +347,9 @@ export class SimulateTradesTool implements ToolDefinition<
       };
     });
 
-    // Check if cash went negative
+    // Determine overall status
     let status: 'partial' | 'success' = 'success';
+    const hasCappedTrade = tradeResults.some((t) => t.status === 'capped');
 
     if (cashAfter < 0) {
       status = 'partial';
@@ -341,6 +357,8 @@ export class SimulateTradesTool implements ToolDefinition<
         code: 'insufficient_cash_assumed_margin',
         message: `Cash balance would be ${baseCurrency} ${cashAfter.toFixed(2)} after trades. This assumes margin or external funding.`
       });
+    } else if (hasCappedTrade) {
+      status = 'partial';
     }
 
     const output: SimulateTradesOutput = {

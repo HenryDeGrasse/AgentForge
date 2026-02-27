@@ -4,6 +4,7 @@ export const COMPLIANCE_CHECK_INPUT_SCHEMA: ToolJsonSchema = {
   additionalProperties: false,
   properties: {
     rules: {
+      description: 'Optional compliance rule overrides. Omit to use defaults.',
       additionalProperties: false,
       properties: {
         maxAssetClassPct: { maximum: 1, minimum: 0, type: 'number' },

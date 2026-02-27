@@ -4,6 +4,8 @@ export const REBALANCE_SUGGEST_INPUT_SCHEMA: ToolJsonSchema = {
   additionalProperties: false,
   properties: {
     constraints: {
+      description:
+        'Optional rebalancing constraints like cash reserve, max trades, and turnover limits.',
       additionalProperties: false,
       properties: {
         cashReservePct: { maximum: 1, minimum: 0, type: 'number' },
@@ -14,10 +16,14 @@ export const REBALANCE_SUGGEST_INPUT_SCHEMA: ToolJsonSchema = {
       type: 'object'
     },
     strategy: {
+      description:
+        'Rebalancing strategy. Use "custom" with targetAllocations for specific targets.',
       enum: ['equal_weight', 'market_cap_weight', 'custom'],
       type: 'string'
     },
     targetAllocations: {
+      description:
+        'Target allocation per symbol (required when strategy is "custom"). Each targetPct is 0–1.',
       items: {
         additionalProperties: false,
         properties: {

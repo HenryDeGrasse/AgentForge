@@ -4,15 +4,45 @@ export const SIMULATE_TRADES_INPUT_SCHEMA: ToolJsonSchema = {
   additionalProperties: false,
   properties: {
     trades: {
+      description:
+        'Array of trades to simulate. Specify quantity, notionalUsd, or fractionOfPosition (quantity takes precedence).',
       items: {
         additionalProperties: false,
         properties: {
-          action: { enum: ['buy', 'sell'], type: 'string' },
-          fractionOfPosition: { maximum: 1, minimum: 0, type: 'number' },
-          notionalUsd: { minimum: 0, type: 'number' },
-          price: { minimum: 0, type: 'number' },
-          quantity: { minimum: 0, type: 'number' },
-          symbol: { type: 'string' }
+          action: {
+            description: 'Trade direction.',
+            enum: ['buy', 'sell'],
+            type: 'string'
+          },
+          fractionOfPosition: {
+            description:
+              'Fraction (0–1) of existing position to sell. Only for sells.',
+            maximum: 1,
+            minimum: 0,
+            type: 'number'
+          },
+          notionalUsd: {
+            description:
+              'Dollar amount to trade. Converted to quantity at market price.',
+            minimum: 0,
+            type: 'number'
+          },
+          price: {
+            description:
+              'Override price per unit. Defaults to current market price.',
+            minimum: 0,
+            type: 'number'
+          },
+          quantity: {
+            description:
+              'Number of shares/units to trade. Takes precedence over notionalUsd.',
+            minimum: 0,
+            type: 'number'
+          },
+          symbol: {
+            description: 'Ticker symbol (e.g. AAPL, MSFT).',
+            type: 'string'
+          }
         },
         required: ['symbol', 'action'],
         type: 'object'

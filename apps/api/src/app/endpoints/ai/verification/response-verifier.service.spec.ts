@@ -32,13 +32,49 @@ describe('ResponseVerifierService', () => {
   // ─── confidence ────────────────────────────────────────────────────────────
 
   describe('confidence', () => {
-    it('assigns HIGH when status=completed and toolCalls > 0', () => {
-      const result = service.verify(BASE_RESULT, [
-        'get_portfolio_summary',
-        'analyze_risk'
-      ]);
+    it('assigns HIGH when status=completed and toolCalls > 0 with all tools successful', () => {
+      const result = service.verify(
+        {
+          ...BASE_RESULT,
+          executedTools: [
+            {
+              envelope: { data: {}, status: 'success' },
+              toolName: 'get_portfolio_summary'
+            },
+            {
+              envelope: { data: {}, status: 'success' },
+              toolName: 'analyze_risk'
+            }
+          ]
+        },
+        ['get_portfolio_summary', 'analyze_risk']
+      );
 
       expect(result.confidence).toBe('high');
+    });
+
+    it('downgrades to MEDIUM when completed with toolCalls > 0 but a tool returned an error', () => {
+      const result = service.verify(
+        {
+          ...BASE_RESULT,
+          executedTools: [
+            {
+              envelope: { data: {}, status: 'success' },
+              toolName: 'get_portfolio_summary'
+            },
+            {
+              envelope: {
+                error: { code: 'tool_execution_failed', message: 'timeout' },
+                status: 'error'
+              },
+              toolName: 'analyze_risk'
+            }
+          ]
+        },
+        ['get_portfolio_summary', 'analyze_risk']
+      );
+
+      expect(result.confidence).toBe('medium');
     });
 
     it('assigns MEDIUM when status=completed but toolCalls === 0', () => {

@@ -3,9 +3,26 @@ import type { ToolJsonSchema } from '@ghostfolio/api/app/endpoints/ai/tools/tool
 export const ANALYZE_RISK_INPUT_SCHEMA: ToolJsonSchema = {
   additionalProperties: false,
   properties: {
-    concentrationSingleThreshold: { maximum: 1, minimum: 0, type: 'number' },
-    concentrationTop3Threshold: { maximum: 1, minimum: 0, type: 'number' },
-    sectorConcentrationThreshold: { maximum: 1, minimum: 0, type: 'number' }
+    concentrationSingleThreshold: {
+      description:
+        'Max fraction (0–1) a single position may occupy. Default 0.3.',
+      maximum: 1,
+      minimum: 0,
+      type: 'number'
+    },
+    concentrationTop3Threshold: {
+      description:
+        'Max combined fraction (0–1) of top 3 holdings. Default 0.6.',
+      maximum: 1,
+      minimum: 0,
+      type: 'number'
+    },
+    sectorConcentrationThreshold: {
+      description: 'Max fraction (0–1) any one sector may occupy. Default 0.4.',
+      maximum: 1,
+      minimum: 0,
+      type: 'number'
+    }
   },
   type: 'object'
 };

@@ -3,9 +3,23 @@ import type { ToolJsonSchema } from '@ghostfolio/api/app/endpoints/ai/tools/tool
 export const TAX_ESTIMATE_INPUT_SCHEMA: ToolJsonSchema = {
   additionalProperties: false,
   properties: {
-    holdingPeriodMonths: { maximum: 120, minimum: 1, type: 'number' },
-    jurisdiction: { type: 'string' },
-    taxYear: { maximum: 2100, minimum: 1900, type: 'number' }
+    holdingPeriodMonths: {
+      description: 'Short/long-term boundary in months (1–120). Default 12.',
+      maximum: 120,
+      minimum: 1,
+      type: 'number'
+    },
+    jurisdiction: {
+      description:
+        'Tax jurisdiction code (e.g. "US", "UK", "DE"). Defaults to generic.',
+      type: 'string'
+    },
+    taxYear: {
+      description: 'Tax year (1900–2100). Defaults to current year.',
+      maximum: 2100,
+      minimum: 1900,
+      type: 'number'
+    }
   },
   type: 'object'
 };
