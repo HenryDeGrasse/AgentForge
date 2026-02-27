@@ -50,6 +50,16 @@ interface RebalanceSuggestOutput {
     targetPct: number;
     valueInBaseCurrency: number;
   }[];
+  targetAllocations: {
+    name: string;
+    symbol: string;
+    targetPct: number;
+    targetValueInBaseCurrency: number;
+    /** Whether a trade was actually suggested for this position (may be false when constraints limit trades). */
+    tradeSuggested: boolean;
+    /** The trade direction if tradeSuggested is true, otherwise undefined. */
+    tradeAction?: 'BUY' | 'SELL';
+  }[];
   summary: {
     constraintsApplied: string[];
     estimatedTurnoverPct: number;
@@ -58,12 +68,7 @@ interface RebalanceSuggestOutput {
     totalTradesCount: number;
     tradesLimitedByConstraints: boolean;
   };
-  targetAllocations: {
-    name: string;
-    symbol: string;
-    targetPct: number;
-    targetValueInBaseCurrency: number;
-  }[];
+
   warnings: {
     code: string;
     message: string;
@@ -181,7 +186,7 @@ export class RebalanceSuggestTool implements ToolDefinition<
         portfolioValueInBaseCurrency,
         strategy,
         suggestedTrades: [],
-        targetAllocations: [],
+        targetAllocations: [] as RebalanceSuggestOutput['targetAllocations'],
         tradesLimitedByConstraints: false,
         warnings
       });
@@ -337,7 +342,12 @@ export class RebalanceSuggestTool implements ToolDefinition<
     portfolioValueInBaseCurrency: number;
     strategy: Strategy;
     suggestedTrades: RebalanceSuggestOutput['suggestedTrades'];
-    targetAllocations: RebalanceSuggestOutput['targetAllocations'];
+    targetAllocations: {
+      name: string;
+      symbol: string;
+      targetPct: number;
+      targetValueInBaseCurrency: number;
+    }[];
     tradesLimitedByConstraints: boolean;
     warnings: RebalanceSuggestOutput['warnings'];
   }): RebalanceSuggestOutput {
@@ -354,11 +364,32 @@ export class RebalanceSuggestTool implements ToolDefinition<
 
     const turnover = totalBuyValueInBaseCurrency + totalSellValueInBaseCurrency;
 
+    // Annotate each target allocation with whether a trade was actually suggested.
+    // This prevents the LLM from implying all positions will be rebalanced when
+    // constraints (turnover cap, max trades) limit the actual trade set.
+    const tradedSymbols = new Map<string, 'BUY' | 'SELL'>(
+      suggestedTrades.map((t) => [t.symbol, t.action])
+    );
+
+    const annotatedTargetAllocations = targetAllocations.map((allocation) => {
+      const tradeAction = tradedSymbols.get(allocation.symbol);
+
+      return {
+        name: allocation.name,
+        symbol: allocation.symbol,
+        targetPct: allocation.targetPct,
+        targetValueInBaseCurrency: allocation.targetValueInBaseCurrency,
+        tradeSuggested: tradeAction !== undefined,
+        ...(tradeAction !== undefined ? { tradeAction } : {})
+      };
+    });
+
     return {
       assumptions: [
         'Rebalancing uses deterministic target-value math over current holdings.',
         'Custom strategy treats unspecified holdings as unchanged (no forced liquidation).',
-        'Constraint filters are applied in order: min trade value, max trades, then turnover cap.'
+        'Constraint filters are applied in order: min trade value, max trades, then turnover cap.',
+        'Positions with tradeSuggested=false have a theoretical target but no trade was generated due to constraints (e.g. turnover cap, max trades limit).'
       ],
       baseCurrency,
       currentAllocations,
@@ -387,7 +418,7 @@ export class RebalanceSuggestTool implements ToolDefinition<
         totalTradesCount: suggestedTrades.length,
         tradesLimitedByConstraints
       },
-      targetAllocations,
+      targetAllocations: annotatedTargetAllocations,
       warnings
     };
   }

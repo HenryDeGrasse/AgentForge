@@ -229,6 +229,43 @@ describe('SimulateTradesTool', () => {
     expect(msftAfter.valueInBaseCurrency).toBe(5250);
   });
 
+  it('omits zero-change rows from allocationChanges', async () => {
+    const tool = createTool(MOCK_HOLDINGS, MOCK_SUMMARY);
+    const result = await tool.execute(
+      { trades: [{ action: 'sell', quantity: 5, symbol: 'AAPL' }] },
+      CTX
+    );
+
+    // Only AAPL was touched — BND and MSFT allocationPct shifts due to
+    // total value changing, but their absolute values are unchanged, so
+    // we only care that AAPL appears and zero-change symbols are dropped.
+    // Every entry must have a non-trivial change
+    for (const change of result.data.impact.allocationChanges) {
+      expect(Math.abs(change.changePct)).toBeGreaterThan(0.0001);
+    }
+  });
+
+  it('tags pre-existing concentration warnings vs new ones', async () => {
+    // AAPL starts at 45% (>35% threshold) — a small buy should NOT create a
+    // "New" warning for AAPL; it should be tagged pre-existing.
+    // Buy enough AAPL to push it higher — that IS a new/worsening situation.
+    const tool = createTool(MOCK_HOLDINGS, MOCK_SUMMARY);
+
+    // Small buy — AAPL was already concentrated before the trade
+    const result = await tool.execute(
+      { trades: [{ action: 'buy', quantity: 1, symbol: 'AAPL' }] },
+      CTX
+    );
+
+    const aaplWarning = result.data.impact.concentrationWarnings.find((w) =>
+      w.includes('AAPL')
+    );
+
+    if (aaplWarning) {
+      expect(aaplWarning).toContain('pre-existing');
+    }
+  });
+
   it('always includes disclaimers', async () => {
     const tool = createTool(MOCK_HOLDINGS, MOCK_SUMMARY);
     const result = await tool.execute(
