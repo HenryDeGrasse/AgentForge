@@ -24,6 +24,7 @@ export type EvalSubcategory =
   | 'guardrail-cost'
   | 'guardrail-iterations'
   | 'guardrail-timeout'
+  | 'jailbreak'
   | 'malformed-query'
   | 'market-data'
   | 'multi-tool-orchestration'
@@ -34,6 +35,7 @@ export type EvalSubcategory =
   | 'rebalance'
   | 'risk-analysis'
   | 'schema-safety'
+  | 'scope-refusal'
   | 'simulate-trades'
   | 'stress-test'
   | 'tax'
@@ -134,6 +136,7 @@ const VALID_SUBCATEGORIES: ReadonlySet<string> = new Set<EvalSubcategory>([
   'guardrail-cost',
   'guardrail-iterations',
   'guardrail-timeout',
+  'jailbreak',
   'malformed-query',
   'market-data',
   'multi-tool-orchestration',
@@ -144,6 +147,7 @@ const VALID_SUBCATEGORIES: ReadonlySet<string> = new Set<EvalSubcategory>([
   'rebalance',
   'risk-analysis',
   'schema-safety',
+  'scope-refusal',
   'simulate-trades',
   'stress-test',
   'tax',

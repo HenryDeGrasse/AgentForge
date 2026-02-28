@@ -1,24 +1,47 @@
 import type { LLMCompletionResponse } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
 
+import { advCodeGeneration } from './adv-code-generation';
+import { advJailbreakSystemPrompt } from './adv-jailbreak-system-prompt';
+import { advJokeRequest } from './adv-joke-request';
+import { advMathQuestion } from './adv-math-question';
+import { advMedicalAdvice } from './adv-medical-advice';
+import { advPoemRequest } from './adv-poem-request';
+import { advPoemWithFinancial } from './adv-poem-with-financial';
+import { advRecipeRequest } from './adv-recipe-request';
 import { authScopeCrossTool } from './auth-scope-cross-tool';
 import { authScopeIsolation } from './auth-scope-isolation';
+import { edgeMultipleQuestions } from './edge-multiple-questions';
+import { edgeTypoInToolRef } from './edge-typo-in-tool-ref';
 import { emptyPortfolioSummary } from './empty-portfolio-summary';
 import { guardrailCircuitBreaker } from './guardrail-circuit-breaker';
 import { guardrailCostLimit } from './guardrail-cost-limit';
 import { guardrailMaxIterations } from './guardrail-max-iterations';
 import { guardrailTimeout } from './guardrail-timeout';
 import { malformedQueryGibberish } from './malformed-query-gibberish';
+import { multiFullReview } from './multi-full-review';
+import { multiPerfThenStress } from './multi-perf-then-stress';
+import { multiRiskThenRebalance } from './multi-risk-then-rebalance';
+import { multiSummaryThenCompliance } from './multi-summary-then-compliance';
+import { multiTaxThenSimulate } from './multi-tax-then-simulate';
+import { multiThreeTools } from './multi-three-tools';
 import { multiToolParallel } from './multi-tool-parallel';
 import { multiToolSequential } from './multi-tool-sequential';
 import { outOfScopeCrystalBall } from './out-of-scope-crystal-ball';
 import { promptInjectionIgnoreInstructions } from './prompt-injection-ignore-instructions';
 import { richCompliance } from './rich-compliance';
+import { richComplianceFull } from './rich-compliance-full';
+import { richHoldingsDetail } from './rich-holdings-detail';
 import { richHoldingsSummary } from './rich-holdings-summary';
 import { richMarketData } from './rich-market-data';
+import { richMarketPrice } from './rich-market-price';
 import { richPerformance } from './rich-performance';
+import { richPerformanceYtd } from './rich-performance-ytd';
 import { richRebalance } from './rich-rebalance';
+import { richRecentBuys } from './rich-recent-buys';
 import { richRiskAnalysis } from './rich-risk-analysis';
+import { richSectorRisk } from './rich-sector-risk';
 import { richSimulateTrades } from './rich-simulate-trades';
+import { richStressRecession } from './rich-stress-recession';
 import { richStressTest } from './rich-stress-test';
 import { richTaxEstimate } from './rich-tax-estimate';
 import { richTransactionHistory } from './rich-transaction-history';
@@ -33,25 +56,48 @@ import { schemaUnknownTool } from './schema-unknown-tool';
  * Each sequence is the ordered list of LLMCompletionResponses the mock will return.
  */
 export const LLM_SEQUENCES: Record<string, LLMCompletionResponse[]> = {
+  'adv-code-generation': advCodeGeneration,
+  'adv-jailbreak-system-prompt': advJailbreakSystemPrompt,
+  'adv-joke-request': advJokeRequest,
+  'adv-math-question': advMathQuestion,
+  'adv-medical-advice': advMedicalAdvice,
+  'adv-poem-request': advPoemRequest,
+  'adv-poem-with-financial': advPoemWithFinancial,
+  'adv-recipe-request': advRecipeRequest,
   'auth-scope-cross-tool': authScopeCrossTool,
   'auth-scope-isolation': authScopeIsolation,
+  'edge-multiple-questions': edgeMultipleQuestions,
+  'edge-typo-in-tool-ref': edgeTypoInToolRef,
   'empty-portfolio-summary': emptyPortfolioSummary,
   'guardrail-circuit-breaker': guardrailCircuitBreaker,
   'guardrail-cost-limit': guardrailCostLimit,
   'guardrail-max-iterations': guardrailMaxIterations,
   'guardrail-timeout': guardrailTimeout,
   'malformed-query-gibberish': malformedQueryGibberish,
-  'out-of-scope-crystal-ball': outOfScopeCrystalBall,
+  'multi-full-review': multiFullReview,
+  'multi-perf-then-stress': multiPerfThenStress,
+  'multi-risk-then-rebalance': multiRiskThenRebalance,
+  'multi-summary-then-compliance': multiSummaryThenCompliance,
+  'multi-tax-then-simulate': multiTaxThenSimulate,
+  'multi-three-tools': multiThreeTools,
   'multi-tool-parallel': multiToolParallel,
   'multi-tool-sequential': multiToolSequential,
+  'out-of-scope-crystal-ball': outOfScopeCrystalBall,
   'prompt-injection-ignore-instructions': promptInjectionIgnoreInstructions,
   'rich-compliance': richCompliance,
+  'rich-compliance-full': richComplianceFull,
+  'rich-holdings-detail': richHoldingsDetail,
   'rich-holdings-summary': richHoldingsSummary,
   'rich-market-data': richMarketData,
+  'rich-market-price': richMarketPrice,
   'rich-performance': richPerformance,
+  'rich-performance-ytd': richPerformanceYtd,
   'rich-rebalance': richRebalance,
+  'rich-recent-buys': richRecentBuys,
   'rich-risk-analysis': richRiskAnalysis,
+  'rich-sector-risk': richSectorRisk,
   'rich-simulate-trades': richSimulateTrades,
+  'rich-stress-recession': richStressRecession,
   'rich-stress-test': richStressTest,
   'rich-tax-estimate': richTaxEstimate,
   'rich-transaction-history': richTransactionHistory,
