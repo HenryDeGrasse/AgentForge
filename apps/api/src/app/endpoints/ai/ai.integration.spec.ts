@@ -106,7 +106,10 @@ describe('Ai chat integration', () => {
       } as any,
       mockPrismaService,
       reactAgentService,
-      new ResponseVerifierService()
+      new ResponseVerifierService(),
+      {
+        selectTools: jest.fn().mockReturnValue({ tools: [], source: 'router' })
+      } as any
     );
 
     const aiController = new AiController(

@@ -17,6 +17,7 @@ import {
   LLMClient,
   LLMMessage
 } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
+import { ToolRouterService } from '@ghostfolio/api/app/endpoints/ai/routing/tool-router.service';
 import { ResponseVerifierService } from '@ghostfolio/api/app/endpoints/ai/verification/response-verifier.service';
 import { PortfolioService } from '@ghostfolio/api/app/portfolio/portfolio.service';
 import { PrismaService } from '@ghostfolio/api/services/prisma/prisma.service';
@@ -69,7 +70,8 @@ export class AiService {
     private readonly portfolioService: PortfolioService,
     private readonly prismaService: PrismaService,
     private readonly reactAgentService: ReactAgentService,
-    private readonly responseVerifierService: ResponseVerifierService
+    private readonly responseVerifierService: ResponseVerifierService,
+    private readonly toolRouterService: ToolRouterService
   ) {}
 
   public getHealth() {
@@ -100,6 +102,13 @@ export class AiService {
   }): Promise<ChatResponse> {
     // 1. Validate toolNames against allowlist
     const sanitizedToolNames = this.sanitizeToolNames(toolNames);
+
+    // 1a. Route tools based on message content (feature flag: AI_TOOL_ROUTER)
+    const routedToolNames = this.routeTools(
+      message,
+      sanitizedToolNames,
+      toolNames
+    );
 
     // 1b. Deterministic scope gate — classify request before reaching the LLM
     const scopeResult = this.checkScopeGate(message);
@@ -199,7 +208,7 @@ export class AiService {
       priorMessages,
       requestId,
       systemPrompt: effectiveSystemPrompt,
-      toolNames: sanitizedToolNames,
+      toolNames: routedToolNames,
       userId
     });
 
@@ -301,6 +310,13 @@ export class AiService {
   }): AsyncIterable<SseEvent> {
     // 1. Validate toolNames against allowlist
     const sanitizedToolNames = this.sanitizeToolNames(toolNames);
+
+    // 1a. Route tools based on message content (feature flag: AI_TOOL_ROUTER)
+    const routedToolNames = this.routeTools(
+      message,
+      sanitizedToolNames,
+      toolNames
+    );
 
     // 1b. Deterministic scope gate
     const scopeResult = this.checkScopeGate(message);
@@ -440,7 +456,7 @@ export class AiService {
         requestId,
         signal,
         systemPrompt: effectiveSystemPrompt,
-        toolNames: sanitizedToolNames,
+        toolNames: routedToolNames,
         userId
       })) {
         if (signal?.aborted) {
@@ -971,6 +987,40 @@ export class AiService {
    * Validates toolNames against the allowlist. Returns undefined if input is
    * undefined (agent uses all tools). Throws 400 for unknown tool names.
    */
+  /**
+   * Routes tool selection through the ToolRouterService when the feature flag
+   * `AI_TOOL_ROUTER` is enabled. When disabled (default), returns the
+   * sanitized tool names unchanged.
+   *
+   * @param message User message for keyword scoring
+   * @param sanitizedToolNames Already-validated tool names (all allowed tools)
+   * @param originalToolNames Caller-provided tool names (undefined if not specified)
+   */
+  private routeTools(
+    message: string,
+    sanitizedToolNames: string[],
+    originalToolNames: string[] | undefined
+  ): string[] {
+    const featureEnabled = process.env.AI_TOOL_ROUTER === '1';
+
+    if (!featureEnabled) {
+      return sanitizedToolNames;
+    }
+
+    const routingResult = this.toolRouterService.selectTools(
+      message,
+      sanitizedToolNames,
+      originalToolNames?.length ? originalToolNames : undefined
+    );
+
+    Logger.debug(
+      `Tool router [${routingResult.source}]: ${routingResult.tools.join(', ')}`,
+      'AiService'
+    );
+
+    return routingResult.tools;
+  }
+
   private sanitizeToolNames(toolNames: string[] | undefined): string[] {
     if (!toolNames) {
       return [...AGENT_ALLOWED_TOOL_NAMES];

@@ -4,6 +4,7 @@ import {
   LLM_CLIENT_TOKEN,
   LLMClient
 } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
+import { ToolRouterService } from '@ghostfolio/api/app/endpoints/ai/routing/tool-router.service';
 import { ResponseVerifierService } from '@ghostfolio/api/app/endpoints/ai/verification/response-verifier.service';
 import { PortfolioService } from '@ghostfolio/api/app/portfolio/portfolio.service';
 import { PrismaService } from '@ghostfolio/api/services/prisma/prisma.service';
@@ -72,7 +73,10 @@ function buildService({
     { getDetails: portfolioGetDetails } as any as PortfolioService,
     prismaService as any as PrismaService,
     { run: agentRun } as any as ReactAgentService,
-    { verify: verifierVerify } as any as ResponseVerifierService
+    { verify: verifierVerify } as any as ResponseVerifierService,
+    {
+      selectTools: jest.fn().mockReturnValue({ tools: [], source: 'router' })
+    } as any
   );
 }
 
@@ -104,7 +108,16 @@ describe('AiService', () => {
         { provide: PortfolioService, useValue: { getDetails: jest.fn() } },
         { provide: PrismaService, useValue: buildPrismaStub() },
         { provide: ReactAgentService, useValue: { run: jest.fn() } },
-        { provide: ResponseVerifierService, useValue: verifier }
+        { provide: ResponseVerifierService, useValue: verifier },
+        {
+          provide: ToolRouterService,
+          useValue: {
+            selectTools: jest.fn().mockReturnValue({
+              source: 'router',
+              tools: []
+            })
+          }
+        }
       ]
     }).compile();
 

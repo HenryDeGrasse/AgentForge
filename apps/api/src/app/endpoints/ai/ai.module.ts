@@ -3,6 +3,7 @@ import { AccountService } from '@ghostfolio/api/app/account/account.service';
 import { ReactAgentService } from '@ghostfolio/api/app/endpoints/ai/agent/react-agent.service';
 import { LLM_CLIENT_TOKEN } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
 import { OpenAiClientService } from '@ghostfolio/api/app/endpoints/ai/llm/openai-client.service';
+import { ToolRouterService } from '@ghostfolio/api/app/endpoints/ai/routing/tool-router.service';
 import { AnalyzeRiskTool } from '@ghostfolio/api/app/endpoints/ai/tools/analyze-risk.tool';
 import { ComplianceCheckTool } from '@ghostfolio/api/app/endpoints/ai/tools/compliance-check.tool';
 import { GetPortfolioSummaryTool } from '@ghostfolio/api/app/endpoints/ai/tools/get-portfolio-summary.tool';
@@ -81,6 +82,7 @@ import { ResponseVerifierService } from './verification/response-verifier.servic
     PortfolioCalculatorFactory,
     ReactAgentService,
     ResponseVerifierService,
+    ToolRouterService,
     AnalyzeRiskTool,
     ComplianceCheckTool,
     GetPortfolioSummaryTool,

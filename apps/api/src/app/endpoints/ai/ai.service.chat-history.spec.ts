@@ -108,7 +108,10 @@ function buildService(
     { getDetails: jest.fn() } as any as PortfolioService,
     prismaService,
     { run: agentRun } as any as ReactAgentService,
-    { verify: verifierVerify } as any as ResponseVerifierService
+    { verify: verifierVerify } as any as ResponseVerifierService,
+    {
+      selectTools: jest.fn().mockReturnValue({ tools: [], source: 'router' })
+    } as any
   );
 }
 
