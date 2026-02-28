@@ -644,17 +644,14 @@ export class ReactAgentService {
       const TRUNCATION_SUFFIX =
         '\n[TRUNCATED: tool output exceeded the context window limit]';
 
-      const summarizersEnabled = process.env.AI_TOOL_SUMMARIZERS === '1';
-      let rawContent: string;
-
-      if (summarizersEnabled) {
-        rawContent = summarizeToolOutput(
-          toolCall.name,
-          envelope.data ?? toolResponse
-        );
-      } else {
-        rawContent = JSON.stringify(toolResponse);
-      }
+      const rawContent = summarizeToolOutput(
+        toolCall.name,
+        // Pass data-only to the summarizer for human-readable output, but
+        // embed the full toolResponse (envelope) as the raw JSON so that
+        // downstream toolEnvelope checks can still find status/error fields.
+        envelope.data ?? toolResponse,
+        toolResponse
+      );
 
       const content =
         rawContent.length > AGENT_TOOL_OUTPUT_MAX_CHARS

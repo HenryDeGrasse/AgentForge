@@ -5,8 +5,6 @@
  * produces a human-readable `[SUMMARY]` block. The LLM receives the summary
  * plus truncated raw JSON for detail lookups. Full JSON stays in the envelope
  * for WS-1 citation checking.
- *
- * Feature flag: AI_TOOL_SUMMARIZERS=1 to enable (default OFF).
  */
 
 /**
@@ -309,9 +307,16 @@ const SUMMARIZERS: Record<string, Summarizer> = {
  * If the tool has no registered summarizer, returns raw JSON only.
  * Summarizer errors fall back to raw JSON silently.
  */
-export function summarizeToolOutput(toolName: string, output: unknown): string {
+export function summarizeToolOutput(
+  toolName: string,
+  output: unknown,
+  rawSource?: unknown
+): string {
+  const rawTarget = rawSource ?? output;
   const rawJson =
-    typeof output === 'string' ? output : JSON.stringify(output ?? null);
+    typeof rawTarget === 'string'
+      ? rawTarget
+      : JSON.stringify(rawTarget ?? null);
 
   const summarizer = SUMMARIZERS[toolName];
 

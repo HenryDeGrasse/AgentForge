@@ -75,7 +75,10 @@ function buildService({
     { run: agentRun } as any as ReactAgentService,
     { verify: verifierVerify } as any as ResponseVerifierService,
     {
-      selectTools: jest.fn().mockReturnValue({ tools: [], source: 'router' })
+      selectTools: jest.fn().mockImplementation((_msg, available, caller) => ({
+        tools: caller ?? available,
+        source: caller ? 'caller_override' : 'fallback_all'
+      }))
     } as any
   );
 }
@@ -112,10 +115,12 @@ describe('AiService', () => {
         {
           provide: ToolRouterService,
           useValue: {
-            selectTools: jest.fn().mockReturnValue({
-              source: 'router',
-              tools: []
-            })
+            selectTools: jest
+              .fn()
+              .mockImplementation((_msg, available, caller) => ({
+                tools: caller ?? available,
+                source: caller ? 'caller_override' : 'fallback_all'
+              }))
           }
         }
       ]

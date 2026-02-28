@@ -327,10 +327,23 @@ function extractToolMessages(llmClient: {
     for (const msg of request.messages) {
       if (msg.role === 'tool' && msg.content) {
         try {
-          const parsed =
-            typeof msg.content === 'string'
-              ? JSON.parse(msg.content)
-              : msg.content;
+          // Tool content may be plain JSON or a summarized block:
+          // "[SUMMARY] ...\n\n--- RAW JSON ---\n{...}"
+          // In both cases we want to parse the JSON portion.
+          const rawContent =
+            typeof msg.content === 'string' ? msg.content : null;
+
+          let jsonSource: string;
+
+          if (rawContent?.includes('--- RAW JSON ---')) {
+            jsonSource = rawContent.split('--- RAW JSON ---\n')[1] ?? '';
+            // Strip truncation notice if present
+            jsonSource = jsonSource.replace(/\n\[RAW JSON truncated\]$/, '');
+          } else {
+            jsonSource = rawContent ?? JSON.stringify(msg.content);
+          }
+
+          const parsed = JSON.parse(jsonSource);
 
           results.push({
             parsedContent: parsed,

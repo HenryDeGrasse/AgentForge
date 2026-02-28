@@ -421,7 +421,12 @@ describe('[adversarial] indirect injection via tool output', () => {
     // Tool message must have been truncated to <= 32,000 chars
     expect(capturedToolMessage).toBeDefined();
     expect(capturedToolMessage!.content.length).toBeLessThanOrEqual(32_000);
-    // Truncation notice must be appended
-    expect(capturedToolMessage!.content).toContain('[TRUNCATED');
+    // Truncation notice must be appended — either from the summarizer's raw
+    // JSON cap ([RAW JSON truncated]) or from the agent context-window guard
+    // ([TRUNCATED: tool output exceeded...])
+    const wasTruncated =
+      capturedToolMessage!.content.includes('[RAW JSON truncated]') ||
+      capturedToolMessage!.content.includes('[TRUNCATED');
+    expect(wasTruncated).toBe(true);
   });
 });

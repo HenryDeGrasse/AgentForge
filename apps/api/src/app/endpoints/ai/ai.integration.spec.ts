@@ -108,7 +108,12 @@ describe('Ai chat integration', () => {
       reactAgentService,
       new ResponseVerifierService(),
       {
-        selectTools: jest.fn().mockReturnValue({ tools: [], source: 'router' })
+        selectTools: jest
+          .fn()
+          .mockImplementation((_msg, available, caller) => ({
+            tools: caller ?? available,
+            source: caller ? 'caller_override' : 'fallback_all'
+          }))
       } as any
     );
 

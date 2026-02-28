@@ -103,7 +103,7 @@ export class AiService {
     // 1. Validate toolNames against allowlist
     const sanitizedToolNames = this.sanitizeToolNames(toolNames);
 
-    // 1a. Route tools based on message content (feature flag: AI_TOOL_ROUTER)
+    // 1a. Route tools based on message content
     const routedToolNames = this.routeTools(
       message,
       sanitizedToolNames,
@@ -311,7 +311,7 @@ export class AiService {
     // 1. Validate toolNames against allowlist
     const sanitizedToolNames = this.sanitizeToolNames(toolNames);
 
-    // 1a. Route tools based on message content (feature flag: AI_TOOL_ROUTER)
+    // 1a. Route tools based on message content
     const routedToolNames = this.routeTools(
       message,
       sanitizedToolNames,
@@ -988,9 +988,7 @@ export class AiService {
    * undefined (agent uses all tools). Throws 400 for unknown tool names.
    */
   /**
-   * Routes tool selection through the ToolRouterService when the feature flag
-   * `AI_TOOL_ROUTER` is enabled. When disabled (default), returns the
-   * sanitized tool names unchanged.
+   * Routes tool selection through the ToolRouterService.
    *
    * @param message User message for keyword scoring
    * @param sanitizedToolNames Already-validated tool names (all allowed tools)
@@ -1001,16 +999,16 @@ export class AiService {
     sanitizedToolNames: string[],
     originalToolNames: string[] | undefined
   ): string[] {
-    const featureEnabled = process.env.AI_TOOL_ROUTER === '1';
-
-    if (!featureEnabled) {
-      return sanitizedToolNames;
-    }
+    // If the caller explicitly provided toolNames, treat the already-sanitized
+    // list as a caller override (sanitizeToolNames already de-duped + trimmed).
+    const callerOverride = originalToolNames?.length
+      ? sanitizedToolNames
+      : undefined;
 
     const routingResult = this.toolRouterService.selectTools(
       message,
       sanitizedToolNames,
-      originalToolNames?.length ? originalToolNames : undefined
+      callerOverride
     );
 
     Logger.debug(
