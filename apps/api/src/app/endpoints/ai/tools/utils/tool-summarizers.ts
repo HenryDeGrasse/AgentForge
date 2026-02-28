@@ -117,23 +117,72 @@ function summarizeTaxEstimate(output: unknown): string {
     return '[SUMMARY] Tax estimate: no data available.';
   }
 
-  const realized = data.realizedGains as Record<string, unknown> | undefined;
-  const unrealized = data.unrealizedGains as
-    | Record<string, unknown>
+  const taxYear = data.taxYear ?? 'N/A';
+  const realized = data.realizedGains as
+    | Record<string, Record<string, unknown>>
     | undefined;
 
-  const lines = ['[SUMMARY] Tax estimate:'];
+  const lines = [`[SUMMARY] Tax estimate (${taxYear}):`];
 
-  if (realized) {
+  if (realized?.total) {
+    const net = realized.total.netInBaseCurrency ?? 0;
+    const ltGain = realized.longTerm?.gainInBaseCurrency ?? 0;
+    const stGain = realized.shortTerm?.gainInBaseCurrency ?? 0;
+    const txCount = realized.total.transactionCount ?? 0;
+
     lines.push(
-      `  Realized gains — long-term: ${realized.longTerm ?? 0}, short-term: ${realized.shortTerm ?? 0}.`
+      `  Realized — net: $${Number(net).toFixed(2)}, long-term gain: $${Number(ltGain).toFixed(2)}, short-term gain: $${Number(stGain).toFixed(2)} (${txCount} transaction(s)).`
     );
+  } else {
+    lines.push('  No realized gains/losses recorded.');
   }
 
-  if (unrealized) {
+  // Hypothetical impact (only present when hypotheticalTrades were requested)
+  const hypo = data.hypotheticalImpact as Record<string, unknown> | undefined;
+
+  if (hypo) {
+    const totalGain = hypo.totalEstimatedGainInBaseCurrency ?? 0;
+    const ltGain = hypo.totalLongTermGainInBaseCurrency ?? 0;
+    const stGain = hypo.totalShortTermGainInBaseCurrency ?? 0;
+    const trades = Array.isArray(hypo.trades) ? hypo.trades : [];
+
     lines.push(
-      `  Unrealized gains — long-term: ${unrealized.longTerm ?? 0}, short-term: ${unrealized.shortTerm ?? 0}.`
+      `  Hypothetical trade impact — estimated gain: $${Number(totalGain).toFixed(2)} (long-term: $${Number(ltGain).toFixed(2)}, short-term: $${Number(stGain).toFixed(2)}).`
     );
+
+    for (const t of trades as Record<string, unknown>[]) {
+      const gain = Number(t.estimatedGainInBaseCurrency ?? 0).toFixed(2);
+      const term = t.isLongTerm ? 'long-term' : 'short-term';
+      const qty = Number(t.quantitySold ?? 0).toFixed(4);
+      const warn = t.warning ? ` ⚠ ${t.warning}` : '';
+
+      lines.push(
+        `    • ${t.symbol}: sell ${qty} shares → estimated gain $${gain} (${term})${warn}`
+      );
+    }
+  }
+
+  // TLH candidates
+  const tlh = Array.isArray(data.taxLossHarvestingCandidates)
+    ? (data.taxLossHarvestingCandidates as Record<string, unknown>[])
+    : [];
+
+  if (tlh.length > 0) {
+    lines.push(`  TLH candidates (${tlh.length}):`);
+
+    for (const c of tlh.slice(0, 3)) {
+      const loss = Number(c.unrealizedLossInBaseCurrency ?? 0).toFixed(2);
+
+      lines.push(`    • ${c.symbol}: unrealized loss $${loss}`);
+    }
+  }
+
+  const warnings = Array.isArray(data.warnings)
+    ? (data.warnings as Record<string, unknown>[])
+    : [];
+
+  if (warnings.length > 0) {
+    lines.push(`  Warnings: ${warnings.map((w) => w.message).join('; ')}`);
   }
 
   return lines.join('\n');
