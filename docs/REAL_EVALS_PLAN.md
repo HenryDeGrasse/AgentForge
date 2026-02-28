@@ -24,14 +24,14 @@ The [prod-evals-cookbook](https://github.com/Gauntlet-HQ/prod-evals-cookbook) ma
 ┌─────────────────────────────────────────────────────────────┐
 │                      Eval Tiers                             │
 │                                                             │
-│  Tier 1: Fast (current)     Tier 2: Live (new)             │
+│  Tier 1: Fast (current)     Tier 2: Live (new)  ← NOW     │
 │  ───────────────────────    ──────────────────              │
 │  MockLlmClient              Real OpenAiClientService        │
 │  Tool stubs                 Real tools (demo user data)     │
 │  ~2s, runs every commit     ~60s, runs on-demand / CI gate │
 │  Tests agent plumbing       Tests LLM behavior              │
 │                                                             │
-│  Tier 3: Recorded (new)     Tier 4: Rubric (deferred)      │
+│  Tier 3: Recorded          Tier 4: Rubric       ← DEFERRED │
 │  ──────────────────────     ─────────────────────           │
 │  Replay cached real output  LLM-as-judge scoring            │
 │  Same assertions as live    Relevance/accuracy/clarity 0-5  │
@@ -39,6 +39,8 @@ The [prod-evals-cookbook](https://github.com/Gauntlet-HQ/prod-evals-cookbook) ma
 │  Tests regression           Tests quality drift             │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+> **Scope:** Only Tier 2 is being implemented now. Tiers 3 and 4 are deferred.
 
 ---
 
@@ -499,22 +501,20 @@ This is negligible. Even running 5x daily during active development = ~$25/month
 7. First run: execute with `OPENAI_API_KEY=... EVAL_RECORD=1 npx nx test api --testFile=golden-sets-live.spec.ts`
 8. Review failures, adjust `liveOverrides` where LLM reasonably deviates
 
-### Phase 3: Replay tier (~30 min)
+### Phase 3: CI integration (~30 min)
 
-9. `golden-sets-replay.spec.ts` — reads from `fixtures/recorded/`
-10. Commit recorded sessions to git (they're the ground truth)
+9. GitHub Actions workflow for nightly live eval run
+10. Slack/email notification on regression (pass rate drops)
 
-### Phase 4: CI integration (~30 min)
+### Phase 4 (deferred): Replay tier
 
-11. GitHub Actions workflow for nightly live eval run
-12. Artifact upload for recorded sessions
-13. Slack/email notification on regression (pass rate drops)
+- `golden-sets-replay.spec.ts` — reads from `fixtures/recorded/`, no API calls
+- Implement after a stable Tier 2 run has been committed
 
 ### Phase 5 (deferred): Rubric scoring
 
-14. LLM-as-judge for relevance, accuracy, completeness, clarity (0-5)
-15. Requires second LLM call per case — adds cost + latency
-16. Only needed when basic pass/fail isn't granular enough
+- LLM-as-judge for relevance, accuracy, completeness, clarity (0-5)
+- Only needed when basic pass/fail isn't granular enough
 
 ---
 
@@ -550,7 +550,6 @@ After a clean live run, commit the recorded sessions. Tier 3 replay runs those d
 | Live pass rate (single-tool) | ≥90% — correct tool selection                |
 | Live pass rate (multi-tool)  | ≥80% — correct tool orchestration            |
 | Live pass rate (overall)     | ≥90% across all 25+ live cases               |
-| Replay pass rate             | 100% — deterministic by definition           |
 | Cost per run                 | < $0.25                                      |
 | Latency per run              | < 120 seconds                                |
 | Nightly regression detection | Alert within 24h of quality drop             |
@@ -563,4 +562,4 @@ After a clean live run, commit the recorded sessions. Tier 3 replay runs those d
 2. **Proof that gpt-4.1 picks `analyze_risk` for "Am I too concentrated?"** — not because we scripted it, but because the model actually routes there
 3. **Regression detection when we change the system prompt** — if we add a new instruction and it breaks scope refusals, the nightly eval catches it
 4. **Regression detection on model upgrades** — swap gpt-4.1 for gpt-4.1-mini and see exactly which cases break
-5. **Recorded sessions as documentation** — `fixtures/recorded/rich-risk-analysis.json` shows exactly what the real agent does, not what we hope it does
+5. **Foundation for Tier 3/4** — recorded sessions (saved on `EVAL_RECORD=1`) become the input to the deferred replay and rubric tiers
