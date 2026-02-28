@@ -73,7 +73,7 @@ describe('OpenAiClientService', () => {
       ],
       usage: {
         completionTokens: 12,
-        estimatedCostUsd: 0.00004,
+        estimatedCostUsd: 0.0002,
         promptTokens: 8,
         totalTokens: 20
       }

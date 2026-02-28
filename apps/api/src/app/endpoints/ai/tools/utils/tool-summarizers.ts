@@ -27,21 +27,43 @@ function summarizePortfolioSummary(output: unknown): string {
   const holdings = Array.isArray(data.holdings) ? data.holdings : [];
   const totalHoldings = data.totalHoldings ?? holdings.length;
   const baseCurrency = data.baseCurrency ?? 'N/A';
+  const totalValue = data.totalValueInBaseCurrency;
+  const cash = data.cash;
 
-  const topHoldings = holdings
-    .slice(0, 5)
+  const totalLine =
+    totalValue != null
+      ? ` Total: $${Number(totalValue).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`
+      : '';
+
+  const cashLine =
+    cash != null && Number(cash) > 0
+      ? ` Cash: $${Number(cash).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`
+      : '';
+
+  // List ALL holdings (not just top 5) with dollar values to prevent
+  // the LLM from digging through raw JSON and producing garbled output.
+  const holdingLines = holdings
     .map((h: Record<string, unknown>) => {
       const symbol = h.symbol ?? 'N/A';
+      const name = h.name ?? symbol;
       const alloc =
-        h.allocationPercentage != null ? `${h.allocationPercentage}%` : 'N/A';
-      return `  - ${symbol}: ${alloc} (${h.assetSubClass ?? h.assetClass ?? 'N/A'})`;
+        h.allocationPercentage != null
+          ? `${Number(h.allocationPercentage).toFixed(1)}%`
+          : 'N/A';
+      const value =
+        h.valueInBaseCurrency != null
+          ? `$${Number(h.valueInBaseCurrency).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+          : 'N/A';
+      const assetType = h.assetSubClass ?? h.assetClass ?? '';
+
+      return `  - ${symbol} (${name}): ${alloc} — ${value}${assetType ? ` [${assetType}]` : ''}`;
     })
     .join('\n');
 
   return [
-    `[SUMMARY] Portfolio: ${totalHoldings} holdings in ${baseCurrency}.`,
-    topHoldings
-      ? `Top holdings:\n${topHoldings}`
+    `[SUMMARY] Portfolio: ${totalHoldings} holdings in ${baseCurrency}.${totalLine}${cashLine}`,
+    holdingLines
+      ? `Holdings:\n${holdingLines}`
       : 'No holding details available.'
   ].join('\n');
 }
@@ -53,28 +75,74 @@ function summarizeAnalyzeRisk(output: unknown): string {
     return '[SUMMARY] Risk analysis: no data available.';
   }
 
-  const risk = data.overallRisk as Record<string, unknown> | undefined;
-  const level = risk?.overallRiskLevel ?? 'UNKNOWN';
-  const concentration = risk?.concentrationRisk ?? 'N/A';
-  const diversification = risk?.diversificationScore ?? 'N/A';
-  const currency = risk?.currencyRisk ?? 'N/A';
+  const level = data.overallRiskLevel ?? 'UNKNOWN';
+  const volProxy = data.volatilityProxyScore;
+  const holdingsCount = data.holdingsCount ?? 'N/A';
 
-  const contributors = Array.isArray(data.riskContributors)
-    ? data.riskContributors
-        .slice(0, 5)
-        .map(
-          (c: Record<string, unknown>) =>
-            `  - ${c.name}: ${c.riskContribution} (${c.allocation}% allocation)`
-        )
-        .join('\n')
-    : '';
+  const lines = [
+    `[SUMMARY] Risk level: ${level}. Holdings: ${holdingsCount}. Volatility proxy: ${volProxy != null ? Number(volProxy).toFixed(2) : 'N/A'}.`
+  ];
 
-  return [
-    `[SUMMARY] Risk level: ${level}. Concentration: ${concentration}, diversification: ${diversification}, currency risk: ${currency}.`,
-    contributors ? `Top risk contributors:\n${contributors}` : ''
-  ]
-    .filter(Boolean)
-    .join('\n');
+  // Flags
+  const flags = Array.isArray(data.flags) ? data.flags : [];
+
+  if (flags.length > 0) {
+    const flagLines = flags.map(
+      (f: Record<string, unknown>) =>
+        `  ⚠ ${f.title} (${f.severity}): ${f.metricName}=${Number(f.metricValue ?? 0).toFixed(2)}, threshold=${Number(f.threshold ?? 0).toFixed(2)}`
+    );
+
+    lines.push(`Risk flags:\n${flagLines.join('\n')}`);
+  }
+
+  // Top holdings exposure
+  const exposures = data.exposures as Record<string, unknown> | undefined;
+
+  if (exposures) {
+    const topHoldings = Array.isArray(exposures.topHoldings)
+      ? exposures.topHoldings
+      : [];
+    const holdingLines = topHoldings
+      .slice(0, 5)
+      .map(
+        (h: Record<string, unknown>) =>
+          `  - ${h.symbol}: ${(Number(h.allocationInPortfolio ?? 0) * 100).toFixed(1)}% ($${Number(h.valueInBaseCurrency ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) [${h.assetClass}]`
+      );
+
+    if (holdingLines.length > 0) {
+      lines.push(`Top holdings:\n${holdingLines.join('\n')}`);
+    }
+  }
+
+  // Statistical metrics
+  const stats = data.statisticalMetrics as Record<string, unknown> | undefined;
+
+  if (stats) {
+    const pct = (v: unknown) =>
+      v != null ? `${(Number(v) * 100).toFixed(2)}%` : 'N/A';
+    const num = (v: unknown) => (v != null ? Number(v).toFixed(2) : 'N/A');
+
+    lines.push(
+      `Statistical metrics (${stats.periodStartDate} to ${stats.periodEndDate}, ${stats.dataPointCount} data points):` +
+        `\n  Sharpe: ${num(stats.sharpeRatio)} | Sortino: ${num(stats.sortinoRatio)}` +
+        `\n  Annualized return: ${pct(stats.annualizedReturnPct)} | Volatility: ${pct(stats.annualizedVolatilityPct)}` +
+        `\n  Max drawdown: ${pct(stats.maxDrawdownPct)} | Current drawdown: ${pct(stats.currentDrawdownPct)}` +
+        `\n  VaR(95%): ${pct(stats.varPct95)} | CVaR(95%): ${pct(stats.cvarPct95)}` +
+        (stats.beta != null ? `\n  Beta: ${num(stats.beta)}` : '') +
+        (stats.alpha != null ? ` | Alpha: ${pct(stats.alpha)}` : '')
+    );
+  }
+
+  // Warnings
+  const warnings = Array.isArray(data.warnings)
+    ? (data.warnings as Record<string, unknown>[])
+    : [];
+
+  if (warnings.length > 0) {
+    lines.push(`Warnings: ${warnings.map((w) => w.message).join('; ')}`);
+  }
+
+  return lines.join('\n');
 }
 
 function summarizePerformanceCompare(output: unknown): string {

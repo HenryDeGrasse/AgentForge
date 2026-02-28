@@ -8,19 +8,53 @@ import {
   ToolJsonSchema,
   ToolResultEnvelope
 } from '@ghostfolio/api/app/endpoints/ai/tools/tool.types';
+import {
+  computeAnnualizedReturn,
+  computeAnnualizedVolatility,
+  computeCVaR,
+  computeDailyReturns,
+  computeMaxDrawdown,
+  computeSharpeRatio,
+  computeSortinoRatio,
+  computeVaR
+} from '@ghostfolio/api/app/endpoints/ai/tools/utils/statistical-helpers';
 import { PortfolioService } from '@ghostfolio/api/app/portfolio/portfolio.service';
 import { UserService } from '@ghostfolio/api/app/user/user.service';
 import { DEFAULT_CURRENCY } from '@ghostfolio/common/config';
+import { DateRange } from '@ghostfolio/common/types';
 
 import { Injectable } from '@nestjs/common';
 
 interface AnalyzeRiskInput {
   concentrationSingleThreshold?: number;
   concentrationTop3Threshold?: number;
+  dateRange?: DateRange;
+  riskFreeRatePct?: number;
   sectorConcentrationThreshold?: number;
 }
 
 type RiskSeverity = 'high' | 'low' | 'medium';
+
+interface StatisticalMetrics {
+  alpha?: number;
+  annualizedReturnPct: number;
+  annualizedVolatilityPct: number;
+  beta?: number;
+  currentDrawdownPct: number;
+  cvarPct95: number;
+  dataPointCount: number;
+  maxDrawdownPct: number;
+  periodEndDate: string;
+  periodStartDate: string;
+  sharpeRatio: number;
+  sortinoRatio: number;
+  varPct95: number;
+}
+
+const MIN_DATA_POINTS_FOR_STATS = 5;
+const DEFAULT_RISK_FREE_RATE = 0.04;
+const DEFAULT_STATS_DATE_RANGE: DateRange = '1y';
+const TRADING_DAYS_PER_YEAR = 252;
 
 interface AnalyzeRiskOutput {
   assumptions: string[];
@@ -57,6 +91,7 @@ interface AnalyzeRiskOutput {
   holdingsCount: number;
   overallRiskLevel: 'HIGH' | 'LOW' | 'MEDIUM';
   portfolioValueInBaseCurrency: number;
+  statisticalMetrics?: StatisticalMetrics;
   volatilityProxyScore: number;
   warnings: {
     code: string;
@@ -298,12 +333,26 @@ export class AnalyzeRiskTool implements ToolDefinition<
           ? 'MEDIUM'
           : 'LOW';
 
+    // ─── Statistical metrics from historical chart data ────────────────────
+    const statisticalMetrics = await this.computeStatisticalMetrics({
+      dateRange: input.dateRange,
+      riskFreeRatePct: input.riskFreeRatePct,
+      userId: context.userId,
+      warnings
+    });
+
     return {
       data: {
         assumptions: [
           'Volatility proxy uses deterministic asset-class risk weights with a concentration penalty.',
           'Sector exposure aggregates per-holding sector weights and normalizes weights above 1 as percentages.',
-          'Risk flags are threshold-based and not a prediction of future returns.'
+          'Risk flags are threshold-based and not a prediction of future returns.',
+          ...(statisticalMetrics
+            ? [
+                'Statistical metrics (Sharpe, Sortino, VaR, etc.) use historical daily returns and are backward-looking.',
+                'Sharpe and Sortino ratios are annualized (×√252). VaR/CVaR are 1-day historical estimates.'
+              ]
+            : [])
         ],
         baseCurrency,
         exposures: {
@@ -326,6 +375,7 @@ export class AnalyzeRiskTool implements ToolDefinition<
         holdingsCount,
         overallRiskLevel,
         portfolioValueInBaseCurrency,
+        ...(statisticalMetrics ? { statisticalMetrics } : {}),
         volatilityProxyScore,
         warnings
       },
@@ -336,6 +386,101 @@ export class AnalyzeRiskTool implements ToolDefinition<
           ? 'partial'
           : 'success'
     };
+  }
+
+  private async computeStatisticalMetrics({
+    dateRange,
+    riskFreeRatePct,
+    userId,
+    warnings
+  }: {
+    dateRange?: DateRange;
+    riskFreeRatePct?: number;
+    userId: string;
+    warnings: AnalyzeRiskOutput['warnings'];
+  }): Promise<StatisticalMetrics | undefined> {
+    const resolvedDateRange = dateRange ?? DEFAULT_STATS_DATE_RANGE;
+    const riskFreeRate = Number.isFinite(riskFreeRatePct)
+      ? Math.max(0, Math.min(1, riskFreeRatePct))
+      : DEFAULT_RISK_FREE_RATE;
+    const riskFreeDaily = riskFreeRate / TRADING_DAYS_PER_YEAR;
+
+    try {
+      const performanceResponse = await this.portfolioService.getPerformance({
+        dateRange: resolvedDateRange,
+        impersonationId: undefined,
+        userId
+      });
+
+      const chart = performanceResponse.chart ?? [];
+
+      if (chart.length < MIN_DATA_POINTS_FOR_STATS) {
+        warnings.push({
+          code: 'insufficient_data_for_stats',
+          message: `Only ${chart.length} data points available (need ≥${MIN_DATA_POINTS_FOR_STATS}); statistical metrics omitted.`
+        });
+
+        return undefined;
+      }
+
+      const netWorthSeries = chart
+        .map((item) => item.netWorth)
+        .filter((v): v is number => Number.isFinite(v));
+
+      if (netWorthSeries.length < MIN_DATA_POINTS_FOR_STATS) {
+        warnings.push({
+          code: 'insufficient_networth_data',
+          message: 'Insufficient net-worth data points for statistical metrics.'
+        });
+
+        return undefined;
+      }
+
+      const dailyReturns = computeDailyReturns(netWorthSeries);
+
+      if (dailyReturns.length < 2) {
+        warnings.push({
+          code: 'insufficient_return_data',
+          message:
+            'Could not compute enough daily returns for statistical metrics.'
+        });
+
+        return undefined;
+      }
+
+      const { currentDrawdownPct, maxDrawdownPct } =
+        computeMaxDrawdown(netWorthSeries);
+
+      // Total return from first to last value
+      const firstValue = netWorthSeries[0];
+      const lastValue = netWorthSeries[netWorthSeries.length - 1];
+      const totalReturn =
+        firstValue > 0 ? (lastValue - firstValue) / firstValue : 0;
+
+      return {
+        annualizedReturnPct: computeAnnualizedReturn(
+          totalReturn,
+          dailyReturns.length
+        ),
+        annualizedVolatilityPct: computeAnnualizedVolatility(dailyReturns),
+        currentDrawdownPct,
+        cvarPct95: computeCVaR(dailyReturns, 0.95),
+        dataPointCount: dailyReturns.length,
+        maxDrawdownPct,
+        periodEndDate: chart[chart.length - 1]?.date ?? '',
+        periodStartDate: chart[0]?.date ?? '',
+        sharpeRatio: computeSharpeRatio(dailyReturns, riskFreeDaily),
+        sortinoRatio: computeSortinoRatio(dailyReturns, riskFreeDaily),
+        varPct95: computeVaR(dailyReturns, 0.95)
+      };
+    } catch {
+      warnings.push({
+        code: 'stats_computation_error',
+        message: 'Could not retrieve performance data for statistical metrics.'
+      });
+
+      return undefined;
+    }
   }
 
   private getAssetClassExposures(
