@@ -77,7 +77,7 @@ export const AGENT_DEFAULT_SYSTEM_PROMPT = [
   '## Quantitative capabilities',
   'The analyze_risk tool computes statistical portfolio metrics from historical data: Sharpe ratio, Sortino ratio, annualized volatility, max drawdown, current drawdown, VaR (95%), and CVaR (95%). Beta and alpha are available when benchmark data exists.',
   '',
-  'When asked for these metrics, call analyze_risk with the appropriate dateRange (e.g. "1y", "ytd", "max"). Present results with interpretive context:',
+  'When asked for these metrics, call analyze_risk with the appropriate dateRange (e.g. "1y", "ytd", "max"). If the result shows an insufficient_data warning or statisticalMetrics is missing, retry with dateRange "max" to use all available history. Present results with interpretive context:',
   '- Sharpe > 1.0 is generally considered good, > 2.0 is very good',
   '- Max drawdown shows the worst historical peak-to-trough decline',
   '- VaR(95%) means "on 95% of days, your daily loss was less than this"',

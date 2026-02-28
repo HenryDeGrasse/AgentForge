@@ -423,14 +423,16 @@ export class AnalyzeRiskTool implements ToolDefinition<
         return undefined;
       }
 
-      const netWorthSeries = chart
-        .map((item) => item.netWorth)
-        .filter((v): v is number => Number.isFinite(v));
+      // Try multiple value sources in priority order:
+      // netWorth > valueWithCurrencyEffect > value
+      // netWorth is the most comprehensive (includes account balance),
+      // but may be undefined depending on the calculator path.
+      const netWorthSeries = this.extractValueSeries(chart);
 
       if (netWorthSeries.length < MIN_DATA_POINTS_FOR_STATS) {
         warnings.push({
           code: 'insufficient_networth_data',
-          message: 'Insufficient net-worth data points for statistical metrics.'
+          message: `Insufficient value data points for statistical metrics (found ${netWorthSeries.length} from ${chart.length} chart entries, need ≥${MIN_DATA_POINTS_FOR_STATS}).`
         });
 
         return undefined;
@@ -476,11 +478,49 @@ export class AnalyzeRiskTool implements ToolDefinition<
     } catch {
       warnings.push({
         code: 'stats_computation_error',
-        message: 'Could not retrieve performance data for statistical metrics.'
+        message:
+          'Could not retrieve performance data for statistical metrics. Try a different dateRange (e.g. "max").'
       });
 
       return undefined;
     }
+  }
+
+  /**
+   * Extract a value time series from chart data, trying multiple fields
+   * in priority order to maximize data availability.
+   */
+  private extractValueSeries(
+    chart: {
+      netWorth?: number;
+      value?: number;
+      valueWithCurrencyEffect?: number;
+    }[]
+  ): number[] {
+    // Try netWorth first (most comprehensive — includes account balance)
+    const netWorthSeries = chart
+      .map((item) => item.netWorth)
+      .filter((v): v is number => Number.isFinite(v) && v > 0);
+
+    if (netWorthSeries.length >= MIN_DATA_POINTS_FOR_STATS) {
+      return netWorthSeries;
+    }
+
+    // Fall back to valueWithCurrencyEffect (portfolio value without account balance)
+    const valueCurrencySeries = chart
+      .map((item) => item.valueWithCurrencyEffect)
+      .filter((v): v is number => Number.isFinite(v) && v > 0);
+
+    if (valueCurrencySeries.length >= MIN_DATA_POINTS_FOR_STATS) {
+      return valueCurrencySeries;
+    }
+
+    // Last resort: raw value
+    const valueSeries = chart
+      .map((item) => item.value)
+      .filter((v): v is number => Number.isFinite(v) && v > 0);
+
+    return valueSeries;
   }
 
   private getAssetClassExposures(
