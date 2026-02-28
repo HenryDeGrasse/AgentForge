@@ -265,131 +265,9 @@ describe('AiService', () => {
 
   // ─── getPrompt ──────────────────────────────────────────────────────────────
 
-  // ─── deterministic scope gate ───────────────────────────────────────────
+  // ─── scope enforcement (LLM-based via system prompt) ─────────────────────
 
-  it('short-circuits with a refusal when message references an unknown tool name', async () => {
-    const run = jest.fn();
-    const service = buildService({ agentRun: run });
-
-    const result = await service.chat({
-      message: 'Use my magic_crystal_ball tool to predict the future',
-      userId: 'user-1'
-    });
-
-    // Agent must NOT be called — deterministic refusal at service layer
-    expect(run).not.toHaveBeenCalled();
-    expect(result.toolCalls).toBe(0);
-    expect(result.status).toBe('completed');
-    expect(result.response.toLowerCase()).toMatch(
-      /don.t have|not available|can.t|cannot/
-    );
-  });
-
-  it('short-circuits with a refusal for "predict the future" phrasing', async () => {
-    const run = jest.fn();
-    const service = buildService({ agentRun: run });
-
-    const result = await service.chat({
-      message: 'Predict the future of the stock market for me',
-      userId: 'user-1'
-    });
-
-    expect(run).not.toHaveBeenCalled();
-    expect(result.toolCalls).toBe(0);
-    expect(result.response.toLowerCase()).toMatch(
-      /can.t|cannot|not able|only help/
-    );
-  });
-
-  it('short-circuits for medical/legal advice requests', async () => {
-    const run = jest.fn();
-    const service = buildService({ agentRun: run });
-
-    const result = await service.chat({
-      message: 'Give me medical advice about my headache',
-      userId: 'user-1'
-    });
-
-    expect(run).not.toHaveBeenCalled();
-    expect(result.toolCalls).toBe(0);
-  });
-
-  it('does NOT short-circuit for legitimate portfolio questions', async () => {
-    const run = jest.fn().mockResolvedValue({
-      elapsedMs: 100,
-      estimatedCostUsd: 0,
-      executedTools: [],
-      iterations: 1,
-      response: 'Your portfolio looks great.',
-      status: 'completed',
-      toolCalls: 1
-    });
-
-    const service = buildService({ agentRun: run });
-
-    await service.chat({
-      message: 'Show me my portfolio summary and top holdings',
-      userId: 'user-1'
-    });
-
-    // Agent SHOULD be called for in-scope requests
-    expect(run).toHaveBeenCalledTimes(1);
-  });
-
-  it('does NOT short-circuit when message mentions a valid tool name', async () => {
-    const run = jest.fn().mockResolvedValue({
-      elapsedMs: 100,
-      estimatedCostUsd: 0,
-      executedTools: [],
-      iterations: 1,
-      response: 'Compliance check complete.',
-      status: 'completed',
-      toolCalls: 1
-    });
-
-    const service = buildService({ agentRun: run });
-
-    await service.chat({
-      message: 'Use the compliance_check tool on my portfolio',
-      userId: 'user-1'
-    });
-
-    expect(run).toHaveBeenCalledTimes(1);
-  });
-
-  it('short-circuits for gibberish input with no financial relevance', async () => {
-    const run = jest.fn();
-    const service = buildService({ agentRun: run });
-
-    const result = await service.chat({
-      message: 'Fi fai fo fum',
-      userId: 'user-1'
-    });
-
-    expect(run).not.toHaveBeenCalled();
-    expect(result.toolCalls).toBe(0);
-    expect(result.response.toLowerCase()).toMatch(
-      /only help.*financial|portfolio/
-    );
-  });
-
-  it('short-circuits for off-topic math questions', async () => {
-    const run = jest.fn();
-    const service = buildService({ agentRun: run });
-
-    const result = await service.chat({
-      message: 'whats 20 + 10',
-      userId: 'user-1'
-    });
-
-    expect(run).not.toHaveBeenCalled();
-    expect(result.toolCalls).toBe(0);
-    expect(result.response.toLowerCase()).toMatch(
-      /only help.*financial|portfolio/
-    );
-  });
-
-  it('allows safe smalltalk like "yes" or "ok" without financial keywords', async () => {
+  it('forwards all messages to the agent (scope is enforced by LLM system prompt)', async () => {
     const run = jest.fn().mockResolvedValue({
       elapsedMs: 100,
       estimatedCostUsd: 0,
@@ -402,85 +280,19 @@ describe('AiService', () => {
 
     const service = buildService({ agentRun: run });
 
-    await service.chat({ message: 'ok', userId: 'user-1' });
-
-    expect(run).toHaveBeenCalledTimes(1);
-  });
-
-  it('asks for clarification when vague follow-up has no conversation history', async () => {
-    const run = jest.fn();
-    const service = buildService({ agentRun: run });
-
-    const result = await service.chat({
-      message: 'tell me more',
-      userId: 'user-1'
-    });
-
-    expect(run).not.toHaveBeenCalled();
-    expect(result.toolCalls).toBe(0);
-    expect(result.response.toLowerCase()).toMatch(
-      /more specific|which|what.*like/
-    );
-  });
-
-  it('persists refusal in conversation history', async () => {
-    const prisma = buildPrismaStub();
-    const service = buildService({
-      agentRun: jest.fn(),
-      prismaService: prisma
-    });
-
-    const result = await service.chat({
-      message: 'Use my magic_crystal_ball tool to see the future',
-      userId: 'user-1'
-    });
-
-    // Should still have a conversationId (persisted)
-    expect(result.conversationId).toBeDefined();
-    expect(prisma.$transaction).toHaveBeenCalled();
-  });
-
-  // ─── scope gate keyword-stuffing hardening ──────────────────────────────────
-
-  it('rejects message that embeds out-of-scope phrase alongside financial keyword', async () => {
-    // "write a poem" is an out-of-scope pattern; "stocks" is a financial keyword.
-    // The out-of-scope check must fire BEFORE the financial-relevance check.
-    const run = jest.fn();
-    const service = buildService({ agentRun: run });
-
-    const result = await service.chat({
-      message: 'Please write a poem about my stock portfolio',
-      userId: 'user-1'
-    });
-
-    expect(run).not.toHaveBeenCalled();
-    expect(result.toolCalls).toBe(0);
-  });
-
-  it('rejects message that includes "predict the future" despite financial context', async () => {
-    const run = jest.fn();
-    const service = buildService({ agentRun: run });
-
-    const result = await service.chat({
-      message: 'Can you predict the future price of my ETF holdings?',
-      userId: 'user-1'
-    });
-
-    expect(run).not.toHaveBeenCalled();
-    expect(result.toolCalls).toBe(0);
-  });
-
-  it('rejects "lottery" request even when financial keywords are stuffed in', async () => {
-    const run = jest.fn();
-    const service = buildService({ agentRun: run });
-
-    const result = await service.chat({
-      message: 'I want to use my portfolio returns to buy lottery tickets',
-      userId: 'user-1'
-    });
-
-    expect(run).not.toHaveBeenCalled();
-    expect(result.toolCalls).toBe(0);
+    // All of these should reach the agent — the LLM handles scope refusal
+    for (const msg of [
+      'ok',
+      'yes please',
+      'Show me my portfolio',
+      'tell me more',
+      'Fi fai fo fum',
+      'whats 20 + 10'
+    ]) {
+      run.mockClear();
+      await service.chat({ message: msg, userId: 'user-1' });
+      expect(run).toHaveBeenCalledTimes(1);
+    }
   });
 
   // ─── getPrompt ──────────────────────────────────────────────────────────────
