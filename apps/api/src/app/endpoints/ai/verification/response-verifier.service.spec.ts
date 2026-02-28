@@ -244,6 +244,68 @@ describe('ResponseVerifierService', () => {
 
       expect(result.warnings.length).toBeGreaterThanOrEqual(3);
     });
+
+    it('warns about unbacked portfolio claims when toolCalls === 0', () => {
+      const result = service.verify(
+        {
+          ...BASE_RESULT,
+          response:
+            'Your portfolio is worth approximately $50,000 with good diversification.',
+          toolCalls: 0
+        },
+        []
+      );
+
+      expect(result.warnings).toContain(
+        'Response contains portfolio-specific claims but no data tools were used to verify them.'
+      );
+    });
+
+    it('does NOT warn about unbacked claims when tools were called', () => {
+      const result = service.verify(
+        {
+          ...BASE_RESULT,
+          response: 'Your portfolio is worth $50,000.',
+          toolCalls: 1
+        },
+        ['get_portfolio_summary']
+      );
+
+      expect(result.warnings).not.toContain(
+        'Response contains portfolio-specific claims but no data tools were used to verify them.'
+      );
+    });
+
+    it('does NOT warn about unbacked claims for generic refusals', () => {
+      const result = service.verify(
+        {
+          ...BASE_RESULT,
+          response:
+            "I can only help with portfolio analysis. I can't write poems.",
+          toolCalls: 0
+        },
+        []
+      );
+
+      expect(result.warnings).not.toContain(
+        'Response contains portfolio-specific claims but no data tools were used to verify them.'
+      );
+    });
+
+    it('does NOT warn about unbacked claims for greetings mentioning portfolio', () => {
+      const result = service.verify(
+        {
+          ...BASE_RESULT,
+          response: 'How can I help you with your portfolio today?',
+          toolCalls: 0
+        },
+        []
+      );
+
+      expect(result.warnings).not.toContain(
+        'Response contains portfolio-specific claims but no data tools were used to verify them.'
+      );
+    });
   });
 
   // ─── safe fallback response ─────────────────────────────────────────────────
