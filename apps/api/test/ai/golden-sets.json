@@ -84,6 +84,12 @@
           "expectStatus": "success",
           "dataFieldsPresent": ["transactions", "page"]
         }
+      ],
+      "dataValueChecks": [
+        {
+          "label": "txType",
+          "valueInResponse": "BUY"
+        }
       ]
     },
     "meta": {
@@ -130,6 +136,12 @@
           "expectStatus": "success",
           "dataFieldsPresent": ["flags", "overallRiskLevel"]
         }
+      ],
+      "dataValueChecks": [
+        {
+          "label": "riskMention",
+          "valueInResponse": "risk"
+        }
       ]
     },
     "meta": {
@@ -162,6 +174,12 @@
         "unable to access",
         "undefined",
         "NaN"
+      ],
+      "dataValueChecks": [
+        {
+          "label": "dollarSign",
+          "valueInResponse": "$"
+        }
       ]
     },
     "meta": {
@@ -194,6 +212,12 @@
         "unable to access",
         "undefined",
         "NaN"
+      ],
+      "dataValueChecks": [
+        {
+          "label": "pctSign",
+          "valueInResponse": "%"
+        }
       ]
     },
     "meta": {
@@ -271,6 +295,12 @@
         "unable to access",
         "undefined",
         "NaN"
+      ],
+      "dataValueChecks": [
+        {
+          "label": "action",
+          "valueInResponse": "sell"
+        }
       ]
     },
     "meta": {
@@ -303,6 +333,12 @@
         "unable to access",
         "undefined",
         "NaN"
+      ],
+      "dataValueChecks": [
+        {
+          "label": "dollarSign",
+          "valueInResponse": "$"
+        }
       ]
     },
     "meta": {
@@ -974,7 +1010,13 @@
       "requiredTools": ["get_portfolio_summary"],
       "mustIncludeAny": ["top", "holding", "value", "VOO", "NVDA"],
       "mustContainAll": ["$"],
-      "mustNotIncludeAny": ["undefined", "NaN", "[object Object]"]
+      "mustNotIncludeAny": ["undefined", "NaN", "[object Object]"],
+      "dataValueChecks": [
+        {
+          "label": "dollarSign",
+          "valueInResponse": "$"
+        }
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -998,7 +1040,13 @@
       "requiredTools": ["get_transaction_history"],
       "mustIncludeAny": ["buy", "purchased", "transaction", "recent"],
       "mustContainAll": ["BUY"],
-      "mustNotIncludeAny": ["undefined", "NaN", "[object Object]"]
+      "mustNotIncludeAny": ["undefined", "NaN", "[object Object]"],
+      "dataValueChecks": [
+        {
+          "label": "txType",
+          "valueInResponse": "buy"
+        }
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -1029,7 +1077,17 @@
         "tech"
       ],
       "mustContainAll": ["concentration"],
-      "mustNotIncludeAny": ["undefined", "insufficient data", "[object Object]"]
+      "mustNotIncludeAny": [
+        "undefined",
+        "insufficient data",
+        "[object Object]"
+      ],
+      "dataValueChecks": [
+        {
+          "label": "riskDetail",
+          "valueInResponse": "concentrat"
+        }
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -1053,7 +1111,13 @@
       "requiredTools": ["market_data_lookup"],
       "mustIncludeAny": ["NVDA", "price", "NVIDIA", "$"],
       "mustContainAll": ["$"],
-      "mustNotIncludeAny": ["undefined", "NaN", "[object Object]"]
+      "mustNotIncludeAny": ["undefined", "NaN", "[object Object]"],
+      "dataValueChecks": [
+        {
+          "label": "dollarSign",
+          "valueInResponse": "$"
+        }
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -1347,7 +1411,13 @@
       "requiredTools": ["analyze_risk", "rebalance_suggest"],
       "mustIncludeAny": ["risk", "rebalance", "allocation", "suggest"],
       "mustContainAll": ["risk", "rebalance"],
-      "mustNotIncludeAny": ["undefined", "NaN", "[object Object]"]
+      "mustNotIncludeAny": ["undefined", "NaN", "[object Object]"],
+      "dataValueChecks": [
+        {
+          "label": "riskMention",
+          "valueInResponse": "risk"
+        }
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -1371,7 +1441,13 @@
       "requiredTools": ["get_portfolio_summary", "compliance_check"],
       "mustIncludeAny": ["portfolio", "compliant", "compliance"],
       "mustContainAll": ["portfolio", "complian"],
-      "mustNotIncludeAny": ["undefined", "NaN", "[object Object]"]
+      "mustNotIncludeAny": ["undefined", "NaN", "[object Object]"],
+      "dataValueChecks": [
+        {
+          "label": "dollarSign",
+          "valueInResponse": "$"
+        }
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -1401,7 +1477,13 @@
         "drawdown"
       ],
       "mustContainAll": ["return", "loss"],
-      "mustNotIncludeAny": ["undefined", "NaN", "[object Object]"]
+      "mustNotIncludeAny": ["undefined", "NaN", "[object Object]"],
+      "dataValueChecks": [
+        {
+          "label": "pctSign",
+          "valueInResponse": "%"
+        }
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -1525,7 +1607,13 @@
       "requiredTools": ["performance_compare"],
       "mustIncludeAny": ["return", "performance", "year-to-date", "ytd", "%"],
       "mustContainAll": ["%"],
-      "mustNotIncludeAny": ["undefined", "NaN", "[object Object]"]
+      "mustNotIncludeAny": ["undefined", "NaN", "[object Object]"],
+      "dataValueChecks": [
+        {
+          "label": "pctSign",
+          "valueInResponse": "%"
+        }
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -1549,7 +1637,13 @@
       "requiredTools": ["compliance_check"],
       "mustIncludeAny": ["compliance", "compliant", "check", "regulation"],
       "mustContainAll": ["non-compliant"],
-      "mustNotIncludeAny": ["undefined", "NaN", "[object Object]"]
+      "mustNotIncludeAny": ["undefined", "NaN", "[object Object]"],
+      "dataValueChecks": [
+        {
+          "label": "status",
+          "valueInResponse": "non-compliant"
+        }
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -1573,7 +1667,13 @@
       "requiredTools": ["stress_test"],
       "mustIncludeAny": ["recession", "drawdown", "loss", "stress", "scenario"],
       "mustContainAll": ["loss", "%"],
-      "mustNotIncludeAny": ["undefined", "[object Object]"]
+      "mustNotIncludeAny": ["undefined", "[object Object]"],
+      "dataValueChecks": [
+        {
+          "label": "pctSign",
+          "valueInResponse": "%"
+        }
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -1636,7 +1736,13 @@
       "requiredTools": ["get_portfolio_summary"],
       "mustIncludeAny": ["portfolio", "review", "holding", "risk", "value"],
       "mustContainAll": ["portfolio", "holding"],
-      "mustNotIncludeAny": ["undefined", "NaN", "[object Object]"]
+      "mustNotIncludeAny": ["undefined", "NaN", "[object Object]"],
+      "dataValueChecks": [
+        {
+          "label": "dollarSign",
+          "valueInResponse": "$"
+        }
+      ]
     },
     "meta": {
       "stage": "golden",
