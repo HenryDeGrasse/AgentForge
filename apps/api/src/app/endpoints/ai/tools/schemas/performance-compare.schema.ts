@@ -46,6 +46,31 @@ export const PERFORMANCE_COMPARE_OUTPUT_SCHEMA: ToolJsonSchema = {
                 },
                 required: ['date', 'performancePercent'],
                 type: 'object'
+              },
+              periodReturn: {
+                additionalProperties: false,
+                description:
+                  'Period return for the selected date range, computed from market data. Present only when sufficient historical data exists (>= 2 data points with a non-zero start price).',
+                properties: {
+                  dataPoints: {
+                    description: 'Number of market data points used.',
+                    type: 'number'
+                  },
+                  endDate: { type: 'string' },
+                  periodReturnPct: {
+                    description:
+                      'Simple period return as a fraction (e.g. 0.125 = +12.5%). Computed as (end - start) / start. Comparable to portfolio netPerformancePercentage.',
+                    type: 'number'
+                  },
+                  startDate: { type: 'string' }
+                },
+                required: [
+                  'dataPoints',
+                  'endDate',
+                  'periodReturnPct',
+                  'startDate'
+                ],
+                type: 'object'
               }
             },
             required: ['allTimeHigh'],
