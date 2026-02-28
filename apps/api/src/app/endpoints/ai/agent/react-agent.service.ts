@@ -406,16 +406,29 @@ export class ReactAgentService {
 
         if (completion.text?.trim()) {
           const responseText = completion.text.trim();
-          const looksLikeRefusal =
-            /\b(?:can'?t|cannot|don'?t|unable to|not able to|outside.{0,20}scope|only help with)\b/i.test(
+
+          // Detect unbacked portfolio claims: the LLM is making specific
+          // assertions about the user's portfolio data without having called
+          // any tools to fetch that data. This is the only scenario where
+          // escalation (forcing tool use) is appropriate.
+          //
+          // We intentionally do NOT detect "refusals" (negative) because the
+          // LLM can refuse in countless ways. Instead we detect the positive
+          // signal: portfolio-specific claims that should be backed by tools.
+          //
+          // The pattern requires a concrete assertion (verb + predicate),
+          // not just a mention of "portfolio" (which could be a greeting
+          // like "How can I help with your portfolio?").
+          const looksLikeUnbackedPortfolioClaim =
+            toolCallsCount === 0 &&
+            /\b(?:your portfolio (?:is|has|shows|contains|looks|total|value|worth)|your holdings (?:are|include|show|consist)|total value (?:is|of)|net worth (?:is|of)|worth (?:about |approximately )?\$[\d,]+|(?:you have|you own|you hold) [\d]+ (?:share|position|holding|stock|asset)|(?:portfolio|account) (?:is worth|has a|total is|value is|contains)|(?:gain|loss|return) of [\d.]+%|risk (?:score|level|rating) (?:is|of) |(?:compliant|non-compliant) with|(?:tax liability|tax estimate) (?:is|of)|your (?:allocation is|exposure is|positions? (?:are|include)))\b/i.test(
               responseText
             );
 
           if (
             toolDefinitions.length > 0 &&
-            toolCallsCount === 0 &&
-            !escalationAttempted &&
-            !looksLikeRefusal
+            looksLikeUnbackedPortfolioClaim &&
+            !escalationAttempted
           ) {
             escalationAttempted = true;
             escalationPending = true;
@@ -423,7 +436,7 @@ export class ReactAgentService {
             messages.push({ content: responseText, role: 'assistant' });
             messages.push({
               content:
-                'You must use the available tools to answer portfolio-specific questions. Do not provide determinations without calling the relevant tool first.',
+                "You appear to be making claims about the user's portfolio without calling any tools to verify. Please call the appropriate tool to get real data, or if the request is outside your scope, decline politely.",
               role: 'user'
             });
 

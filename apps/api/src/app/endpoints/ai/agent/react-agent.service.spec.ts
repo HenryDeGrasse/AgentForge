@@ -603,7 +603,7 @@ describe('ReactAgentService', () => {
     expect(llmClient.complete).toHaveBeenCalledTimes(1);
   });
 
-  it('returns the no-tool response when the retry also produces no tool calls', async () => {
+  it('returns the no-tool response when LLM makes unbacked portfolio claims and retry also skips tools', async () => {
     toolRegistry.register({
       description: 'Run compliance checks',
       execute: jest.fn().mockResolvedValue({ status: 'success' }),
@@ -612,10 +612,10 @@ describe('ReactAgentService', () => {
     });
 
     (llmClient.complete as jest.Mock)
-      // First call: no tool calls
+      // First call: unbacked portfolio claim → triggers escalation
       .mockResolvedValueOnce({
         finishReason: 'stop',
-        text: 'I think you are compliant.',
+        text: 'Your portfolio is compliant with all regulations.',
         toolCalls: [],
         usage: { estimatedCostUsd: 0.001 }
       })
@@ -644,7 +644,7 @@ describe('ReactAgentService', () => {
     expect(secondCallRequest.toolChoice).toBe('required');
   });
 
-  it('escalates even when response text does not contain portfolio keywords', async () => {
+  it('escalates when LLM makes unbacked portfolio claims without tool calls', async () => {
     toolRegistry.register({
       description: 'Check compliance',
       execute: jest
@@ -655,10 +655,10 @@ describe('ReactAgentService', () => {
     });
 
     (llmClient.complete as jest.Mock)
-      // First call: LLM responds without tool calls and no portfolio keywords
+      // First call: LLM makes a portfolio-specific claim without tool calls
       .mockResolvedValueOnce({
         finishReason: 'stop',
-        text: 'Let me check that for you.',
+        text: 'Your portfolio is compliant with all current regulations.',
         toolCalls: [],
         usage: { estimatedCostUsd: 0.001 }
       })
@@ -1195,6 +1195,207 @@ describe('Phase 2 reliability improvements', () => {
       expect(result.toolCalls).toBe(1);
       // Exactly 2 calls: tool then answer — no escalation
       expect(llmClient2.complete).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ── 2.3b Escalation scope-awareness ──────────────────────────────────────
+
+  describe('escalation scope-awareness', () => {
+    it('does NOT escalate for out-of-scope requests (no portfolio claims in response)', async () => {
+      toolRegistry2.register({
+        description: 'portfolio tool',
+        execute: jest.fn().mockResolvedValue({ data: {}, status: 'success' }),
+        inputSchema: { type: 'object' as const },
+        name: 'get_portfolio_summary'
+      });
+
+      (llmClient2.complete as jest.Mock).mockResolvedValueOnce({
+        finishReason: 'stop',
+        text: "I'd love to help, but writing poems isn't something I'm designed for. I specialize in portfolio analysis.",
+        toolCalls: [],
+        usage: { estimatedCostUsd: 0.001 }
+      });
+
+      const result = await agent2.run({
+        guardrails: reliabilityGuardrails,
+        prompt: 'Write me a poem',
+        toolNames: ['get_portfolio_summary'],
+        userId: 'user-1'
+      });
+
+      expect(result.status).toBe('completed');
+      expect(result.toolCalls).toBe(0);
+      // No escalation — response has no portfolio claims
+      expect(llmClient2.complete).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT escalate for greetings or smalltalk', async () => {
+      toolRegistry2.register({
+        description: 'portfolio tool',
+        execute: jest.fn().mockResolvedValue({ data: {}, status: 'success' }),
+        inputSchema: { type: 'object' as const },
+        name: 'get_portfolio_summary'
+      });
+
+      (llmClient2.complete as jest.Mock).mockResolvedValueOnce({
+        finishReason: 'stop',
+        text: 'Hello! How can I help you with your portfolio today?',
+        toolCalls: [],
+        usage: { estimatedCostUsd: 0.001 }
+      });
+
+      const result = await agent2.run({
+        guardrails: reliabilityGuardrails,
+        prompt: 'Hello',
+        toolNames: ['get_portfolio_summary'],
+        userId: 'user-1'
+      });
+
+      expect(result.status).toBe('completed');
+      expect(result.toolCalls).toBe(0);
+      // No escalation for greetings
+      expect(llmClient2.complete).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT escalate when LLM asks a clarifying question', async () => {
+      toolRegistry2.register({
+        description: 'portfolio tool',
+        execute: jest.fn().mockResolvedValue({ data: {}, status: 'success' }),
+        inputSchema: { type: 'object' as const },
+        name: 'get_portfolio_summary'
+      });
+
+      (llmClient2.complete as jest.Mock).mockResolvedValueOnce({
+        finishReason: 'stop',
+        text: 'Could you be more specific? I can help with portfolio summaries, risk analysis, compliance checks, and more.',
+        toolCalls: [],
+        usage: { estimatedCostUsd: 0.001 }
+      });
+
+      const result = await agent2.run({
+        guardrails: reliabilityGuardrails,
+        prompt: 'help',
+        toolNames: ['get_portfolio_summary'],
+        userId: 'user-1'
+      });
+
+      expect(result.status).toBe('completed');
+      expect(result.toolCalls).toBe(0);
+      // No escalation for clarifying questions
+      expect(llmClient2.complete).toHaveBeenCalledTimes(1);
+    });
+
+    it('DOES escalate when LLM makes unbacked portfolio claims', async () => {
+      toolRegistry2.register({
+        description: 'portfolio tool',
+        execute: jest
+          .fn()
+          .mockResolvedValue({ data: { total: 1000 }, status: 'success' }),
+        inputSchema: { type: 'object' as const },
+        name: 'get_portfolio_summary'
+      });
+
+      (llmClient2.complete as jest.Mock)
+        // First turn: LLM makes portfolio claims without calling tools
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: 'Your portfolio is worth about $50,000 and has good diversification.',
+          toolCalls: [],
+          usage: { estimatedCostUsd: 0.001 }
+        })
+        // After escalation, LLM uses tools
+        .mockResolvedValueOnce({
+          finishReason: 'tool_calls',
+          text: '',
+          toolCalls: [
+            { arguments: {}, id: 'tc-esc', name: 'get_portfolio_summary' }
+          ],
+          usage: { estimatedCostUsd: 0.001 }
+        })
+        // Final response with tool data
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: 'Based on the data, your portfolio total is $1000.',
+          toolCalls: [],
+          usage: { estimatedCostUsd: 0.001 }
+        });
+
+      const result = await agent2.run({
+        guardrails: reliabilityGuardrails,
+        prompt: 'What is my portfolio worth?',
+        toolNames: ['get_portfolio_summary'],
+        userId: 'user-1'
+      });
+
+      expect(result.status).toBe('completed');
+      expect(result.toolCalls).toBeGreaterThanOrEqual(1);
+      // Escalation happened — 3 LLM calls
+      expect(llmClient2.complete).toHaveBeenCalledTimes(3);
+    });
+
+    it('does NOT escalate for varied refusal phrasings', async () => {
+      toolRegistry2.register({
+        description: 'portfolio tool',
+        execute: jest.fn().mockResolvedValue({ data: {}, status: 'success' }),
+        inputSchema: { type: 'object' as const },
+        name: 'get_portfolio_summary'
+      });
+
+      const refusalVariations = [
+        "That's not within my capabilities. I'm a portfolio analysis tool.",
+        "I'm not designed for that kind of request.",
+        'Writing code is outside what I do. I focus on portfolio analysis.',
+        "I specialize in financial analysis and can't assist with that.",
+        "Sorry, I'm only able to help with portfolio-related questions."
+      ];
+
+      for (const refusal of refusalVariations) {
+        (llmClient2.complete as jest.Mock).mockReset();
+        (llmClient2.complete as jest.Mock).mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: refusal,
+          toolCalls: [],
+          usage: { estimatedCostUsd: 0.001 }
+        });
+
+        const result = await agent2.run({
+          guardrails: reliabilityGuardrails,
+          prompt: 'Write me some Python code',
+          toolNames: ['get_portfolio_summary'],
+          userId: 'user-1'
+        });
+
+        expect(result.status).toBe('completed');
+        expect(result.toolCalls).toBe(0);
+        expect(llmClient2.complete).toHaveBeenCalledTimes(1);
+      }
+    });
+
+    it('does NOT escalate when LLM lists its capabilities', async () => {
+      toolRegistry2.register({
+        description: 'portfolio tool',
+        execute: jest.fn().mockResolvedValue({ data: {}, status: 'success' }),
+        inputSchema: { type: 'object' as const },
+        name: 'get_portfolio_summary'
+      });
+
+      (llmClient2.complete as jest.Mock).mockResolvedValueOnce({
+        finishReason: 'stop',
+        text: 'I can help you with:\n- Portfolio summaries\n- Risk analysis\n- Compliance checks\n- Market data lookups\nWhat would you like to do?',
+        toolCalls: [],
+        usage: { estimatedCostUsd: 0.001 }
+      });
+
+      const result = await agent2.run({
+        guardrails: reliabilityGuardrails,
+        prompt: 'What can you do?',
+        toolNames: ['get_portfolio_summary'],
+        userId: 'user-1'
+      });
+
+      expect(result.status).toBe('completed');
+      expect(result.toolCalls).toBe(0);
+      expect(llmClient2.complete).toHaveBeenCalledTimes(1);
     });
   });
 
