@@ -1,6 +1,15 @@
 export const AGENT_CIRCUIT_BREAKER_COOLDOWN_MS = 60_000;
 
 /**
+ * Maximum characters of raw JSON included after the [SUMMARY] block in
+ * tool-summarized output. Tool summarizers use this to truncate the raw
+ * JSON appendix while preserving key facts in the summary.
+ *
+ * Only active when AI_TOOL_SUMMARIZERS=1 feature flag is enabled.
+ */
+export const AGENT_SUMMARY_RAW_CHARS = 16_000;
+
+/**
  * Maximum character length for a single tool-result message injected into the
  * LLM context. Tool outputs that exceed this limit are truncated with a clear
  * notice so the context window never silently overflows.

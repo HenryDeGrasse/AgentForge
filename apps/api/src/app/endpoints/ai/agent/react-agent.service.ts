@@ -17,6 +17,7 @@ import {
 } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
 import { ToolRegistry } from '@ghostfolio/api/app/endpoints/ai/tools/tool.registry';
 import { ToolResultEnvelope } from '@ghostfolio/api/app/endpoints/ai/tools/tool.types';
+import { summarizeToolOutput } from '@ghostfolio/api/app/endpoints/ai/tools/utils/tool-summarizers';
 import type { SseEvent } from '@ghostfolio/common/interfaces';
 
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
@@ -636,13 +637,25 @@ export class ReactAgentService {
               status: 'success'
             };
 
-      // Context-window guard: truncate oversized tool output before injecting
-      // it into the LLM conversation. Without this a single large response
-      // (e.g. a full transaction history) can silently overflow the context
-      // window, causing the LLM to error or produce garbled answers.
+      // Context-window guard: summarize + truncate oversized tool output
+      // before injecting it into the LLM conversation. Without this a single
+      // large response (e.g. a full transaction history) can silently overflow
+      // the context window, causing the LLM to error or produce garbled answers.
       const TRUNCATION_SUFFIX =
         '\n[TRUNCATED: tool output exceeded the context window limit]';
-      const rawContent = JSON.stringify(toolResponse);
+
+      const summarizersEnabled = process.env.AI_TOOL_SUMMARIZERS === '1';
+      let rawContent: string;
+
+      if (summarizersEnabled) {
+        rawContent = summarizeToolOutput(
+          toolCall.name,
+          envelope.data ?? toolResponse
+        );
+      } else {
+        rawContent = JSON.stringify(toolResponse);
+      }
+
       const content =
         rawContent.length > AGENT_TOOL_OUTPUT_MAX_CHARS
           ? rawContent.slice(

@@ -1,0 +1,338 @@
+/**
+ * Deterministic tool output summarizers.
+ *
+ * Each tool gets a summarizer that extracts key facts from its output and
+ * produces a human-readable `[SUMMARY]` block. The LLM receives the summary
+ * plus truncated raw JSON for detail lookups. Full JSON stays in the envelope
+ * for WS-1 citation checking.
+ *
+ * Feature flag: AI_TOOL_SUMMARIZERS=1 to enable (default OFF).
+ */
+
+/**
+ * Maximum characters of raw JSON appended after the summary.
+ * Keeps the combined content within AGENT_TOOL_OUTPUT_MAX_CHARS.
+ */
+export const SUMMARY_RAW_CHARS = 16_000;
+
+type Summarizer = (output: unknown) => string;
+
+// ─── Per-tool summarizers ──────────────────────────────────────────────
+
+function summarizePortfolioSummary(output: unknown): string {
+  const data = output as Record<string, unknown> | null;
+
+  if (!data || typeof data !== 'object') {
+    return '[SUMMARY] Portfolio summary: no data available.';
+  }
+
+  const holdings = Array.isArray(data.holdings) ? data.holdings : [];
+  const totalHoldings = data.totalHoldings ?? holdings.length;
+  const baseCurrency = data.baseCurrency ?? 'N/A';
+
+  const topHoldings = holdings
+    .slice(0, 5)
+    .map((h: Record<string, unknown>) => {
+      const symbol = h.symbol ?? 'N/A';
+      const alloc =
+        h.allocationPercentage != null ? `${h.allocationPercentage}%` : 'N/A';
+      return `  - ${symbol}: ${alloc} (${h.assetSubClass ?? h.assetClass ?? 'N/A'})`;
+    })
+    .join('\n');
+
+  return [
+    `[SUMMARY] Portfolio: ${totalHoldings} holdings in ${baseCurrency}.`,
+    topHoldings
+      ? `Top holdings:\n${topHoldings}`
+      : 'No holding details available.'
+  ].join('\n');
+}
+
+function summarizeAnalyzeRisk(output: unknown): string {
+  const data = output as Record<string, unknown> | null;
+
+  if (!data || typeof data !== 'object') {
+    return '[SUMMARY] Risk analysis: no data available.';
+  }
+
+  const risk = data.overallRisk as Record<string, unknown> | undefined;
+  const level = risk?.overallRiskLevel ?? 'UNKNOWN';
+  const concentration = risk?.concentrationRisk ?? 'N/A';
+  const diversification = risk?.diversificationScore ?? 'N/A';
+  const currency = risk?.currencyRisk ?? 'N/A';
+
+  const contributors = Array.isArray(data.riskContributors)
+    ? data.riskContributors
+        .slice(0, 5)
+        .map(
+          (c: Record<string, unknown>) =>
+            `  - ${c.name}: ${c.riskContribution} (${c.allocation}% allocation)`
+        )
+        .join('\n')
+    : '';
+
+  return [
+    `[SUMMARY] Risk level: ${level}. Concentration: ${concentration}, diversification: ${diversification}, currency risk: ${currency}.`,
+    contributors ? `Top risk contributors:\n${contributors}` : ''
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+function summarizePerformanceCompare(output: unknown): string {
+  const data = output as Record<string, unknown> | null;
+
+  if (!data || typeof data !== 'object') {
+    return '[SUMMARY] Performance comparison: no data available.';
+  }
+
+  const portfolio = data.portfolio as Record<string, unknown> | undefined;
+  const perfPct = portfolio?.netPerformancePercentage;
+  const dateRange = data.dateRange ?? 'N/A';
+  const comparison = data.comparison as Record<string, unknown> | undefined;
+  const outperforming = Array.isArray(comparison?.outperformingBenchmarks)
+    ? comparison.outperformingBenchmarks
+    : [];
+  const underperforming = Array.isArray(comparison?.underperformingBenchmarks)
+    ? comparison.underperformingBenchmarks
+    : [];
+
+  const lines = [
+    `[SUMMARY] Performance (${dateRange}): portfolio return ${perfPct != null ? `${(Number(perfPct) * 100).toFixed(1)}%` : 'N/A'}.`
+  ];
+
+  if (outperforming.length > 0) {
+    lines.push(`Outperforming: ${outperforming.join(', ')}.`);
+  }
+
+  if (underperforming.length > 0) {
+    lines.push(`Underperforming: ${underperforming.join(', ')}.`);
+  }
+
+  return lines.join(' ');
+}
+
+function summarizeTaxEstimate(output: unknown): string {
+  const data = output as Record<string, unknown> | null;
+
+  if (!data || typeof data !== 'object') {
+    return '[SUMMARY] Tax estimate: no data available.';
+  }
+
+  const realized = data.realizedGains as Record<string, unknown> | undefined;
+  const unrealized = data.unrealizedGains as
+    | Record<string, unknown>
+    | undefined;
+
+  const lines = ['[SUMMARY] Tax estimate:'];
+
+  if (realized) {
+    lines.push(
+      `  Realized gains — long-term: ${realized.longTerm ?? 0}, short-term: ${realized.shortTerm ?? 0}.`
+    );
+  }
+
+  if (unrealized) {
+    lines.push(
+      `  Unrealized gains — long-term: ${unrealized.longTerm ?? 0}, short-term: ${unrealized.shortTerm ?? 0}.`
+    );
+  }
+
+  return lines.join('\n');
+}
+
+function summarizeTransactionHistory(output: unknown): string {
+  const data = output as Record<string, unknown> | null;
+
+  if (!data || typeof data !== 'object') {
+    return '[SUMMARY] Transaction history: no data available.';
+  }
+
+  const transactions = Array.isArray(data.transactions)
+    ? data.transactions
+    : [];
+  const count = data.totalCount ?? transactions.length;
+
+  const typeCounts: Record<string, number> = {};
+
+  for (const t of transactions) {
+    const type = (t as Record<string, unknown>).type as string;
+
+    if (type) {
+      typeCounts[type] = (typeCounts[type] ?? 0) + 1;
+    }
+  }
+
+  const typeBreakdown = Object.entries(typeCounts)
+    .map(([type, n]) => `${type}: ${n}`)
+    .join(', ');
+
+  return [
+    `[SUMMARY] ${count} transactions.`,
+    typeBreakdown ? `Types: ${typeBreakdown}.` : ''
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+function summarizeComplianceCheck(output: unknown): string {
+  const data = output as Record<string, unknown> | null;
+
+  if (!data || typeof data !== 'object') {
+    return '[SUMMARY] Compliance check: no data available.';
+  }
+
+  const compliant = data.isCompliant;
+  const rules = Array.isArray(data.rules) ? data.rules : [];
+  const passed = rules.filter(
+    (r: Record<string, unknown>) => r.status === 'PASS'
+  ).length;
+  const failed = rules.filter(
+    (r: Record<string, unknown>) => r.status === 'FAIL'
+  ).length;
+
+  return `[SUMMARY] Compliance: ${compliant ? 'COMPLIANT' : 'NON-COMPLIANT'}. ${passed} rules passed, ${failed} rules failed out of ${rules.length} total.`;
+}
+
+function summarizeRebalanceSuggest(output: unknown): string {
+  const data = output as Record<string, unknown> | null;
+
+  if (!data || typeof data !== 'object') {
+    return '[SUMMARY] Rebalance suggestions: no data available.';
+  }
+
+  const suggestions = Array.isArray(data.suggestions) ? data.suggestions : [];
+
+  if (suggestions.length === 0) {
+    return '[SUMMARY] Rebalance: no suggestions. Portfolio may already be balanced.';
+  }
+
+  const lines = suggestions
+    .slice(0, 5)
+    .map(
+      (s: Record<string, unknown>) =>
+        `  - ${s.action} ${s.symbol}${s.amount != null ? ` ($${s.amount})` : ''}`
+    );
+
+  return [
+    `[SUMMARY] ${suggestions.length} rebalance suggestion(s):`,
+    ...lines
+  ].join('\n');
+}
+
+function summarizeSimulateTrades(output: unknown): string {
+  const data = output as Record<string, unknown> | null;
+
+  if (!data || typeof data !== 'object') {
+    return '[SUMMARY] Trade simulation: no data available.';
+  }
+
+  const sim = data.simulatedPortfolio as Record<string, unknown> | undefined;
+
+  if (!sim) {
+    return '[SUMMARY] Trade simulation completed. See raw data for details.';
+  }
+
+  return `[SUMMARY] Simulated portfolio: total value ${sim.totalValue ?? 'N/A'}, net change ${sim.netChange ?? 'N/A'}.`;
+}
+
+function summarizeStressTest(output: unknown): string {
+  const data = output as Record<string, unknown> | null;
+
+  if (!data || typeof data !== 'object') {
+    return '[SUMMARY] Stress test: no data available.';
+  }
+
+  const scenarios = Array.isArray(data.scenarios) ? data.scenarios : [];
+
+  if (scenarios.length === 0) {
+    return '[SUMMARY] Stress test completed. No scenario data available.';
+  }
+
+  const lines = scenarios
+    .slice(0, 5)
+    .map(
+      (s: Record<string, unknown>) =>
+        `  - ${s.name}: ${s.portfolioImpact != null ? `${(Number(s.portfolioImpact) * 100).toFixed(1)}%` : 'N/A'} impact`
+    );
+
+  return [
+    `[SUMMARY] Stress test — ${scenarios.length} scenario(s):`,
+    ...lines
+  ].join('\n');
+}
+
+function summarizeMarketDataLookup(output: unknown): string {
+  const data = output as Record<string, unknown> | null;
+
+  if (!data || typeof data !== 'object') {
+    return '[SUMMARY] Market data: no data available.';
+  }
+
+  const quotes = Array.isArray(data.quotes) ? data.quotes : [];
+
+  if (quotes.length === 0) {
+    return '[SUMMARY] Market data lookup returned no quotes.';
+  }
+
+  const lines = quotes
+    .slice(0, 10)
+    .map(
+      (q: Record<string, unknown>) =>
+        `  - ${q.symbol}: ${q.price ?? 'N/A'} ${q.currency ?? ''}`
+    );
+
+  return [`[SUMMARY] ${quotes.length} quote(s):`, ...lines].join('\n');
+}
+
+// ─── Registry ──────────────────────────────────────────────────────────
+
+const SUMMARIZERS: Record<string, Summarizer> = {
+  analyze_risk: summarizeAnalyzeRisk,
+  compliance_check: summarizeComplianceCheck,
+  get_portfolio_summary: summarizePortfolioSummary,
+  get_transaction_history: summarizeTransactionHistory,
+  market_data_lookup: summarizeMarketDataLookup,
+  performance_compare: summarizePerformanceCompare,
+  rebalance_suggest: summarizeRebalanceSuggest,
+  simulate_trades: summarizeSimulateTrades,
+  stress_test: summarizeStressTest,
+  tax_estimate: summarizeTaxEstimate
+};
+
+// ─── Public API ────────────────────────────────────────────────────────
+
+/**
+ * Summarize tool output for LLM context injection.
+ *
+ * Returns `[SUMMARY] ...key facts...\n\n--- RAW JSON ---\n{truncated}`.
+ * If the tool has no registered summarizer, returns raw JSON only.
+ * Summarizer errors fall back to raw JSON silently.
+ */
+export function summarizeToolOutput(toolName: string, output: unknown): string {
+  const rawJson =
+    typeof output === 'string' ? output : JSON.stringify(output ?? null);
+
+  const summarizer = SUMMARIZERS[toolName];
+
+  if (!summarizer) {
+    return rawJson;
+  }
+
+  let summary: string;
+
+  try {
+    summary = summarizer(output);
+  } catch {
+    // Summarizer failure: fall back to raw JSON
+    return rawJson;
+  }
+
+  // Append truncated raw JSON for detail lookups
+  const truncatedRaw =
+    rawJson.length > SUMMARY_RAW_CHARS
+      ? rawJson.slice(0, SUMMARY_RAW_CHARS) + '\n[RAW JSON truncated]'
+      : rawJson;
+
+  return `${summary}\n\n--- RAW JSON ---\n${truncatedRaw}`;
+}
