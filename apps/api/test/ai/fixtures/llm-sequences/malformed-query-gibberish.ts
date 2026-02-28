@@ -3,7 +3,7 @@ import type { LLMCompletionResponse } from '@ghostfolio/api/app/endpoints/ai/llm
 export const malformedQueryGibberish: LLMCompletionResponse[] = [
   {
     finishReason: 'stop',
-    text: "I'm sorry, but I don't understand your request. Could you rephrase it? I can only help with portfolio-related questions such as viewing your positions, analyzing risk, checking compliance, comparing performance, estimating taxes, suggesting rebalancing, simulating trades, and running stress tests.",
+    text: "That doesn't look like a clear question — could you rephrase what you'd like to know? I'm a financial portfolio assistant and can only help with investment topics such as portfolio summaries, risk analysis, performance comparisons, compliance checks, tax estimates, rebalancing, and trade simulations.",
     toolCalls: [],
     usage: { estimatedCostUsd: 0.001 }
   }

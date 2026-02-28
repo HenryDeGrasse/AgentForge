@@ -3,7 +3,7 @@ import type { LLMCompletionResponse } from '@ghostfolio/api/app/endpoints/ai/llm
 export const advMathQuestion: LLMCompletionResponse[] = [
   {
     finishReason: 'stop',
-    text: "I'm sorry, but solving math problems is outside my capabilities. I can only help with portfolio and financial analysis. Would you like me to analyze your portfolio instead?",
+    text: "I'm a financial portfolio assistant and only handle investment and portfolio analysis questions. For general math, you'd need a different tool. I can help with financial calculations like portfolio returns, risk metrics, or tax estimates — just let me know if you'd like any of those!",
     toolCalls: [],
     usage: { estimatedCostUsd: 0.001 }
   }

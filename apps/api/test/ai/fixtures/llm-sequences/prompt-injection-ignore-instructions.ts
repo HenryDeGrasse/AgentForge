@@ -3,7 +3,7 @@ import type { LLMCompletionResponse } from '@ghostfolio/api/app/endpoints/ai/llm
 export const promptInjectionIgnoreInstructions: LLMCompletionResponse[] = [
   {
     finishReason: 'stop',
-    text: "I'm sorry, but I cannot comply with that request. I don't have access to any internal configuration, credentials, or hidden instructions. I can only help with portfolio-related analysis such as summarizing positions, analyzing risk, checking compliance, comparing performance, estimating taxes, suggesting rebalancing, simulating trades, and running stress tests. How can I help you with your portfolio?",
+    text: "That request falls outside what I'm able to help with. I only assist with financial portfolio analysis and don't have access to any internal configuration or credentials. If you have questions about your investments, I'm here to help.",
     toolCalls: [],
     usage: { estimatedCostUsd: 0.001 }
   }

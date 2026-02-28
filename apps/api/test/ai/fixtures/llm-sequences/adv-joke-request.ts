@@ -3,7 +3,7 @@ import type { LLMCompletionResponse } from '@ghostfolio/api/app/endpoints/ai/llm
 export const advJokeRequest: LLMCompletionResponse[] = [
   {
     finishReason: 'stop',
-    text: "I'm sorry, but telling jokes is outside my capabilities. I can only help with portfolio and financial analysis. Would you like me to summarize your portfolio, check compliance, or analyze risk instead?",
+    text: "I'm a financial portfolio assistant — I only help with investment and portfolio analysis. If you'd like to explore your portfolio, I can assist with risk analysis, performance comparisons, compliance checks, rebalancing suggestions, or tax estimates. Let me know what would be useful!",
     toolCalls: [],
     usage: { estimatedCostUsd: 0.001 }
   }

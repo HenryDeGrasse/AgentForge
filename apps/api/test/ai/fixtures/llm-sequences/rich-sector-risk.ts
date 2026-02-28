@@ -9,7 +9,7 @@ export const richSectorRisk: LLMCompletionResponse[] = [
   },
   {
     finishReason: 'stop',
-    text: 'Based on the risk analysis, your portfolio has **elevated concentration** risk. Your equity allocation is 65% of the total portfolio, which is above the recommended diversification threshold. Consider reducing exposure to your largest positions to improve risk-adjusted returns.',
+    text: "Based on your risk analysis, your portfolio is rated **HIGH** risk with notable concentration issues:\n\n**Concentration flags:**\n- SYM-A accounts for **40%** of your portfolio — significantly above the 25% single-position threshold\n- Your top 3 holdings (SYM-A, SYM-B, SYM-C) represent 90% of total holdings\n\n**Asset class exposure:**\n- Equities: 70%\n- Bonds: 20%\n- Commodities: 10%\n\nWhile your sector breakdown isn't highly concentrated in a single sector, your equity-heavy allocation combined with SYM-A concentration creates meaningful concentration risk. Diversifying into more holdings would reduce this.",
     toolCalls: [],
     usage: { estimatedCostUsd: 0.001 }
   }

@@ -9,7 +9,7 @@ export const richHoldingsSummary: LLMCompletionResponse[] = [
   },
   {
     finishReason: 'stop',
-    text: 'Your portfolio contains 4 holdings with a total value of $10,000. The largest position is Asset A at 40% allocation, followed by Asset B at 30%. Your total portfolio value including cash is $10,500.',
+    text: 'Your portfolio has 4 holdings with a total value of $10,500 (including $500 cash).\n\nTop holdings by value:\n1. **SYM-A** (Asset A) — 40% allocation, $4,000 @ $150/share (26.67 shares)\n2. **SYM-B** (Asset B) — 30% allocation, $3,000 @ $120/share\n3. **SYM-C** (Asset C) — 20% allocation, $2,000 @ $100/share\n4. **SYM-D** (Asset D) — 10% allocation, $1,000 @ $50/share\n\nTotal invested portfolio value: $10,000 in holdings + $500 cash.',
     toolCalls: [],
     usage: { estimatedCostUsd: 0.001 }
   }

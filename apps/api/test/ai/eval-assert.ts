@@ -5,6 +5,8 @@
  * - Tool call count assertions via invocationLog
  * - Tool envelope structure assertions via LLM call history
  * - Auth scoping assertions via invocationLog
+ * - mustNotCallTools / forbiddenTools / mustContainAll / dataValueChecks
+ * - Replay metrics: toolAccuracy, toolEfficiency, contentPrecision
  */
 import type { ConfidenceLevel } from '@ghostfolio/api/app/endpoints/ai/contracts/final-response.schema';
 
@@ -136,8 +138,51 @@ export function assertEvalInvariants(
     }
   }
 
+  // mustContainAll — AND logic: every keyword must appear
+  if (expected.mustContainAll && expected.mustContainAll.length > 0) {
+    const missing = expected.mustContainAll.filter(
+      (phrase) => !normalizedResponse.includes(phrase.toLowerCase())
+    );
+
+    if (missing.length > 0) {
+      const truncated =
+        normalizedResponse.length > 300
+          ? normalizedResponse.slice(0, 300) + '…'
+          : normalizedResponse;
+
+      throw new Error(
+        `mustContainAll: missing [${missing.join(', ')}] in response: "${truncated}"`
+      );
+    }
+  }
+
   for (const forbiddenPhrase of expected.mustNotIncludeAny) {
-    expect(normalizedResponse).not.toContain(forbiddenPhrase.toLowerCase());
+    if (normalizedResponse.includes(forbiddenPhrase.toLowerCase())) {
+      const truncated =
+        normalizedResponse.length > 300
+          ? normalizedResponse.slice(0, 300) + '…'
+          : normalizedResponse;
+
+      throw new Error(
+        `mustNotIncludeAny: forbidden phrase "${forbiddenPhrase}" found in response: "${truncated}"`
+      );
+    }
+  }
+
+  // dataValueChecks — specific data values must appear in response
+  if (expected.dataValueChecks && expected.dataValueChecks.length > 0) {
+    for (const check of expected.dataValueChecks) {
+      if (!normalizedResponse.includes(check.valueInResponse.toLowerCase())) {
+        const truncated =
+          normalizedResponse.length > 300
+            ? normalizedResponse.slice(0, 300) + '…'
+            : normalizedResponse;
+
+        throw new Error(
+          `dataValueChecks[${check.label}]: expected "${check.valueInResponse}" not found in response: "${truncated}"`
+        );
+      }
+    }
   }
 
   if (expected.maxElapsedMs !== undefined) {
@@ -155,6 +200,35 @@ export function assertToolCallCounts(
   expected: EvalCaseExpect,
   invocationLog: ToolInvocationEntry[]
 ) {
+  // mustNotCallTools — zero tool calls is the primary invariant for adversarial cases
+  if (expected.mustNotCallTools === true) {
+    if (invocationLog.length > 0) {
+      const calledTools = [
+        ...new Set(invocationLog.map((e) => e.toolName))
+      ].join(', ');
+
+      throw new Error(
+        `mustNotCallTools: expected zero tool calls but got [${calledTools}]`
+      );
+    }
+
+    return; // No further checks needed
+  }
+
+  // forbiddenTools — specific tools must not have been called
+  if (expected.forbiddenTools && expected.forbiddenTools.length > 0) {
+    const calledSet = new Set(invocationLog.map((e) => e.toolName));
+    const illegalCalls = expected.forbiddenTools.filter((t) =>
+      calledSet.has(t)
+    );
+
+    if (illegalCalls.length > 0) {
+      throw new Error(
+        `forbiddenTools: these tools were called but should not have been: [${illegalCalls.join(', ')}]`
+      );
+    }
+  }
+
   expect(invocationLog.length).toBeGreaterThanOrEqual(expected.minToolCalls);
 
   if (expected.maxToolCalls !== undefined) {
@@ -298,6 +372,65 @@ export function assertLiveSources(
       }
     }
   }
+}
+
+// ─── Phase 5: Replay Metrics ──────────────────────────────────────────────────
+
+/**
+ * Tool accuracy: Jaccard similarity between expected and actual tool sets.
+ * 1.0 = perfect match, 0.0 = no overlap.
+ */
+export function toolAccuracy(expected: string[], actual: string[]): number {
+  if (expected.length === 0 && actual.length === 0) return 1.0;
+  if (expected.length === 0) return 0.0; // unexpected calls
+  if (actual.length === 0) return 0.0;
+
+  const expectedSet = new Set(expected);
+  const actualSet = new Set(actual);
+  const intersection = [...expectedSet].filter((t) => actualSet.has(t)).length;
+  const union = new Set([...expectedSet, ...actualSet]).size;
+
+  return union > 0 ? intersection / union : 0;
+}
+
+/**
+ * Tool efficiency: penalises unnecessary tool calls.
+ * Each call not in expectedTools subtracts 0.25.
+ */
+export function toolEfficiency(expected: string[], actual: string[]): number {
+  if (actual.length === 0) return expected.length === 0 ? 1.0 : 0.0;
+
+  const expectedSet = new Set(expected);
+  const unnecessary = actual.filter((t) => !expectedSet.has(t)).length;
+
+  return Math.max(0, 1.0 - unnecessary * 0.25);
+}
+
+/**
+ * Content precision: fraction of mustContainAll keywords found in response.
+ * Returns 1.0 when mustContainAll is empty (no assertions = perfect score).
+ */
+export function contentPrecision(
+  mustContainAll: string[] | undefined,
+  response: string
+): number {
+  if (!mustContainAll || mustContainAll.length === 0) return 1.0;
+
+  const lower = response.toLowerCase();
+  const found = mustContainAll.filter((k) =>
+    lower.includes(k.toLowerCase())
+  ).length;
+
+  return found / mustContainAll.length;
+}
+
+/** Aggregate metrics for one eval case — used in summary reporting. */
+export interface EvalCaseMetrics {
+  caseId: string;
+  contentPrecisionScore: number;
+  passed: boolean;
+  toolAccuracyScore: number;
+  toolEfficiencyScore: number;
 }
 
 // ─── Internal Helpers ──────────────────────────────────────────────────────────

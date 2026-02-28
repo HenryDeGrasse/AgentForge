@@ -11,7 +11,7 @@ export const richMarketData: LLMCompletionResponse[] = [
   },
   {
     finishReason: 'stop',
-    text: 'Asset A (SYM-A) is currently priced at $150 USD. It is classified as an equity in the Technology sector. The price has changed by +2.5% recently, an increase of $3.67.',
+    text: 'Here is the current market data for **SYM-A** (Asset A):\n\n- **Current price**: $150.00 USD\n- **Asset class**: Equity / Stock\n- **24h change**: +$3.67 (+2.5%)\n- **Sector**: Technology\n- **Country**: US\n- **Data source**: MANUAL\n- **Price last updated**: 2025-06-01\n\nWould you like to see historical price data or compare this to other holdings?',
     toolCalls: [],
     usage: { estimatedCostUsd: 0.001 }
   }

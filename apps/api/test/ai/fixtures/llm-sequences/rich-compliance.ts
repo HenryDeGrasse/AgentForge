@@ -9,7 +9,7 @@ export const richCompliance: LLMCompletionResponse[] = [
   },
   {
     finishReason: 'stop',
-    text: 'Your portfolio is currently non-compliant. The max single position rule is violated: SYM-A is at 40% allocation, which exceeds the 25% threshold. One rule was checked and it failed.',
+    text: 'Your portfolio is **NON_COMPLIANT** with standard compliance rules.\n\n**Failed rules:**\n- ❌ **Single position limit**: SYM-A is 40% of portfolio (limit: 25%) — exceeds by 15 percentage points\n\n**Passed rules:**\n- ✅ Asset class diversification\n- ✅ No restricted symbols\n- ✅ Minimum holdings count (4 ≥ 3)\n\n**Summary:** 1 rule failed out of 4 checked. To become compliant, consider reducing your SYM-A position below 25% of total portfolio value.',
     toolCalls: [],
     usage: { estimatedCostUsd: 0.001 }
   }

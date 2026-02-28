@@ -12,8 +12,8 @@ export const edgeMultipleQuestions: LLMCompletionResponse[] = [
   },
   {
     finishReason: 'stop',
-    text: 'Here are the results for both of your questions:\n\n**Portfolio Summary**: You have 4 holdings with a total value of $10,000.\n\n**Compliance Check**: Your portfolio is compliant with all current regulatory guidelines.',
+    text: '**Portfolio Summary:**\n4 holdings worth $10,500. Top position: SYM-A at 40% ($4,000).\n\n**Compliance Check:**\nStatus: **NON_COMPLIANT** — SYM-A at 40% exceeds the 25% single-position limit.',
     toolCalls: [],
-    usage: { estimatedCostUsd: 0.001 }
+    usage: { estimatedCostUsd: 0.002 }
   }
 ];

@@ -3,7 +3,7 @@ import type { LLMCompletionResponse } from '@ghostfolio/api/app/endpoints/ai/llm
 export const advRecipeRequest: LLMCompletionResponse[] = [
   {
     finishReason: 'stop',
-    text: "I'm sorry, but providing recipes is outside my capabilities. I can only help with portfolio and financial analysis. Would you like me to analyze your portfolio instead?",
+    text: "I only assist with financial portfolio analysis — recipes aren't in my wheelhouse! If you'd like help with your investment portfolio (risk analysis, performance benchmarking, tax estimates, rebalancing suggestions), I'm ready to assist.",
     toolCalls: [],
     usage: { estimatedCostUsd: 0.001 }
   }

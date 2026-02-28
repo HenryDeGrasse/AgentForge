@@ -4,12 +4,14 @@ export const richTaxEstimate: LLMCompletionResponse[] = [
   {
     finishReason: 'tool_calls',
     text: '',
-    toolCalls: [{ arguments: {}, id: 'tc-1', name: 'tax_estimate' }],
+    toolCalls: [
+      { arguments: { taxYear: 2025 }, id: 'tc-1', name: 'tax_estimate' }
+    ],
     usage: { estimatedCostUsd: 0.001 }
   },
   {
     finishReason: 'stop',
-    text: 'For tax year 2025, your estimated realized gains total $340. You have $140 in short-term gains from 2 transactions and $200 in long-term gains from 1 transaction. There are no tax loss harvesting candidates currently available.',
+    text: "Here's your estimated tax situation for 2025 (US jurisdiction, FIFO basis):\n\n**Realized gains:**\n- Long-term gains: +$200 (held > 12 months)\n- Short-term gains: +$140 (held < 12 months)\n- **Total net realized gain: $340** across 3 transactions\n\n**Tax-loss harvesting candidates:** None identified (all positions are profitable).\n\n**Assumptions:** FIFO cost basis method; short-term = held < 12 months.\n\n⚠️ This is an estimate only — consult a tax professional before filing.",
     toolCalls: [],
     usage: { estimatedCostUsd: 0.001 }
   }

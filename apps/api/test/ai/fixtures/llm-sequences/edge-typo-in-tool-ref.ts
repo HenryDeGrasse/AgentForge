@@ -1,5 +1,6 @@
 import type { LLMCompletionResponse } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
 
+// Agent understands "complience" = "compliance" and routes to compliance_check
 export const edgeTypoInToolRef: LLMCompletionResponse[] = [
   {
     finishReason: 'tool_calls',
@@ -9,7 +10,7 @@ export const edgeTypoInToolRef: LLMCompletionResponse[] = [
   },
   {
     finishReason: 'stop',
-    text: 'I ran the compliance check for you. Your portfolio is **compliant** with all current regulatory guidelines. No violations were detected.',
+    text: '**Compliance Check:**\nYour portfolio status is **NON_COMPLIANT** with standard investment guidelines.\n\n- ❌ Single-position limit: SYM-A is at 40% (regulation threshold: 25%)\n- ✅ All other checks passed\n\nTo become compliant, reduce your SYM-A position below 25%.',
     toolCalls: [],
     usage: { estimatedCostUsd: 0.001 }
   }
