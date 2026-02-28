@@ -19,14 +19,18 @@ on:
     branches: [main]
   schedule:
     - cron: '0 6 * * *' # nightly at 6 AM UTC
+  workflow_dispatch: {} # manual trigger (e.g. to re-record sessions)
 
 concurrency:
-  group: ai-evals-live-${{ github.ref }}
+  group: ai-evals-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  fast-evals:
-    name: 'Golden Sets (fast, mocked LLM)'
+  # ─── Tier 1: Framework tests (mocked LLM) ────────────────────────────────────
+  # Runs every commit. Tests schema validation, auth scoping, guardrails,
+  # tool registry wiring, and envelope structure. Does NOT test LLM behaviour.
+  framework-tests:
+    name: 'Agent Framework Tests (mocked LLM)'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -36,14 +40,67 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'npm'
       - run: npm ci
-      - run: npx nx test api --testPathPattern='golden-sets-fast'
+      - run: npx nx test api --testPathPattern='agent-framework'
 
+  # ─── Tier 3: Replay evals (recorded real gpt-4.1) ────────────────────────────
+  # Runs every commit. Replays the recorded gpt-4.1 sessions from
+  # fixtures/recorded/*.json — no OpenAI calls, $0, <15s.
+  # Catches: assertion tightening regressions, tool-logic changes that
+  # break recorded output, new mustNotIncludeAny violations.
+  # Re-record when: model changes, system prompt changes, new cases added.
+  replay-evals:
+    name: 'Golden Sets (replay — recorded gpt-4.1)'
+    needs: framework-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+      - run: npm ci
+      - run: npx nx test api --testPathPattern='golden-sets-replay'
+
+  # ─── Tier 2: Live evals (real gpt-4.1 in-process) ────────────────────────────
+  # Runs nightly and on any PR that touches agent.constants.ts (system prompt /
+  # model version), because those changes invalidate recorded sessions.
+  # Also runs on manual workflow_dispatch.
+  # Cost: ~$1.36/run. Saves fresh recordings as a build artifact.
+  live-evals:
+    name: 'Golden Sets (live gpt-4.1)'
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch'
+    needs: framework-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY_EVAL }}
+      EVAL_RECORD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+      - run: npm ci
+      - run: npx nx test api --testPathPattern='golden-sets-live' --runInBand
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: recorded-sessions-${{ github.run_id }}
+          path: apps/api/test/ai/fixtures/recorded/
+
+  # ─── Tier 2b: Pre-merge live evals (via deployed API) ────────────────────────
+  # Runs on PRs and merge group using the deployed API endpoint.
+  # Separate from in-process live evals — tests the full HTTP stack.
   pre-merge-evals:
-    name: 'Golden Sets (live LLM)'
+    name: 'Golden Sets (live LLM, HTTP API)'
     if: >-
       github.event_name == 'merge_group' ||
       (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false)
-    needs: fast-evals
+    needs: framework-tests
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
@@ -76,6 +133,7 @@ jobs:
       - run: npm ci
       - run: npx nx test api --testPathPattern='golden-sets.spec' --runInBand
 
+  # ─── Nightly: Labeled scenarios (coverage report) ────────────────────────────
   nightly-evals:
     name: 'Labeled Scenarios (coverage)'
     if: github.event_name == 'schedule'

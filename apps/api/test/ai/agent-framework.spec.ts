@@ -1,9 +1,12 @@
 /**
- * Golden Sets — Fast Tier (mocked LLM)
+ * Agent Framework Tests (mocked LLM)
  *
  * Runs every commit, no env gate, <30s budget.
- * Tests actual ReactAgentService + ToolRegistry + ResponseVerifierService
- * with deterministic tool stubs and scripted LLM completions.
+ * Tests ReactAgentService + ToolRegistry + ResponseVerifierService plumbing:
+ *   schema validation, auth scoping, guardrails, envelope structure, routing.
+ *
+ * These are NOT golden-set evals — the LLM is a scripted mock so LLM
+ * behaviour is not tested here. See golden-sets-live.spec.ts for that.
  *
  * Cases are loaded at MODULE SCOPE — Jest registers it() blocks at parse time.
  */
@@ -92,7 +95,7 @@ const metricsLog: EvalCaseMetrics[] = [];
 
 jest.setTimeout(30_000);
 
-describe('Golden Sets (fast)', () => {
+describe('Agent Framework Tests', () => {
   const verifier = new ResponseVerifierService();
 
   afterEach(() => {
