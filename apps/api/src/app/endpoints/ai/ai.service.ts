@@ -354,6 +354,17 @@ export class AiService {
     try {
       // 4. Run the streaming agent
       const requestId = randomUUID();
+
+      // Start Langfuse trace (mirrors the non-streaming chat() path)
+      const { traceId: streamTraceId, end: endStreamTrace } =
+        this.langfuseService.startTrace({
+          conversationId,
+          message,
+          requestId,
+          toolNames: routedToolNames,
+          userId
+        });
+
       let agentResult: SseAgentDoneEvent['result'] | undefined;
 
       for await (const event of this.reactAgentService.runStreaming({
@@ -392,8 +403,22 @@ export class AiService {
 
       const verified = this.responseVerifierService.verify(
         agentResult,
-        invokedToolNames
+        invokedToolNames,
+        streamTraceId
       );
+
+      // Finalise Langfuse trace with outcome metadata
+      endStreamTrace({
+        confidence: verified.confidence,
+        elapsedMs: verified.elapsedMs,
+        estimatedCostUsd: verified.estimatedCostUsd,
+        invokedToolNames: verified.invokedToolNames,
+        iterations: verified.iterations,
+        requiresHumanReview: verified.requiresHumanReview,
+        status: verified.status,
+        toolCalls: verified.toolCalls,
+        warnings: verified.warnings
+      });
 
       verified.chartData = this.chartDataExtractorService.extract(
         agentResult.executedTools ?? []
@@ -479,10 +504,12 @@ export class AiService {
           estimatedCostUsd: verified.estimatedCostUsd,
           invokedToolNames: verified.invokedToolNames,
           iterations: verified.iterations,
+          requiresHumanReview: verified.requiresHumanReview,
           response: verified.response,
           sources: verified.sources,
           status: verified.status,
           toolCalls: verified.toolCalls,
+          traceId: verified.traceId,
           warnings: verified.warnings
         }
       };
