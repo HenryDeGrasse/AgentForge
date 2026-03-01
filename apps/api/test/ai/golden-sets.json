@@ -45,7 +45,8 @@
           "expectStatus": "success",
           "dataFieldsPresent": ["topHoldings", "totals"]
         }
-      ]
+      ],
+      "maxElapsedMs": 5000
     },
     "meta": {
       "stage": "golden",
@@ -90,7 +91,8 @@
           "label": "txType",
           "valueInResponse": "BUY"
         }
-      ]
+      ],
+      "maxElapsedMs": 5000
     },
     "meta": {
       "stage": "golden",
@@ -142,7 +144,8 @@
           "label": "riskMention",
           "valueInResponse": "risk"
         }
-      ]
+      ],
+      "maxElapsedMs": 5000
     },
     "meta": {
       "stage": "golden",
@@ -180,7 +183,8 @@
           "label": "dollarSign",
           "valueInResponse": "$"
         }
-      ]
+      ],
+      "maxElapsedMs": 5000
     },
     "meta": {
       "stage": "golden",
@@ -218,7 +222,8 @@
           "label": "pctSign",
           "valueInResponse": "%"
         }
-      ]
+      ],
+      "maxElapsedMs": 5000
     },
     "meta": {
       "stage": "golden",
@@ -301,7 +306,8 @@
           "label": "action",
           "valueInResponse": "sell"
         }
-      ]
+      ],
+      "maxElapsedMs": 5000
     },
     "meta": {
       "stage": "golden",
@@ -339,7 +345,8 @@
           "label": "dollarSign",
           "valueInResponse": "$"
         }
-      ]
+      ],
+      "maxElapsedMs": 5000
     },
     "meta": {
       "stage": "golden",
@@ -392,7 +399,8 @@
           "label": "buySymbol",
           "valueInResponse": "BND"
         }
-      ]
+      ],
+      "maxElapsedMs": 5000
     },
     "meta": {
       "stage": "golden",
@@ -436,7 +444,8 @@
           "label": "scenario",
           "valueInResponse": "scenario"
         }
-      ]
+      ],
+      "maxElapsedMs": 5000
     },
     "meta": {
       "stage": "golden",
@@ -508,7 +517,8 @@
         "unable to access",
         "undefined",
         "NaN"
-      ]
+      ],
+      "maxElapsedMs": 15000
     },
     "meta": {
       "stage": "golden",
@@ -540,7 +550,8 @@
         "unable to access",
         "undefined",
         "NaN"
-      ]
+      ],
+      "maxElapsedMs": 15000
     },
     "meta": {
       "stage": "golden",
@@ -1036,7 +1047,8 @@
           "label": "dollarSign",
           "valueInResponse": "$"
         }
-      ]
+      ],
+      "maxElapsedMs": 5000
     },
     "meta": {
       "stage": "golden",
@@ -1066,7 +1078,8 @@
           "label": "txType",
           "valueInResponse": "buy"
         }
-      ]
+      ],
+      "maxElapsedMs": 5000
     },
     "meta": {
       "stage": "golden",
@@ -1107,7 +1120,8 @@
           "label": "riskDetail",
           "valueInResponse": "concentrat"
         }
-      ]
+      ],
+      "maxElapsedMs": 5000
     },
     "meta": {
       "stage": "golden",
@@ -1137,7 +1151,8 @@
           "label": "dollarSign",
           "valueInResponse": "$"
         }
-      ]
+      ],
+      "maxElapsedMs": 5000
     },
     "meta": {
       "stage": "golden",
@@ -1437,7 +1452,8 @@
           "label": "riskMention",
           "valueInResponse": "risk"
         }
-      ]
+      ],
+      "maxElapsedMs": 15000
     },
     "meta": {
       "stage": "golden",
@@ -1467,7 +1483,8 @@
           "label": "dollarSign",
           "valueInResponse": "$"
         }
-      ]
+      ],
+      "maxElapsedMs": 15000
     },
     "meta": {
       "stage": "golden",
@@ -1503,7 +1520,8 @@
           "label": "pctSign",
           "valueInResponse": "%"
         }
-      ]
+      ],
+      "maxElapsedMs": 15000
     },
     "meta": {
       "stage": "golden",
@@ -1527,7 +1545,8 @@
       "requiredTools": ["tax_estimate", "simulate_trades"],
       "mustIncludeAny": ["tax", "simulat", "sell", "loss", "gain"],
       "mustContainAll": ["tax", "simulat"],
-      "mustNotIncludeAny": ["undefined", "NaN", "[object Object]"]
+      "mustNotIncludeAny": ["undefined", "NaN", "[object Object]"],
+      "maxElapsedMs": 15000
     },
     "meta": {
       "stage": "golden",
@@ -1555,7 +1574,8 @@
       ],
       "mustIncludeAny": ["portfolio", "risk", "compliance", "compliant"],
       "mustContainAll": ["portfolio", "risk", "complian"],
-      "mustNotIncludeAny": ["undefined", "NaN", "[object Object]"]
+      "mustNotIncludeAny": ["undefined", "NaN", "[object Object]"],
+      "maxElapsedMs": 15000
     },
     "meta": {
       "stage": "golden",
@@ -1633,7 +1653,8 @@
           "label": "pctSign",
           "valueInResponse": "%"
         }
-      ]
+      ],
+      "maxElapsedMs": 5000
     },
     "meta": {
       "stage": "golden",
@@ -1663,7 +1684,8 @@
           "label": "status",
           "valueInResponse": "non-compliant"
         }
-      ]
+      ],
+      "maxElapsedMs": 5000
     },
     "meta": {
       "stage": "golden",
@@ -1693,7 +1715,8 @@
           "label": "pctSign",
           "valueInResponse": "%"
         }
-      ]
+      ],
+      "maxElapsedMs": 5000
     },
     "meta": {
       "stage": "golden",
@@ -1762,7 +1785,8 @@
           "label": "dollarSign",
           "valueInResponse": "$"
         }
-      ]
+      ],
+      "maxElapsedMs": 15000
     },
     "meta": {
       "stage": "golden",
@@ -1798,7 +1822,8 @@
           "label": "tickerSymbol",
           "valueInResponse": "TSLA"
         }
-      ]
+      ],
+      "maxElapsedMs": 5000
     },
     "meta": {
       "stage": "golden",
@@ -1806,6 +1831,361 @@
       "subcategory": "unowned-symbol",
       "difficulty": "basic",
       "description": "Price lookup for a symbol not in portfolio \u2014 should use market_data_lookup and return price data",
+      "addedFrom": "gap-analysis"
+    }
+  },
+  {
+    "id": "rich-crypto-allocation",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "What percentage of my portfolio is in crypto?",
+      "toolNames": ["get_portfolio_summary"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "maxToolCalls": 2,
+      "requiredTools": ["get_portfolio_summary"],
+      "mustIncludeAny": ["crypto", "bitcoin", "BTC", "%", "percent"],
+      "mustNotIncludeAny": ["technical issue", "unable to access", "undefined"],
+      "dataValueChecks": [
+        {
+          "label": "percentSign",
+          "valueInResponse": "%"
+        }
+      ],
+      "maxElapsedMs": 5000
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "single-tool",
+      "subcategory": "portfolio-summary",
+      "difficulty": "basic",
+      "description": "Crypto allocation query \u2014 must return percentage breakdown",
+      "addedFrom": "gap-analysis"
+    }
+  },
+  {
+    "id": "rich-simulate-buy-only",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Simulate buying 20 shares of AAPL",
+      "toolNames": ["simulate_trades"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "maxToolCalls": 2,
+      "requiredTools": ["simulate_trades"],
+      "mustIncludeAny": ["AAPL", "simulat", "buy"],
+      "mustNotIncludeAny": ["technical issue", "unable to access", "undefined"],
+      "dataValueChecks": [
+        {
+          "label": "buySymbol",
+          "valueInResponse": "AAPL"
+        }
+      ],
+      "maxElapsedMs": 5000
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "single-tool",
+      "subcategory": "simulate-trades",
+      "difficulty": "basic",
+      "description": "Buy-only trade simulation for AAPL",
+      "addedFrom": "gap-analysis"
+    }
+  },
+  {
+    "id": "rich-ytd-benchmark",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "How has my portfolio performed versus the S&P 500 this year?",
+      "toolNames": ["performance_compare"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "maxToolCalls": 2,
+      "requiredTools": ["performance_compare"],
+      "mustIncludeAny": ["S&P", "benchmark", "performance", "%", "return"],
+      "mustNotIncludeAny": ["technical issue", "unable to access", "undefined"],
+      "dataValueChecks": [
+        {
+          "label": "percentSign",
+          "valueInResponse": "%"
+        }
+      ],
+      "maxElapsedMs": 5000
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "single-tool",
+      "subcategory": "performance",
+      "difficulty": "basic",
+      "description": "YTD performance vs S&P 500 benchmark",
+      "addedFrom": "gap-analysis"
+    }
+  },
+  {
+    "id": "edge-empty-portfolio-rebalance",
+    "profile": "empty",
+    "liveEligible": false,
+    "request": {
+      "message": "Suggest a rebalance for my portfolio",
+      "toolNames": ["rebalance_suggest", "get_portfolio_summary"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "medium",
+      "minToolCalls": 1,
+      "maxToolCalls": 3,
+      "requiredTools": [],
+      "mustIncludeAny": [
+        "no holdings",
+        "empty",
+        "no positions",
+        "nothing to rebalance",
+        "add",
+        "first"
+      ],
+      "mustNotIncludeAny": ["technical issue", "undefined", "NaN"]
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "edge-case",
+      "subcategory": "empty-data",
+      "difficulty": "intermediate",
+      "description": "Rebalance suggestion on empty portfolio \u2014 must not crash, must give helpful guidance",
+      "addedFrom": "gap-analysis"
+    }
+  },
+  {
+    "id": "edge-single-holding",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Am I too concentrated in any one stock?",
+      "toolNames": ["analyze_risk"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "maxToolCalls": 2,
+      "requiredTools": ["analyze_risk"],
+      "mustIncludeAny": ["concentrat", "risk", "allocation", "%"],
+      "mustNotIncludeAny": ["technical issue", "unable to access", "undefined"],
+      "dataValueChecks": [
+        {
+          "label": "riskKeyword",
+          "valueInResponse": "concentrat"
+        }
+      ],
+      "maxElapsedMs": 5000
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "edge-case",
+      "subcategory": "risk-analysis",
+      "difficulty": "basic",
+      "description": "Concentration risk query \u2014 must reference actual allocation percentages",
+      "addedFrom": "gap-analysis"
+    }
+  },
+  {
+    "id": "edge-boundary-date-range",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Show me transactions from exactly 5 years ago",
+      "toolNames": ["get_transaction_history"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "medium",
+      "minToolCalls": 1,
+      "maxToolCalls": 2,
+      "requiredTools": ["get_transaction_history"],
+      "mustIncludeAny": [
+        "transaction",
+        "history",
+        "no transactions",
+        "none",
+        "found",
+        "result"
+      ],
+      "mustNotIncludeAny": [
+        "technical issue",
+        "unable to access",
+        "undefined",
+        "crash"
+      ],
+      "maxElapsedMs": 5000
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "edge-case",
+      "subcategory": "transaction-history",
+      "difficulty": "intermediate",
+      "description": "Boundary date range query \u2014 agent must pick a date, not crash on unusual timeframe",
+      "addedFrom": "gap-analysis"
+    }
+  },
+  {
+    "id": "edge-crypto-only-tax",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "What are the tax implications if I sell all my Bitcoin?",
+      "toolNames": ["tax_estimate", "get_portfolio_summary"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "medium",
+      "minToolCalls": 1,
+      "maxToolCalls": 3,
+      "requiredTools": ["tax_estimate"],
+      "mustIncludeAny": ["bitcoin", "BTC", "tax", "gain", "capital"],
+      "mustNotIncludeAny": ["technical issue", "unable to access", "undefined"],
+      "maxElapsedMs": 5000
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "edge-case",
+      "subcategory": "tax",
+      "difficulty": "intermediate",
+      "description": "Crypto-specific tax query \u2014 must handle crypto asset class correctly",
+      "addedFrom": "gap-analysis"
+    }
+  },
+  {
+    "id": "edge-ambiguous-timeframe",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "How have I been doing recently?",
+      "toolNames": ["performance_compare"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "medium",
+      "minToolCalls": 1,
+      "maxToolCalls": 2,
+      "requiredTools": ["performance_compare"],
+      "mustIncludeAny": ["performance", "%", "return", "period"],
+      "mustNotIncludeAny": ["technical issue", "unable to access", "undefined"],
+      "maxElapsedMs": 5000
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "edge-case",
+      "subcategory": "performance",
+      "difficulty": "intermediate",
+      "description": "Ambiguous timeframe \u2014 agent must pick a reasonable default period, not refuse",
+      "addedFrom": "gap-analysis"
+    }
+  },
+  {
+    "id": "edge-compliance-clean-portfolio",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Is my portfolio compliant with standard ESG guidelines?",
+      "toolNames": ["compliance_check"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "maxToolCalls": 2,
+      "requiredTools": ["compliance_check"],
+      "mustIncludeAny": ["compliant", "compliance", "rule", "ESG", "check"],
+      "mustNotIncludeAny": ["technical issue", "unable to access", "undefined"],
+      "maxElapsedMs": 5000
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "edge-case",
+      "subcategory": "compliance",
+      "difficulty": "intermediate",
+      "description": "ESG compliance query \u2014 must run compliance check and report result",
+      "addedFrom": "gap-analysis"
+    }
+  },
+  {
+    "id": "multi-tax-then-rebalance",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "What would be the tax hit if I rebalance to 60/40 stocks and bonds?",
+      "toolNames": [
+        "tax_estimate",
+        "rebalance_suggest",
+        "get_portfolio_summary"
+      ]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "medium",
+      "minToolCalls": 2,
+      "maxToolCalls": 4,
+      "requiredTools": ["tax_estimate", "rebalance_suggest"],
+      "mustIncludeAny": ["tax", "rebalanc", "60", "40"],
+      "mustNotIncludeAny": ["technical issue", "unable to access", "undefined"],
+      "dataValueChecks": [
+        {
+          "label": "taxKeyword",
+          "valueInResponse": "tax"
+        }
+      ],
+      "maxElapsedMs": 15000
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "multi-tool",
+      "subcategory": "multi-tool-orchestration",
+      "difficulty": "advanced",
+      "description": "Tax impact of rebalancing \u2014 must call both tax_estimate and rebalance_suggest",
+      "addedFrom": "gap-analysis"
+    }
+  },
+  {
+    "id": "multi-market-then-simulate",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Check the current price of MSFT then simulate what happens if I buy 10 more shares",
+      "toolNames": ["market_data_lookup", "simulate_trades"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 2,
+      "maxToolCalls": 3,
+      "requiredTools": ["market_data_lookup", "simulate_trades"],
+      "mustIncludeAny": ["MSFT", "price", "simulat"],
+      "mustNotIncludeAny": ["technical issue", "unable to access", "undefined"],
+      "dataValueChecks": [
+        {
+          "label": "symbol",
+          "valueInResponse": "MSFT"
+        }
+      ],
+      "maxElapsedMs": 15000
+    },
+    "meta": {
+      "stage": "golden",
+      "category": "multi-tool",
+      "subcategory": "multi-tool-orchestration",
+      "difficulty": "intermediate",
+      "description": "Market lookup then trade simulation \u2014 two sequential tool calls with context carry-through",
       "addedFrom": "gap-analysis"
     }
   }

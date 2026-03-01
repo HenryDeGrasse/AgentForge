@@ -359,4 +359,62 @@ describe('ResponseVerifierService', () => {
       expect(result.guardrail).toBeUndefined();
     });
   });
+
+  // ─── requiresHumanReview ────────────────────────────────────────────────────
+
+  describe('requiresHumanReview', () => {
+    it('is false for a clean completed response with tool calls', () => {
+      const input: ReactAgentRunResult = {
+        ...BASE_RESULT,
+        status: 'completed',
+        toolCalls: 1,
+        executedTools: [
+          {
+            toolName: 'get_portfolio_summary',
+            envelope: { status: 'success', data: {} }
+          }
+        ]
+      };
+
+      const result = service.verify(input, ['get_portfolio_summary']);
+
+      expect(result.requiresHumanReview).toBe(false);
+    });
+
+    it('is true when confidence is low (failed status)', () => {
+      const input: ReactAgentRunResult = {
+        ...BASE_RESULT,
+        status: 'failed',
+        response: 'An error occurred.'
+      };
+
+      const result = service.verify(input, []);
+
+      expect(result.requiresHumanReview).toBe(true);
+    });
+
+    it('is true when a guardrail fired', () => {
+      const input: ReactAgentRunResult = {
+        ...BASE_RESULT,
+        guardrail: 'TIMEOUT',
+        status: 'partial'
+      };
+
+      const result = service.verify(input, []);
+
+      expect(result.requiresHumanReview).toBe(true);
+    });
+
+    it('includes traceId passed in from caller', () => {
+      const result = service.verify(BASE_RESULT, [], 'trace-abc-123');
+
+      expect(result.traceId).toBe('trace-abc-123');
+    });
+
+    it('defaults traceId to empty string when not provided', () => {
+      const result = service.verify(BASE_RESULT, []);
+
+      expect(result.traceId).toBe('');
+    });
+  });
 });

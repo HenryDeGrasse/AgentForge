@@ -221,7 +221,21 @@ export class OpenAiClientService implements LLMClient {
       throw new Error('Missing OPENAI_API_KEY environment variable.');
     }
 
-    this.openAIClient = new OpenAI({ apiKey });
+    // Route through Helicone proxy when key is present.
+    // Helicone captures every LLM call: tokens, cost, latency — no code changes needed.
+    const heliconeKey = process.env['HELICONE_API_KEY'];
+
+    this.openAIClient = new OpenAI({
+      apiKey,
+      ...(heliconeKey
+        ? {
+            baseURL: 'https://oai.hconeai.com/v1',
+            defaultHeaders: {
+              'Helicone-Auth': `Bearer ${heliconeKey}`
+            }
+          }
+        : {})
+    });
 
     return this.openAIClient;
   }

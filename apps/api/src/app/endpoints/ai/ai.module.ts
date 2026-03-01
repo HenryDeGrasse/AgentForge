@@ -46,6 +46,7 @@ import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
 import { ChartDataExtractorService } from './chart-data-extractor.service';
 import { ChatConversationService } from './chat-conversation.service';
+import { LangfuseService } from './observability/langfuse.service';
 import { ResponseVerifierService } from './verification/response-verifier.service';
 
 @Module({
@@ -74,6 +75,7 @@ import { ResponseVerifierService } from './verification/response-verifier.servic
     ActionExtractorService,
     AiRateLimiterGuard,
     AiService,
+    LangfuseService,
     ChartDataExtractorService,
     ChatConversationService,
     CurrentRateService,

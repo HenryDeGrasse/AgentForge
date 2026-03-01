@@ -38,6 +38,8 @@ const STUB_VERIFIED: VerifiedResponse = {
   chartData: [],
   confidence: 'high',
   invokedToolNames: ['get_portfolio_summary'],
+  requiresHumanReview: false,
+  traceId: '',
   warnings: []
 };
 
@@ -104,6 +106,11 @@ function buildService(
   return new AiService(
     { extract: jest.fn().mockReturnValue([]) } as any,
     { extract: jest.fn().mockReturnValue([]) } as any,
+    {
+      startTrace: jest.fn().mockReturnValue({ traceId: '', end: jest.fn() }),
+      addScore: jest.fn(),
+      flush: jest.fn()
+    } as any,
     { complete: jest.fn() } as LLMClient,
     { getDetails: jest.fn() } as any as PortfolioService,
     prismaService,

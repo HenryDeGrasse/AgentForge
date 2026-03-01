@@ -20,7 +20,8 @@ export class ResponseVerifierService {
    */
   public verify(
     result: ReactAgentRunResult,
-    invokedToolNames: string[]
+    invokedToolNames: string[],
+    traceId = ''
   ): VerifiedResponse {
     const confidence = this.computeConfidence(result);
     const warnings = this.collectWarnings(result);
@@ -31,6 +32,17 @@ export class ResponseVerifierService {
     const response = result.response?.trim()
       ? result.response
       : SAFE_FALLBACK_RESPONSE;
+
+    // Human review is recommended when:
+    //  - confidence is low (failed status, tool errors)
+    //  - a guardrail fired (cost, timeout, circuit breaker, max iterations)
+    //  - the verifier detected unbacked portfolio claims
+    const requiresHumanReview =
+      confidence === 'low' ||
+      result.guardrail !== undefined ||
+      warnings.some((w) =>
+        w.includes('portfolio-specific claims but no data tools')
+      );
 
     return {
       actions: [],
@@ -43,10 +55,12 @@ export class ResponseVerifierService {
         : {}),
       invokedToolNames,
       iterations: result.iterations,
+      requiresHumanReview,
       response,
       sources,
       status: result.status,
       toolCalls: result.toolCalls,
+      traceId,
       warnings
     };
   }

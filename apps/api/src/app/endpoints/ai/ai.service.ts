@@ -17,6 +17,7 @@ import {
   LLMClient,
   LLMMessage
 } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
+import { LangfuseService } from '@ghostfolio/api/app/endpoints/ai/observability/langfuse.service';
 import { ToolRouterService } from '@ghostfolio/api/app/endpoints/ai/routing/tool-router.service';
 import { ResponseVerifierService } from '@ghostfolio/api/app/endpoints/ai/verification/response-verifier.service';
 import { PortfolioService } from '@ghostfolio/api/app/portfolio/portfolio.service';
@@ -65,6 +66,7 @@ export class AiService {
   public constructor(
     private readonly actionExtractorService: ActionExtractorService,
     private readonly chartDataExtractorService: ChartDataExtractorService,
+    private readonly langfuseService: LangfuseService,
     @Inject(LLM_CLIENT_TOKEN)
     private readonly llmClient: LLMClient,
     private readonly portfolioService: PortfolioService,
@@ -158,6 +160,16 @@ export class AiService {
 
     // 3. Run the agent (outside any transaction — failure = no DB writes)
     const requestId = randomUUID();
+
+    // Start Langfuse trace (no-ops when LANGFUSE_PUBLIC_KEY is not set)
+    const { traceId, end: endTrace } = this.langfuseService.startTrace({
+      conversationId,
+      message,
+      requestId,
+      toolNames: routedToolNames,
+      userId
+    });
+
     const result = await this.reactAgentService.run({
       prompt: message,
       priorMessages,
@@ -175,8 +187,22 @@ export class AiService {
 
     const verified = this.responseVerifierService.verify(
       result,
-      invokedToolNames
+      invokedToolNames,
+      traceId
     );
+
+    // Finalise the Langfuse trace with outcome metadata
+    endTrace({
+      confidence: verified.confidence,
+      elapsedMs: verified.elapsedMs,
+      estimatedCostUsd: verified.estimatedCostUsd,
+      invokedToolNames: verified.invokedToolNames,
+      iterations: verified.iterations,
+      requiresHumanReview: verified.requiresHumanReview,
+      status: verified.status,
+      toolCalls: verified.toolCalls,
+      warnings: verified.warnings
+    });
 
     // 4b. Extract chart data from tool results
     const chartData = this.chartDataExtractorService.extract(

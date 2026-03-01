@@ -13,6 +13,7 @@ import { Test } from '@nestjs/testing';
 import { StatusCodes, getReasonPhrase } from 'http-status-codes';
 
 import { AiService } from './ai.service';
+import { LangfuseService } from './observability/langfuse.service';
 
 /** Builds a minimal prismaService stub that records calls and satisfies the chat() transaction. */
 function buildPrismaStub(convId = 'test-conv-id') {
@@ -60,6 +61,8 @@ function buildService({
     ...r,
     chartData: [],
     confidence: 'high',
+    requiresHumanReview: false,
+    traceId: '',
     warnings: [],
     sources: []
   })),
@@ -69,6 +72,13 @@ function buildService({
   return new AiService(
     { extract: jest.fn().mockReturnValue([]) } as any,
     { extract: jest.fn().mockReturnValue([]) } as any,
+    {
+      startTrace: jest
+        .fn()
+        .mockReturnValue({ traceId: 'test-trace', end: jest.fn() }),
+      addScore: jest.fn(),
+      flush: jest.fn()
+    } as any,
     { complete: llmComplete } as LLMClient,
     { getDetails: portfolioGetDetails } as any as PortfolioService,
     prismaService as any as PrismaService,
@@ -107,6 +117,16 @@ describe('AiService', () => {
         ActionExtractorService,
         AiService,
         ChartDataExtractorService,
+        {
+          provide: LangfuseService,
+          useValue: {
+            startTrace: jest
+              .fn()
+              .mockReturnValue({ traceId: '', end: jest.fn() }),
+            addScore: jest.fn(),
+            flush: jest.fn()
+          }
+        },
         { provide: LLM_CLIENT_TOKEN, useValue: llmClient },
         { provide: PortfolioService, useValue: { getDetails: jest.fn() } },
         { provide: PrismaService, useValue: buildPrismaStub() },
@@ -177,7 +197,9 @@ describe('AiService', () => {
       chartData: [],
       confidence: 'high',
       invokedToolNames: ['get_portfolio_summary'],
+      requiresHumanReview: false,
       sources: ['get_portfolio_summary'],
+      traceId: 'test-trace',
       warnings: []
     };
 
@@ -201,7 +223,11 @@ describe('AiService', () => {
       userId: 'user-1'
     });
 
-    expect(verify).toHaveBeenCalledWith(rawResult, ['get_portfolio_summary']);
+    expect(verify).toHaveBeenCalledWith(
+      rawResult,
+      ['get_portfolio_summary'],
+      expect.any(String)
+    );
     expect(response).toEqual({
       ...verifiedResult,
       conversationId: expect.any(String)
@@ -222,7 +248,11 @@ describe('AiService', () => {
 
     await service.chat({ message: 'Hello', userId: 'user-1' });
 
-    expect(verify).toHaveBeenCalledWith(expect.anything(), []);
+    expect(verify).toHaveBeenCalledWith(
+      expect.anything(),
+      [],
+      expect.any(String)
+    );
   });
 
   it('returns verified response with confidence and warnings from verifier', async () => {

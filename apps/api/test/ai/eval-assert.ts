@@ -31,10 +31,17 @@ export interface VerifiedResponseLike {
   /** Present in API versions that return tool names; absent in older deployments */
   invokedToolNames?: string[];
   iterations: number;
+  /**
+   * True when agent confidence is low or verifier detected issues.
+   * Optional for backward compat with older response shapes.
+   */
+  requiresHumanReview?: boolean;
   response: string;
   sources: string[];
   status: string;
   toolCalls: number;
+  /** Langfuse trace ID — present in production responses */
+  traceId?: string;
   warnings: string[];
 }
 

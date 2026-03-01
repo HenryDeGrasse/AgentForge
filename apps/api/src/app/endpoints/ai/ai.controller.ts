@@ -11,6 +11,7 @@ import {
   Delete,
   Get,
   HttpCode,
+  HttpStatus,
   Inject,
   Param,
   ParseUUIDPipe,
@@ -27,7 +28,9 @@ import type { Request, Response } from 'express';
 import { AiRateLimiterGuard } from './ai-rate-limiter.guard';
 import { AiService } from './ai.service';
 import { ChatConversationService } from './chat-conversation.service';
+import { ChatFeedbackDto } from './chat-feedback.dto';
 import { ChatDto } from './chat.dto';
+import { LangfuseService } from './observability/langfuse.service';
 
 @Controller('ai')
 export class AiController {
@@ -35,6 +38,7 @@ export class AiController {
     private readonly aiService: AiService,
     private readonly apiService: ApiService,
     private readonly chatConversationService: ChatConversationService,
+    private readonly langfuseService: LangfuseService,
     @Inject(REQUEST) private readonly request: RequestWithUser
   ) {}
 
@@ -164,5 +168,26 @@ export class AiController {
     });
 
     return { prompt };
+  }
+
+  /**
+   * POST /api/v1/ai/feedback
+   *
+   * Record user feedback (thumbs up/down) for a chat response.
+   * The traceId is returned as part of every VerifiedResponse so the
+   * frontend can send this immediately after a response is received.
+   *
+   * This writes a Langfuse score — visible in the Langfuse dashboard
+   * under Traces → Scores. Used to track user satisfaction over time
+   * and identify low-quality responses for eval case creation.
+   */
+  @Post('feedback')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @HasPermission(permissions.accessAssistant)
+  @UseGuards(AuthGuard('jwt'), HasPermissionGuard)
+  public async submitFeedback(
+    @Body() { comment, traceId, value }: ChatFeedbackDto
+  ): Promise<void> {
+    await this.langfuseService.addScore({ comment, traceId, value });
   }
 }
