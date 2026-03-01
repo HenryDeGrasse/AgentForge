@@ -71,7 +71,8 @@ jobs:
     name: 'Golden Sets (live gpt-4.1-mini)'
     if: >-
       github.event_name == 'schedule' ||
-      github.event_name == 'workflow_dispatch'
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'push'
     needs: framework-tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -101,51 +102,6 @@ jobs:
         with:
           name: recorded-sessions-${{ github.run_id }}
           path: apps/api/test/ai/fixtures/recorded/
-
-  # ─── Tier 2b: Pre-merge live evals (via deployed API) ────────────────────────
-  # Runs on PRs and merge group using the deployed Railway API endpoint.
-  # Skips gracefully if EVAL_API_URL secret is not configured.
-  pre-merge-evals:
-    name: 'Golden Sets (live LLM, HTTP API)'
-    if: >-
-      github.event_name == 'merge_group' ||
-      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false)
-    needs: framework-tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 8
-    continue-on-error: true # not a hard merge gate while secrets are being configured
-    env:
-      RUN_GOLDEN_EVALS: '1'
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY_EVAL }}
-      MVP_EVAL_BASE_URL: ${{ secrets.EVAL_API_URL }}
-    steps:
-      - name: Check required secrets
-        id: check
-        run: |
-          if [ -z "$MVP_EVAL_BASE_URL" ] || [[ "$MVP_EVAL_BASE_URL" == *"INSERT"* ]]; then
-            echo "::warning::EVAL_API_URL secret not set — skipping pre-merge live evals"
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Pre-flight API health check
-        if: steps.check.outputs.skip != 'true'
-        run: |
-          echo "Checking API at $MVP_EVAL_BASE_URL ..."
-          curl --fail --silent --max-time 10 \
-            "${MVP_EVAL_BASE_URL%/api/v1}/api/v1/info" \
-            || (echo "::error::API not reachable at $MVP_EVAL_BASE_URL" && exit 1)
-          echo "API is healthy ✓"
-      - uses: actions/checkout@v4
-        if: steps.check.outputs.skip != 'true'
-      - uses: actions/setup-node@v4
-        if: steps.check.outputs.skip != 'true'
-        with:
-          node-version-file: '.nvmrc'
-          cache: 'npm'
-      - if: steps.check.outputs.skip != 'true'
-        run: npm ci
-      - if: steps.check.outputs.skip != 'true'
-        run: npx nx test api --testPathPattern='golden-sets.spec' --runInBand
-
   # ─── Nightly: Labeled scenarios (coverage report) ────────────────────────────
   nightly-evals:
     name: 'Labeled Scenarios (coverage)'
