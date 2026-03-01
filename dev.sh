@@ -121,7 +121,7 @@ run_ai_coverage() {
 run_seed_demo() {
   echo "[dev] Seeding demo portfolio..."
 
-  # Load .env so the seed script can read ACCESS_TOKEN_SALT
+  # Load .env so the seed script can read DATABASE_URL and ACCESS_TOKEN_SALT
   if [[ -f .env ]]; then
     set -a
     # shellcheck disable=SC1091
@@ -129,7 +129,7 @@ run_seed_demo() {
     set +a
   fi
 
-  DATABASE_URL="$DATABASE_URL" npx tsx prisma/seed-demo.mts
+  npx tsx prisma/seed-demo.mts
 }
 
 get_demo_token() {
@@ -230,8 +230,15 @@ case "$command" in
     start_api
     wait_for_health
     echo "[dev] Seeding demo data + market prices..."
+    # Source .env before running seed-market-data (DATABASE_URL is required)
+    if [[ -f .env ]]; then
+      set -a
+      # shellcheck disable=SC1091
+      source .env
+      set +a
+    fi
     run_seed_demo
-    DATABASE_URL="$DATABASE_URL" npx tsx prisma/seed-market-data.mts
+    npx tsx prisma/seed-market-data.mts
     echo "[dev] API logs: $API_LOG_FILE"
     ;;
   stop)
