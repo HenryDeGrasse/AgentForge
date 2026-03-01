@@ -451,10 +451,114 @@ $c-low-bg: #fef2f2;
   }
 }
 
+// ─── "What can I ask?" capability list ───────────────────────────────────────
+.capability-list {
+  width: 100%;
+  max-width: 340px;
+  margin-top: 0.875rem;
+  border: 1.5px solid $c-border;
+  border-radius: 12px;
+  background: $c-surface;
+  overflow: hidden;
+  text-align: left;
+  transition: box-shadow 0.15s;
+
+  &[open] {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  }
+}
+
+.capability-summary {
+  padding: 0.5rem 0.875rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: $c-indigo-dark;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  transition: background 0.12s;
+
+  &::before {
+    content: '▸';
+    font-size: 0.6rem;
+    transition: transform 0.18s;
+    display: inline-block;
+  }
+
+  &:hover {
+    background: $c-indigo-dim;
+  }
+}
+
+.capability-list[open] .capability-summary::before {
+  transform: rotate(90deg);
+}
+
+.capability-items {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0 0.5rem;
+  border-top: 1px solid $c-border;
+}
+
+.capability-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  padding: 0.375rem 0.875rem;
+  transition: background 0.1s;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.02);
+  }
+}
+
+.capability-icon {
+  font-size: 0.875rem;
+  line-height: 1.4;
+  flex-shrink: 0;
+  width: 1.25rem;
+  text-align: center;
+}
+
+.capability-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.capability-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: $c-text-1;
+}
+
+.capability-desc {
+  font-size: 0.6875rem;
+  color: $c-text-2;
+  line-height: 1.45;
+}
+
+// ─── Message entry animations ─────────────────────────────────────────────────
+@keyframes msgSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 // ─── Message bubbles ──────────────────────────────────────────────────────────
 .message-user {
   display: flex;
   justify-content: flex-end;
+  animation: msgSlideUp 0.22s cubic-bezier(0.2, 0, 0, 1) both;
 
   .bubble {
     max-width: 78%;
@@ -472,6 +576,7 @@ $c-low-bg: #fef2f2;
 .message-assistant {
   display: flex;
   justify-content: flex-start;
+  animation: msgSlideUp 0.26s cubic-bezier(0.2, 0, 0, 1) both;
 
   .bubble {
     max-width: 96%;
@@ -1430,6 +1535,34 @@ $c-low-bg: #fef2f2;
     background: rgba(129, 140, 248, 0.12);
     color: #818cf8;
     border-color: rgba(129, 140, 248, 0.25);
+  }
+
+  .capability-list {
+    background: #252538;
+    border-color: rgba(255, 255, 255, 0.07);
+  }
+
+  .capability-summary {
+    color: #a5b4fc;
+    &:hover {
+      background: rgba(129, 140, 248, 0.1);
+    }
+  }
+
+  .capability-items {
+    border-top-color: rgba(255, 255, 255, 0.06);
+  }
+
+  .capability-item:hover {
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .capability-label {
+    color: rgba(255, 255, 255, 0.85);
+  }
+
+  .capability-desc {
+    color: rgba(255, 255, 255, 0.4);
   }
 
   .confidence-badge {

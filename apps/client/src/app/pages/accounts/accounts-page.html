@@ -1,22 +1,7 @@
 <div class="container">
   <div class="row">
     <div class="col">
-      <div
-        class="page-title-row d-none d-sm-flex align-items-center justify-content-center mb-4"
-      >
-        <h1 class="h3 mb-0" i18n>Accounts</h1>
-        @if (hasPermissionToAccessAi && accounts?.length) {
-          <button
-            class="ask-ai-btn ms-3"
-            title="Ask AI Advisor about your accounts"
-            type="button"
-            (click)="onAskAiAboutAccounts()"
-          >
-            <span aria-hidden="true" class="ask-ai-icon">✦</span>
-            Ask AI
-          </button>
-        }
-      </div>
+      <h1 class="d-none d-sm-block h3 mb-4 text-center" i18n>Accounts</h1>
       <gf-accounts-table
         [accounts]="accounts"
         [activitiesCount]="activitiesCount"

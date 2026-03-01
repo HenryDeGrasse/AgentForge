@@ -352,7 +352,7 @@ describe('AiChatPanelComponent', () => {
     setup({ messages: [ASSISTANT_MSG] });
     const spy = jest
       .spyOn(component, 'onCopyMessage')
-      .mockImplementation(() => {});
+      .mockImplementation(jest.fn());
     const copyBtn = fixture.debugElement.query(By.css('.copy-btn'));
     copyBtn.triggerEventHandler('click', null);
     expect(spy).toHaveBeenCalled();
@@ -663,5 +663,74 @@ describe('AiChatPanelComponent', () => {
       Date.now() - 2 * 24 * 60 * 60 * 1000
     ).toISOString();
     expect(component.getRelativeTime(twoDaysAgo)).toBe('2d ago');
+  });
+
+  // ─── Escape key ────────────────────────────────────────────────────────────
+  it('calls stateService.close() when Escape is pressed while panel is open', () => {
+    setup({ isOpen: true });
+    component.onEscape();
+    expect(stateService.close).toHaveBeenCalled();
+  });
+
+  it('does not call stateService.close() when Escape is pressed while panel is already closed', () => {
+    setup({ isOpen: false });
+    component.onEscape();
+    expect(stateService.close).not.toHaveBeenCalled();
+  });
+
+  // ─── Auto-focus ────────────────────────────────────────────────────────────
+  it('focuses the textarea input element when the panel opens', fakeAsync(() => {
+    // Start with panel closed so we can observe the open transition
+    setup({ isOpen: false });
+
+    // Create a mock native element with a jest.fn() focus
+    const mockTextarea = { focus: jest.fn() } as unknown as HTMLTextAreaElement;
+    // Patch the private ViewChild reference
+    (component as any).inputRef = { nativeElement: mockTextarea };
+
+    // Now open the panel
+    stateService.isOpen$.next(true);
+    fixture.detectChanges();
+
+    // The subscription uses setTimeout(50) before focusing
+    tick(50);
+    expect(mockTextarea.focus).toHaveBeenCalled();
+  }));
+
+  // ─── "What can I ask?" capability list ─────────────────────────────────────
+  it('exposes 10 capability entries in the CAPABILITIES array', () => {
+    setup();
+    expect(component.CAPABILITIES).toHaveLength(10);
+  });
+
+  it('each capability entry has icon, label, desc, and tool fields', () => {
+    setup();
+    for (const cap of component.CAPABILITIES) {
+      expect(typeof cap.icon).toBe('string');
+      expect(typeof cap.label).toBe('string');
+      expect(typeof cap.desc).toBe('string');
+      expect(typeof cap.tool).toBe('string');
+    }
+  });
+
+  it('renders the capability-list <details> element in empty state', () => {
+    setup({ isOpen: true });
+    fixture.detectChanges();
+    const details = fixture.debugElement.query(By.css('.capability-list'));
+    expect(details).toBeTruthy();
+  });
+
+  it('renders the correct number of capability items', () => {
+    setup({ isOpen: true });
+    fixture.detectChanges();
+    const items = fixture.debugElement.queryAll(By.css('.capability-item'));
+    expect(items).toHaveLength(10);
+  });
+
+  it('does not render the capability-list when messages are present', () => {
+    setup({ isOpen: true, messages: [USER_MSG, ASSISTANT_MSG] });
+    fixture.detectChanges();
+    const details = fixture.debugElement.query(By.css('.capability-list'));
+    expect(details).toBeNull();
   });
 });

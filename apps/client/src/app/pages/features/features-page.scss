@@ -12,6 +12,51 @@
   }
 }
 
+// ─── AI feature card ──────────────────────────────────────────────────────────
+.ai-feature-card {
+  border-color: rgba(92, 107, 192, 0.35) !important;
+  background: linear-gradient(145deg, rgba(232, 234, 246, 0.55) 0%, #fff 100%);
+  position: relative;
+  overflow: hidden;
+
+  // Subtle top gradient bar
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #5c6bc0, #7e57c2);
+    border-radius: 2px 2px 0 0;
+  }
+}
+
+.ai-feature-icon {
+  font-size: 1rem;
+  filter: drop-shadow(0 0 5px rgba(92, 107, 192, 0.6));
+  animation: featureIconGlow 3s ease-in-out infinite;
+}
+
+@keyframes featureIconGlow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 3px rgba(92, 107, 192, 0.4));
+  }
+  50% {
+    filter: drop-shadow(0 0 9px rgba(92, 107, 192, 0.9));
+  }
+}
+
 :host-context(.theme-dark) {
   color: rgb(var(--light-primary-text));
+
+  .ai-feature-card {
+    background: linear-gradient(
+      145deg,
+      rgba(129, 140, 248, 0.08) 0%,
+      rgba(30, 30, 46, 0.6) 100%
+    );
+    border-color: rgba(129, 140, 248, 0.3) !important;
+  }
 }

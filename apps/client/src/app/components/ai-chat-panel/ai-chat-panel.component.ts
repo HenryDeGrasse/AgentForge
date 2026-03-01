@@ -14,6 +14,7 @@ import {
   ChangeDetectorRef,
   Component,
   ElementRef,
+  HostListener,
   OnDestroy,
   ViewChild
 } from '@angular/core';
@@ -71,6 +72,75 @@ const ROUTE_CHIPS: Record<string, string[]> = {
   ]
 };
 
+// ─── "What can I ask?" capability entries ─────────────────────────────────────
+const CAPABILITIES: {
+  desc: string;
+  icon: string;
+  label: string;
+  tool: string;
+}[] = [
+  {
+    desc: 'Total value, top holdings, and allocation breakdown',
+    icon: '📊',
+    label: 'Portfolio summary',
+    tool: 'get_portfolio_summary'
+  },
+  {
+    desc: 'Concentration, sector, currency, and volatility risk',
+    icon: '⚠️',
+    label: 'Risk analysis',
+    tool: 'analyze_risk'
+  },
+  {
+    desc: 'Compare your returns against benchmarks like S&P 500',
+    icon: '📈',
+    label: 'Performance comparison',
+    tool: 'performance_compare'
+  },
+  {
+    desc: 'Estimated short/long-term capital gains and unrealised gains',
+    icon: '🧾',
+    label: 'Tax estimates',
+    tool: 'tax_estimate'
+  },
+  {
+    desc: 'Check position size, sector limits, and cash floor rules',
+    icon: '✅',
+    label: 'Compliance checks',
+    tool: 'compliance_check'
+  },
+  {
+    desc: 'Target-allocation suggestions with specific buy/sell trades',
+    icon: '⚖️',
+    label: 'Rebalancing suggestions',
+    tool: 'rebalance_suggest'
+  },
+  {
+    desc: 'What-if analysis — apply hypothetical trades to your portfolio',
+    icon: '🔮',
+    label: 'Trade simulation',
+    tool: 'simulate_trades'
+  },
+  {
+    desc: 'Apply market crash or custom shock scenarios',
+    icon: '🌪️',
+    label: 'Stress testing',
+    tool: 'stress_test'
+  },
+  {
+    desc: 'Live quotes, profiles, and price history for any symbol',
+    icon: '🔍',
+    label: 'Market data lookup',
+    tool: 'market_data_lookup'
+  },
+  {
+    desc: 'Filtered list of your past transactions with pagination',
+    icon: '🗓️',
+    label: 'Transaction history',
+    tool: 'get_transaction_history'
+  }
+];
+
 // Confidence badge tooltip copy
 const CONFIDENCE_TOOLTIPS: Record<string, string> = {
   high: 'Response is backed by verified tool data with matching figures',
@@ -93,6 +163,7 @@ const CONFIDENCE_TOOLTIPS: Record<string, string> = {
 })
 export class AiChatPanelComponent implements AfterViewChecked, OnDestroy {
   @ViewChild('messageList') private messageListRef: ElementRef<HTMLElement>;
+  @ViewChild('inputEl') private inputRef: ElementRef<HTMLTextAreaElement>;
 
   public readonly messages$ = this.stateService.messages$;
   public readonly isOpen$ = this.stateService.isOpen$;
@@ -104,6 +175,14 @@ export class AiChatPanelComponent implements AfterViewChecked, OnDestroy {
   public readonly toolCallHistory$ = this.stateService.toolCallHistory$;
   public readonly thinkingSteps$ = this.stateService.thinkingSteps$;
 
+  /** Close the panel when Escape is pressed while it is open. */
+  @HostListener('document:keydown.escape')
+  public onEscape(): void {
+    if (this.stateService.isOpen$.getValue()) {
+      this.stateService.close();
+    }
+  }
+
   public inputControl = new FormControl('', { nonNullable: true });
   public showHistory = false;
   public showThinking = false;
@@ -111,6 +190,7 @@ export class AiChatPanelComponent implements AfterViewChecked, OnDestroy {
   public suggestionChips: string[] = ROUTE_CHIPS['default'];
   public copiedIndex: number | null = null;
   public readonly confidenceTooltips = CONFIDENCE_TOOLTIPS;
+  public readonly CAPABILITIES = CAPABILITIES;
 
   private shouldScrollToBottom = false;
   private unsubscribeSubject = new Subject<void>();
@@ -150,6 +230,19 @@ export class AiChatPanelComponent implements AfterViewChecked, OnDestroy {
       .subscribe(() => {
         if (this.showHistory) {
           this.refreshConversations();
+        }
+      });
+
+    // Auto-focus the textarea whenever the panel opens
+    this.stateService.isOpen$
+      .pipe(takeUntil(this.unsubscribeSubject))
+      .subscribe((isOpen) => {
+        if (isOpen) {
+          // Defer one tick so the panel's open CSS transition has started and
+          // the element is interactive before we steal focus.
+          setTimeout(() => {
+            this.inputRef?.nativeElement?.focus();
+          }, 50);
         }
       });
 
@@ -307,8 +400,9 @@ export class AiChatPanelComponent implements AfterViewChecked, OnDestroy {
   }
 
   private resolveChips(url: string): string[] {
-    const segment = url.split('?')[0].split('/').filter(Boolean)[0] ?? '';
-    const sub = url.split('?')[0].split('/').filter(Boolean)[1] ?? '';
+    const segments = url.split('?')[0].split('/').filter(Boolean);
+    const segment = segments.at(0) ?? '';
+    const sub = segments.at(1) ?? '';
 
     // Portfolio sub-routes get their own chips
     if (segment === 'portfolio') {

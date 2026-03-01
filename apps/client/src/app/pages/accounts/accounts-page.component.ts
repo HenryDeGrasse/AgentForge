@@ -1,6 +1,5 @@
 import { GfAccountDetailDialogComponent } from '@ghostfolio/client/components/account-detail-dialog/account-detail-dialog.component';
 import { AccountDetailDialogParams } from '@ghostfolio/client/components/account-detail-dialog/interfaces/interfaces';
-import { AiChatStateService } from '@ghostfolio/client/services/ai-chat-state.service';
 import { ImpersonationStorageService } from '@ghostfolio/client/services/impersonation-storage.service';
 import { UserService } from '@ghostfolio/client/services/user/user.service';
 import {
@@ -42,7 +41,6 @@ export class GfAccountsPageComponent implements OnDestroy, OnInit {
   public activitiesCount = 0;
   public deviceType: string;
   public hasImpersonationId: boolean;
-  public hasPermissionToAccessAi: boolean;
   public hasPermissionToCreateAccount: boolean;
   public hasPermissionToUpdateAccount: boolean;
   public routeQueryParams: Subscription;
@@ -53,7 +51,6 @@ export class GfAccountsPageComponent implements OnDestroy, OnInit {
   private unsubscribeSubject = new Subject<void>();
 
   public constructor(
-    private readonly aiChatStateService: AiChatStateService,
     private changeDetectorRef: ChangeDetectorRef,
     private dataService: DataService,
     private deviceService: DeviceDetectorService,
@@ -108,10 +105,6 @@ export class GfAccountsPageComponent implements OnDestroy, OnInit {
         if (state?.user) {
           this.user = state.user;
 
-          this.hasPermissionToAccessAi = hasPermission(
-            this.user.permissions,
-            permissions.accessAssistant
-          );
           this.hasPermissionToCreateAccount = hasPermission(
             this.user.permissions,
             permissions.createAccount
@@ -233,21 +226,6 @@ export class GfAccountsPageComponent implements OnDestroy, OnInit {
 
         this.router.navigate(['.'], { relativeTo: this.route });
       });
-  }
-
-  /**
-   * Open the AI Advisor panel pre-filled with a contextual question about
-   * the user's accounts. Triggered by the "✦ Ask AI" button in the page header.
-   */
-  public onAskAiAboutAccounts(): void {
-    const count = this.accounts?.length ?? 0;
-    const prompt =
-      count === 1
-        ? 'Analyze my account — how is it performing and what are my biggest risks?'
-        : `I have ${count} accounts. Which one has the best performance and how is my overall account diversification?`;
-
-    this.aiChatStateService.open();
-    this.aiChatStateService.sendMessage(prompt);
   }
 
   public ngOnDestroy() {

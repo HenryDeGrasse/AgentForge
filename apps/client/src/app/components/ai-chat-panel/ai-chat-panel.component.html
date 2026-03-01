@@ -144,6 +144,22 @@
             </button>
           }
         </div>
+
+        <!-- "What can I ask?" expandable capability list -->
+        <details class="capability-list">
+          <summary class="capability-summary">What can I ask?</summary>
+          <ul class="capability-items">
+            @for (cap of CAPABILITIES; track cap.tool) {
+              <li class="capability-item">
+                <span class="capability-icon">{{ cap.icon }}</span>
+                <div class="capability-text">
+                  <span class="capability-label">{{ cap.label }}</span>
+                  <span class="capability-desc">{{ cap.desc }}</span>
+                </div>
+              </li>
+            }
+          </ul>
+        </details>
       </div>
     }
 
@@ -320,6 +336,7 @@
   <!-- ── Input area ────────────────────────────────────────────────────────── -->
   <div class="input-area">
     <textarea
+      #inputEl
       class="message-input"
       placeholder="Ask about your portfolio…"
       rows="1"
