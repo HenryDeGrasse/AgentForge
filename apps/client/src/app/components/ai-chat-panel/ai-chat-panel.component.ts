@@ -48,7 +48,7 @@ const ROUTE_CHIPS: Record<string, string[]> = {
   default: [
     'Summarize my holdings',
     'Analyze my risk',
-    'Check compliance',
+    'Check portfolio rules',
     'Compare performance',
     'Estimate taxes',
     'Suggest rebalancing'
@@ -75,68 +75,75 @@ const ROUTE_CHIPS: Record<string, string[]> = {
 // ─── "What can I ask?" capability entries ─────────────────────────────────────
 const CAPABILITIES: {
   desc: string;
-  icon: string;
   label: string;
+  prompt: string;
   tool: string;
 }[] = [
   {
     desc: 'Total value, top holdings, and allocation breakdown',
-    icon: '📊',
     label: 'Portfolio summary',
+    prompt:
+      'Give me a full summary of my portfolio — total value, top holdings, and allocation breakdown.',
     tool: 'get_portfolio_summary'
   },
   {
     desc: 'Concentration, sector, currency, and volatility risk',
-    icon: '⚠️',
     label: 'Risk analysis',
+    prompt:
+      'Analyze my portfolio risk — concentration, sector exposure, and any positions I should be concerned about.',
     tool: 'analyze_risk'
   },
   {
     desc: 'Compare your returns against benchmarks like S&P 500',
-    icon: '📈',
     label: 'Performance comparison',
+    prompt: 'How has my portfolio performed compared to the S&P 500 this year?',
     tool: 'performance_compare'
   },
   {
     desc: 'Estimated short/long-term capital gains and unrealised gains',
-    icon: '🧾',
     label: 'Tax estimates',
+    prompt:
+      'Estimate my capital gains tax exposure — both short-term and long-term.',
     tool: 'tax_estimate'
   },
   {
-    desc: 'Check position size, sector limits, and cash floor rules',
-    icon: '✅',
-    label: 'Compliance checks',
+    desc: 'Checks concentration limits, position sizes, and cash floor against configurable portfolio rules',
+    label: 'Portfolio rules check',
+    prompt:
+      'Run a portfolio rules check — flag any positions that breach concentration or diversification limits.',
     tool: 'compliance_check'
   },
   {
     desc: 'Target-allocation suggestions with specific buy/sell trades',
-    icon: '⚖️',
     label: 'Rebalancing suggestions',
+    prompt:
+      'Suggest how I should rebalance my portfolio to improve diversification.',
     tool: 'rebalance_suggest'
   },
   {
     desc: 'What-if analysis — apply hypothetical trades to your portfolio',
-    icon: '🔮',
     label: 'Trade simulation',
+    prompt:
+      'Simulate what happens to my portfolio if I buy $5,000 of VTI today.',
     tool: 'simulate_trades'
   },
   {
     desc: 'Apply market crash or custom shock scenarios',
-    icon: '🌪️',
     label: 'Stress testing',
+    prompt:
+      'Stress test my portfolio against a 2008-style market crash scenario.',
     tool: 'stress_test'
   },
   {
     desc: 'Live quotes, profiles, and price history for any symbol',
-    icon: '🔍',
     label: 'Market data lookup',
+    prompt: 'Show me the current price and profile for ',
     tool: 'market_data_lookup'
   },
   {
     desc: 'Filtered list of your past transactions with pagination',
-    icon: '🗓️',
     label: 'Transaction history',
+    prompt: 'Show my transactions from the last 3 months.',
     tool: 'get_transaction_history'
   }
 ];
@@ -190,7 +197,7 @@ export class AiChatPanelComponent implements AfterViewChecked, OnDestroy {
   public suggestionChips: string[] = ROUTE_CHIPS['default'];
   public copiedIndex: number | null = null;
   public readonly confidenceTooltips = CONFIDENCE_TOOLTIPS;
-  public readonly CAPABILITIES = CAPABILITIES;
+  public readonly CAPABILITIES: typeof CAPABILITIES = CAPABILITIES;
 
   private shouldScrollToBottom = false;
   private unsubscribeSubject = new Subject<void>();
@@ -287,6 +294,23 @@ export class AiChatPanelComponent implements AfterViewChecked, OnDestroy {
 
   public onSuggestionClick(text: string): void {
     this.stateService.sendMessage(text);
+  }
+
+  /**
+   * Pre-fill the textarea with a capability sample prompt so the user can
+   * review and edit before sending. Focus is moved to the input.
+   */
+  public onCapabilityClick(prompt: string): void {
+    this.inputControl.setValue(prompt);
+    // Move cursor to end of text so the user can append immediately
+    setTimeout(() => {
+      const el = this.inputRef?.nativeElement;
+
+      if (el) {
+        el.focus();
+        el.setSelectionRange(el.value.length, el.value.length);
+      }
+    }, 0);
   }
 
   public onActionClick(action: ActionItem): void {

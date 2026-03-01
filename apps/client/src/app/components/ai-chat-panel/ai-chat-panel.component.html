@@ -15,16 +15,18 @@
     </div>
 
     <div class="panel-actions">
-      <!-- Thinking toggle (only visible when there are thinking steps) -->
+      <!-- Thinking toggle: shows how many ReAct iterations the agent ran -->
       @if ((thinkingSteps$ | async)?.length) {
         <button
-          class="btn-thinking btn-icon"
-          title="Agent reasoning steps"
+          class="btn-thinking btn-text"
+          title="Show or hide agent reasoning steps"
           type="button"
           [class.active]="showThinking"
           (click)="showThinking = !showThinking"
         >
-          🧠
+          {{ (thinkingSteps$ | async)?.length }} step{{
+            (thinkingSteps$ | async)?.length === 1 ? '' : 's'
+          }}
         </button>
       }
 
@@ -62,7 +64,7 @@
   <!-- ── Thinking drawer ───────────────────────────────────────────────────── -->
   @if (showThinking && (thinkingSteps$ | async)?.length) {
     <div class="thinking-drawer">
-      <div class="thinking-header">🧠 Agent reasoning</div>
+      <div class="thinking-header">Agent reasoning steps</div>
       @for (step of thinkingSteps$ | async; track step.iteration) {
         <div class="thinking-step">
           <span class="thinking-iter"
@@ -148,14 +150,22 @@
         <!-- "What can I ask?" expandable capability list -->
         <details class="capability-list">
           <summary class="capability-summary">What can I ask?</summary>
-          <ul class="capability-items">
+          <ul class="capability-items" role="listbox">
             @for (cap of CAPABILITIES; track cap.tool) {
-              <li class="capability-item">
-                <span class="capability-icon">{{ cap.icon }}</span>
+              <li
+                class="capability-item"
+                role="option"
+                tabindex="0"
+                [attr.aria-label]="'Ask: ' + cap.label"
+                (click)="onCapabilityClick(cap.prompt)"
+                (keydown.enter)="onCapabilityClick(cap.prompt)"
+                (keydown.space)="onCapabilityClick(cap.prompt)"
+              >
                 <div class="capability-text">
                   <span class="capability-label">{{ cap.label }}</span>
                   <span class="capability-desc">{{ cap.desc }}</span>
                 </div>
+                <span aria-hidden="true" class="capability-arrow">↗</span>
               </li>
             }
           </ul>

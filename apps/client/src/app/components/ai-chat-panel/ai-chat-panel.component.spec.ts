@@ -703,12 +703,13 @@ describe('AiChatPanelComponent', () => {
     expect(component.CAPABILITIES).toHaveLength(10);
   });
 
-  it('each capability entry has icon, label, desc, and tool fields', () => {
+  it('each capability entry has label, desc, prompt, and tool fields', () => {
     setup();
     for (const cap of component.CAPABILITIES) {
-      expect(typeof cap.icon).toBe('string');
       expect(typeof cap.label).toBe('string');
       expect(typeof cap.desc).toBe('string');
+      expect(typeof cap.prompt).toBe('string');
+      expect(cap.prompt.length).toBeGreaterThan(0);
       expect(typeof cap.tool).toBe('string');
     }
   });
@@ -732,5 +733,21 @@ describe('AiChatPanelComponent', () => {
     fixture.detectChanges();
     const details = fixture.debugElement.query(By.css('.capability-list'));
     expect(details).toBeNull();
+  });
+
+  it('onCapabilityClick pre-fills the input control with the capability prompt', () => {
+    setup();
+    const prompt =
+      'Analyze my portfolio risk — concentration, sector exposure, and any positions I should be concerned about.';
+    component.onCapabilityClick(prompt);
+    expect(component.inputControl.value).toBe(prompt);
+  });
+
+  it('clicking a capability-item sets the input value', () => {
+    setup({ isOpen: true });
+    fixture.detectChanges();
+    const firstItem = fixture.debugElement.query(By.css('.capability-item'));
+    firstItem.triggerEventHandler('click', null);
+    expect(component.inputControl.value).toBe(component.CAPABILITIES[0].prompt);
   });
 });
