@@ -12,6 +12,7 @@ import {
   Component,
   DOCUMENT,
   HostBinding,
+  HostListener,
   Inject,
   OnDestroy,
   OnInit
@@ -39,6 +40,7 @@ import { GfFooterComponent } from './components/footer/footer.component';
 import { GfHeaderComponent } from './components/header/header.component';
 import { GfHoldingDetailDialogComponent } from './components/holding-detail-dialog/holding-detail-dialog.component';
 import { HoldingDetailDialogParams } from './components/holding-detail-dialog/interfaces/interfaces';
+import { AiChatStateService } from './services/ai-chat-state.service';
 import { ImpersonationStorageService } from './services/impersonation-storage.service';
 import { TokenStorageService } from './services/token-storage.service';
 import { UserService } from './services/user/user.service';
@@ -81,7 +83,22 @@ export class GfAppComponent implements OnDestroy, OnInit {
 
   private unsubscribeSubject = new Subject<void>();
 
+  /**
+   * ⌘K / Ctrl+K — toggle the AI Advisor panel from anywhere in the app.
+   * Only fires when the AI panel is accessible (guard handled in template).
+   */
+  @HostListener('document:keydown', ['$event'])
+  public onGlobalKeydown(event: KeyboardEvent): void {
+    if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
+      if (this.hasPermissionToAccessAssistant) {
+        event.preventDefault();
+        this.aiChatStateService.toggle();
+      }
+    }
+  }
+
   public constructor(
+    private readonly aiChatStateService: AiChatStateService,
     private changeDetectorRef: ChangeDetectorRef,
     private dataService: DataService,
     private deviceService: DeviceDetectorService,

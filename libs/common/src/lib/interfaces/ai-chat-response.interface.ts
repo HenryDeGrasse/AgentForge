@@ -51,10 +51,31 @@ export interface ChatMessage {
   actions?: ActionItem[];
   chartData?: ChartDataItem[];
   confidence?: AiChatConfidence;
+  /** Feedback the user gave this response. Persisted client-side only. */
+  feedback?: 'down' | 'up';
   role: 'assistant' | 'user';
   sources?: string[];
   text: string;
+  /** Langfuse trace ID used to submit thumbs-up/down feedback. */
+  traceId?: string;
   warnings?: string[];
+}
+
+/** One entry in the per-turn tool call timeline. */
+export interface ToolCallRecord {
+  endMs?: number;
+  iteration: number;
+  name: string;
+  startMs: number;
+  status?: 'error' | 'partial' | 'success';
+  summary?: string;
+}
+
+/** One entry in the per-turn agent thinking log. */
+export interface ThinkingStep {
+  iteration: number;
+  maxIterations: number;
+  timestamp: number;
 }
 
 /** Summary for conversation list / sidebar. */

@@ -1,12 +1,33 @@
+<!-- Backdrop (separate element so z-index works correctly) -->
+@if (isOpen$ | async) {
+  <div class="ai-backdrop" (click)="stateService.close()"></div>
+}
+
 <div class="ai-panel" [class.open]="isOpen$ | async">
-  <!-- Header -->
+  <!-- ── Header ──────────────────────────────────────────────────────────── -->
   <div class="panel-header">
     <div class="panel-title">
-      <span class="panel-icon">&#x2726;</span>
+      <span aria-hidden="true" class="panel-icon">✦</span>
       <span>AI Advisor</span>
+      <span aria-label="Keyboard shortcut Command K" class="panel-shortcut"
+        >⌘K</span
+      >
     </div>
 
     <div class="panel-actions">
+      <!-- Thinking toggle (only visible when there are thinking steps) -->
+      @if ((thinkingSteps$ | async)?.length) {
+        <button
+          class="btn-thinking btn-icon"
+          title="Agent reasoning steps"
+          type="button"
+          [class.active]="showThinking"
+          (click)="showThinking = !showThinking"
+        >
+          🧠
+        </button>
+      }
+
       <button
         class="btn-history btn-icon"
         title="Conversation history"
@@ -29,7 +50,7 @@
 
       <button
         class="btn-close btn-icon"
-        title="Close"
+        title="Close (Esc)"
         type="button"
         (click)="stateService.close()"
       >
@@ -38,7 +59,27 @@
     </div>
   </div>
 
-  <!-- History drawer -->
+  <!-- ── Thinking drawer ───────────────────────────────────────────────────── -->
+  @if (showThinking && (thinkingSteps$ | async)?.length) {
+    <div class="thinking-drawer">
+      <div class="thinking-header">🧠 Agent reasoning</div>
+      @for (step of thinkingSteps$ | async; track step.iteration) {
+        <div class="thinking-step">
+          <span class="thinking-iter"
+            >Step {{ step.iteration }}/{{ step.maxIterations }}</span
+          >
+          <span class="thinking-bar">
+            <span
+              class="thinking-fill"
+              [style.width.%]="(step.iteration / step.maxIterations) * 100"
+            ></span>
+          </span>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- ── History drawer ──────────────────────────────────────────────────── -->
   @if (showHistory) {
     <div class="history-drawer">
       <button
@@ -83,17 +124,17 @@
     </div>
   }
 
-  <!-- Message list -->
+  <!-- ── Message list ────────────────────────────────────────────────────── -->
   <div #messageList class="message-list">
     @if (!(messages$ | async)?.length) {
       <div class="empty-state">
-        <div class="empty-icon">&#x2726;</div>
+        <div class="empty-icon">✦</div>
         <p class="empty-title">Ask anything about your portfolio</p>
         <p class="empty-hint">
           I can summarise holdings, analyse risk, check compliance, and more.
         </p>
         <div class="suggestion-chips">
-          @for (chip of SUGGESTION_CHIPS; track chip) {
+          @for (chip of suggestionChips; track chip) {
             <button
               class="suggestion-chip"
               type="button"
@@ -106,7 +147,7 @@
       </div>
     }
 
-    @for (msg of messages$ | async; track $index) {
+    @for (msg of messages$ | async; track $index; let i = $index) {
       @if (msg.role === 'user') {
         <div class="message-user">
           <span class="bubble">{{ msg.text }}</span>
@@ -141,9 +182,63 @@
               </div>
             }
 
-            <span class="confidence-badge confidence-{{ msg.confidence }}">
-              {{ msg.confidence }}
-            </span>
+            <!-- Confidence badge with descriptive tooltip -->
+            @if (msg.confidence) {
+              <span
+                class="confidence-badge confidence-{{ msg.confidence }}"
+                matTooltipPosition="above"
+                [matTooltip]="confidenceTooltips[msg.confidence]"
+              >
+                <span class="confidence-dot"></span>
+                {{ msg.confidence }}
+              </span>
+            }
+
+            <!-- Message action bar: copy + feedback -->
+            <div class="msg-action-bar">
+              <!-- Copy button -->
+              <button
+                class="msg-action-btn copy-btn"
+                type="button"
+                [attr.title]="copiedIndex === i ? 'Copied!' : 'Copy response'"
+                [class.copied]="copiedIndex === i"
+                (click)="onCopyMessage(msg.text, i)"
+              >
+                @if (copiedIndex === i) {
+                  <span>✓ Copied</span>
+                } @else {
+                  <span>⎘ Copy</span>
+                }
+              </button>
+
+              <!-- Feedback buttons (only when traceId is present) -->
+              @if (msg.traceId) {
+                <div
+                  aria-label="Was this helpful?"
+                  class="feedback-btns"
+                  role="group"
+                >
+                  <button
+                    class="msg-action-btn feedback-btn"
+                    title="Helpful"
+                    type="button"
+                    [class.active]="msg.feedback === 'up'"
+                    (click)="onFeedback(i, 'up')"
+                  >
+                    👍
+                  </button>
+                  <button
+                    class="msg-action-btn feedback-btn"
+                    title="Not helpful"
+                    type="button"
+                    [class.active]="msg.feedback === 'down'"
+                    (click)="onFeedback(i, 'down')"
+                  >
+                    👎
+                  </button>
+                </div>
+              }
+            </div>
           </div>
 
           @if (msg.actions?.length) {
@@ -164,25 +259,52 @@
       }
     }
 
-    <!-- Tool indicator -->
-    @if (activeTool$ | async; as toolName) {
-      <div class="tool-indicator">
-        <span class="tool-spinner"></span>
-        <span class="tool-name">{{ toolName }}</span>
+    <!-- ── Tool execution timeline ──────────────────────────────────── -->
+    @if ((toolCallHistory$ | async)?.length && (isLoading$ | async)) {
+      <div class="tool-timeline">
+        @for (
+          record of toolCallHistory$ | async;
+          track record.name + record.iteration
+        ) {
+          <div
+            class="tool-record"
+            [class.error]="record.status === 'error'"
+            [class.pending]="!record.endMs"
+          >
+            <span class="tool-record-icon">
+              @if (!record.endMs) {
+                <span class="tool-spinner"></span>
+              } @else if (record.status === 'error') {
+                <span class="tool-record-status-icon">✗</span>
+              } @else {
+                <span class="tool-record-status-icon ok">✓</span>
+              }
+            </span>
+            <span class="tool-record-name">{{ record.name }}</span>
+            @if (record.endMs) {
+              <span class="tool-record-duration">
+                {{ formatDuration(record.startMs, record.endMs) }}
+              </span>
+            }
+          </div>
+        }
       </div>
     }
 
-    <!-- Streaming preview (plaintext, not markdown) -->
+    <!-- Streaming preview (markdown, not plaintext) -->
     @if (isStreaming$ | async) {
       @if (streamingText$ | async; as streamText) {
         <div class="message-assistant">
-          <div class="bubble streaming-preview">{{ streamText }}</div>
+          <div class="bubble streaming-preview">
+            <markdown class="message-text" [data]="streamText"></markdown>
+            <span aria-hidden="true" class="cursor-blink"></span>
+          </div>
         </div>
       }
     }
 
     @if ((isLoading$ | async) && !(isStreaming$ | async)) {
-      <div class="typing-indicator">
+      <div aria-label="AI is thinking…" class="typing-indicator">
         <span class="dot"></span>
         <span class="dot"></span>
         <span class="dot"></span>
@@ -190,16 +312,16 @@
     }
   </div>
 
-  <!-- Error banner -->
+  <!-- ── Error banner ──────────────────────────────────────────────────────── -->
   @if (error$ | async; as errorMsg) {
-    <div class="error-banner">{{ errorMsg }}</div>
+    <div class="error-banner" role="alert">{{ errorMsg }}</div>
   }
 
-  <!-- Input area -->
+  <!-- ── Input area ────────────────────────────────────────────────────────── -->
   <div class="input-area">
     <textarea
       class="message-input"
-      placeholder="Ask about your portfolio..."
+      placeholder="Ask about your portfolio…"
       rows="1"
       [formControl]="inputControl"
       (keydown)="onKeydown($event)"

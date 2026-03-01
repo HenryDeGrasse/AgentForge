@@ -1,11 +1,17 @@
-<button class="fab-btn" type="button" (click)="onToggle()">
+<button
+  class="fab-btn"
+  title="AI Advisor (⌘K)"
+  type="button"
+  (click)="onToggle()"
+>
   @if (isLoading$ | async) {
-    <span class="fab-loading">
+    <span aria-label="Loading…" class="fab-loading">
       <span class="dot"></span>
       <span class="dot"></span>
       <span class="dot"></span>
     </span>
   } @else {
-    <span class="fab-label">✦ AI Advisor</span>
+    <span aria-hidden="true" class="fab-icon-wrap">✦</span>
+    <span class="fab-label">AI Advisor</span>
   }
 </button>
