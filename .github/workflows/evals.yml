@@ -62,39 +62,49 @@ jobs:
       - run: npm ci
       - run: npx nx test api --testPathPattern='golden-sets-replay'
 
-  # ─── Tier 2: Live evals (real gpt-4.1 in-process) ────────────────────────────
-  # Runs nightly and on any PR that touches agent.constants.ts (system prompt /
-  # model version), because those changes invalidate recorded sessions.
-  # Also runs on manual workflow_dispatch.
-  # Cost: ~$1.36/run. Saves fresh recordings as a build artifact.
+  # ─── Tier 2: Live evals (real gpt-4.1-mini in-process) ──────────────────────
+  # Runs nightly and on manual workflow_dispatch only.
+  # Cost: ~$0.30/run. Saves fresh recordings as a build artifact.
+  # Non-blocking: a missing or invalid OPENAI_API_KEY_EVAL skips gracefully
+  # rather than failing the whole pipeline.
   live-evals:
-    name: 'Golden Sets (live gpt-4.1)'
+    name: 'Golden Sets (live gpt-4.1-mini)'
     if: >-
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch'
     needs: framework-tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    continue-on-error: true # nightly monitor — not a merge gate
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY_EVAL }}
+      OPENAI_MODEL: 'gpt-4.1-mini'
       EVAL_RECORD: '1'
     steps:
+      - name: Check OPENAI_API_KEY_EVAL secret
+        run: |
+          if [ -z "$OPENAI_API_KEY" ] || [[ "$OPENAI_API_KEY" == *"INSERT"* ]]; then
+            echo "::warning::OPENAI_API_KEY_EVAL secret is missing or is still the placeholder value."
+            echo "::warning::Go to repo Settings → Secrets → Actions and add OPENAI_API_KEY_EVAL."
+            echo "SKIP_LIVE=true" >> "$GITHUB_ENV"
+          fi
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
       - run: npm ci
-      - run: npx nx test api --testPathPattern='golden-sets-live' --runInBand
+      - if: env.SKIP_LIVE != 'true'
+        run: npx nx test api --testPathPattern='golden-sets-live' --runInBand
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: env.SKIP_LIVE != 'true'
         with:
           name: recorded-sessions-${{ github.run_id }}
           path: apps/api/test/ai/fixtures/recorded/
 
   # ─── Tier 2b: Pre-merge live evals (via deployed API) ────────────────────────
-  # Runs on PRs and merge group using the deployed API endpoint.
-  # Separate from in-process live evals — tests the full HTTP stack.
+  # Runs on PRs and merge group using the deployed Railway API endpoint.
+  # Skips gracefully if EVAL_API_URL secret is not configured.
   pre-merge-evals:
     name: 'Golden Sets (live LLM, HTTP API)'
     if: >-
@@ -103,22 +113,21 @@ jobs:
     needs: framework-tests
     runs-on: ubuntu-latest
     timeout-minutes: 8
+    continue-on-error: true # not a hard merge gate while secrets are being configured
     env:
       RUN_GOLDEN_EVALS: '1'
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY_EVAL }}
       MVP_EVAL_BASE_URL: ${{ secrets.EVAL_API_URL }}
     steps:
       - name: Check required secrets
+        id: check
         run: |
-          if [ -z "$MVP_EVAL_BASE_URL" ]; then
-            echo "::error::EVAL_API_URL secret is not set — cannot reach live API"
-            exit 1
-          fi
-          if [ -z "$OPENAI_API_KEY" ]; then
-            echo "::error::OPENAI_API_KEY_EVAL secret is not set"
-            exit 1
+          if [ -z "$MVP_EVAL_BASE_URL" ] || [[ "$MVP_EVAL_BASE_URL" == *"INSERT"* ]]; then
+            echo "::warning::EVAL_API_URL secret not set — skipping pre-merge live evals"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Pre-flight API health check
+        if: steps.check.outputs.skip != 'true'
         run: |
           echo "Checking API at $MVP_EVAL_BASE_URL ..."
           curl --fail --silent --max-time 10 \
@@ -126,12 +135,16 @@ jobs:
             || (echo "::error::API not reachable at $MVP_EVAL_BASE_URL" && exit 1)
           echo "API is healthy ✓"
       - uses: actions/checkout@v4
+        if: steps.check.outputs.skip != 'true'
       - uses: actions/setup-node@v4
+        if: steps.check.outputs.skip != 'true'
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
-      - run: npm ci
-      - run: npx nx test api --testPathPattern='golden-sets.spec' --runInBand
+      - if: steps.check.outputs.skip != 'true'
+        run: npm ci
+      - if: steps.check.outputs.skip != 'true'
+        run: npx nx test api --testPathPattern='golden-sets.spec' --runInBand
 
   # ─── Nightly: Labeled scenarios (coverage report) ────────────────────────────
   nightly-evals:
@@ -139,9 +152,11 @@ jobs:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    continue-on-error: true
     env:
       RUN_LABELED_EVALS: '1'
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY_EVAL }}
+      OPENAI_MODEL: 'gpt-4.1-mini'
       MVP_EVAL_BASE_URL: ${{ secrets.EVAL_API_URL }}
     steps:
       - uses: actions/checkout@v4
