@@ -15,21 +15,6 @@
     </div>
 
     <div class="panel-actions">
-      <!-- Thinking toggle: shows how many ReAct iterations the agent ran -->
-      @if ((thinkingSteps$ | async)?.length) {
-        <button
-          class="btn-thinking btn-text"
-          title="Show or hide agent reasoning steps"
-          type="button"
-          [class.active]="showThinking"
-          (click)="showThinking = !showThinking"
-        >
-          {{ (thinkingSteps$ | async)?.length }} step{{
-            (thinkingSteps$ | async)?.length === 1 ? '' : 's'
-          }}
-        </button>
-      }
-
       <button
         class="btn-history btn-icon"
         title="Conversation history"
@@ -60,26 +45,6 @@
       </button>
     </div>
   </div>
-
-  <!-- ── Thinking drawer ───────────────────────────────────────────────────── -->
-  @if (showThinking && (thinkingSteps$ | async)?.length) {
-    <div class="thinking-drawer">
-      <div class="thinking-header">Agent reasoning steps</div>
-      @for (step of thinkingSteps$ | async; track step.iteration) {
-        <div class="thinking-step">
-          <span class="thinking-iter"
-            >Step {{ step.iteration }}/{{ step.maxIterations }}</span
-          >
-          <span class="thinking-bar">
-            <span
-              class="thinking-fill"
-              [style.width.%]="(step.iteration / step.maxIterations) * 100"
-            ></span>
-          </span>
-        </div>
-      }
-    </div>
-  }
 
   <!-- ── History drawer ──────────────────────────────────────────────────── -->
   @if (showHistory) {
@@ -133,7 +98,7 @@
         <div class="empty-icon">✦</div>
         <p class="empty-title">Ask anything about your portfolio</p>
         <p class="empty-hint">
-          I can summarise holdings, analyse risk, check compliance, and more.
+          I can summarise holdings, analyse risk, suggest rebalancing, and more.
         </p>
         <div class="suggestion-chips">
           @for (chip of suggestionChips; track chip) {
@@ -342,6 +307,11 @@
   @if (error$ | async; as errorMsg) {
     <div class="error-banner" role="alert">{{ errorMsg }}</div>
   }
+
+  <!-- ── Disclaimer ───────────────────────────────────────────────────────── -->
+  <p class="ai-disclaimer">
+    For informational purposes only. Not financial advice.
+  </p>
 
   <!-- ── Input area ────────────────────────────────────────────────────────── -->
   <div class="input-area">

@@ -511,56 +511,36 @@ describe('AiChatPanelComponent', () => {
     expect(component.formatDuration(0, 0)).toBe('0.0s');
   });
 
-  // ─── thinking drawer ──────────────────────────────────────────────────────
-  it('shows thinking toggle button when thinkingSteps exist', () => {
+  // ─── thinking drawer (removed from UI) ───────────────────────────────────
+  it('does not render a thinking toggle button regardless of thinking steps', () => {
     const steps: ThinkingStep[] = [
       { iteration: 1, maxIterations: 15, timestamp: Date.now() }
     ];
     setup({ thinkingSteps: steps });
-    const btn = fixture.debugElement.query(By.css('.btn-thinking'));
-    expect(btn).toBeTruthy();
-  });
-
-  it('does not show thinking toggle button when no thinking steps', () => {
-    setup({ thinkingSteps: [] });
     const btn = fixture.debugElement.query(By.css('.btn-thinking'));
     expect(btn).toBeFalsy();
   });
 
-  it('toggles thinking drawer on button click', () => {
-    const steps: ThinkingStep[] = [
-      { iteration: 1, maxIterations: 15, timestamp: Date.now() }
-    ];
-    setup({ thinkingSteps: steps });
-
-    expect(component.showThinking).toBe(false);
-    const btn = fixture.debugElement.query(By.css('.btn-thinking'));
-    btn.triggerEventHandler('click', null);
-    expect(component.showThinking).toBe(true);
-
-    btn.triggerEventHandler('click', null);
-    expect(component.showThinking).toBe(false);
-  });
-
-  it('shows thinking drawer content when showThinking is true', fakeAsync(() => {
+  it('does not render a thinking drawer regardless of thinking steps', () => {
     const steps: ThinkingStep[] = [
       { iteration: 1, maxIterations: 15, timestamp: Date.now() },
       { iteration: 2, maxIterations: 15, timestamp: Date.now() }
     ];
     setup({ thinkingSteps: steps });
-
-    // Toggle showThinking to true — this must be done via the public API
-    // so OnPush change detection picks up the mutation.
-    const btn = fixture.debugElement.query(By.css('.btn-thinking'));
-    btn.triggerEventHandler('click', null);
-    tick();
     fixture.detectChanges();
-
     const drawer = fixture.debugElement.query(By.css('.thinking-drawer'));
-    expect(drawer).toBeTruthy();
-    const stepEls = fixture.debugElement.queryAll(By.css('.thinking-step'));
-    expect(stepEls.length).toBe(2);
-  }));
+    expect(drawer).toBeFalsy();
+  });
+
+  // ─── disclaimer ──────────────────────────────────────────────────────────
+  it('renders the informational disclaimer in the panel', () => {
+    setup({ isOpen: true });
+    const disclaimer = fixture.debugElement.query(By.css('.ai-disclaimer'));
+    expect(disclaimer).toBeTruthy();
+    expect(disclaimer.nativeElement.textContent).toContain(
+      'informational purposes only'
+    );
+  });
 
   // ─── context-aware suggestion chips ──────────────────────────────────────
   it('shows default suggestion chips on /home route', () => {

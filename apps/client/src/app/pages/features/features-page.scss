@@ -48,6 +48,12 @@
   }
 }
 
+.ai-feature-disclaimer {
+  font-size: 0.6875rem;
+  color: rgba(92, 107, 192, 0.7);
+  font-style: italic;
+}
+
 :host-context(.theme-dark) {
   color: rgb(var(--light-primary-text));
 

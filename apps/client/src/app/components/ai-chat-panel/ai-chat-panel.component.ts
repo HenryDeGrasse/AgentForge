@@ -48,7 +48,7 @@ const ROUTE_CHIPS: Record<string, string[]> = {
   default: [
     'Summarize my holdings',
     'Analyze my risk',
-    'Check portfolio rules',
+    'Check diversification',
     'Compare performance',
     'Estimate taxes',
     'Suggest rebalancing'
@@ -107,10 +107,10 @@ const CAPABILITIES: {
     tool: 'tax_estimate'
   },
   {
-    desc: 'Checks concentration limits, position sizes, and cash floor against configurable portfolio rules',
-    label: 'Portfolio rules check',
+    desc: 'Flags over-concentration in single positions, sectors, asset classes, and cash — thresholds are configurable',
+    label: 'Diversification check',
     prompt:
-      'Run a portfolio rules check — flag any positions that breach concentration or diversification limits.',
+      'Check my portfolio diversification — flag anything that looks too concentrated.',
     tool: 'compliance_check'
   },
   {
@@ -180,7 +180,6 @@ export class AiChatPanelComponent implements AfterViewChecked, OnDestroy {
   public readonly activeTool$ = this.stateService.activeTool$;
   public readonly isStreaming$ = this.stateService.isStreaming$;
   public readonly toolCallHistory$ = this.stateService.toolCallHistory$;
-  public readonly thinkingSteps$ = this.stateService.thinkingSteps$;
 
   /** Close the panel when Escape is pressed while it is open. */
   @HostListener('document:keydown.escape')
@@ -192,7 +191,6 @@ export class AiChatPanelComponent implements AfterViewChecked, OnDestroy {
 
   public inputControl = new FormControl('', { nonNullable: true });
   public showHistory = false;
-  public showThinking = false;
   public conversations$ = new BehaviorSubject<ConversationSummary[]>([]);
   public suggestionChips: string[] = ROUTE_CHIPS['default'];
   public copiedIndex: number | null = null;
@@ -289,7 +287,6 @@ export class AiChatPanelComponent implements AfterViewChecked, OnDestroy {
 
     this.stateService.sendMessage(text);
     this.inputControl.setValue('');
-    this.showThinking = false;
   }
 
   public onSuggestionClick(text: string): void {
