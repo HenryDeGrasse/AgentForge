@@ -16,6 +16,12 @@
  * Safe to run on every dev restart and as a Railway start command.
  */
 import { PrismaClient } from '@prisma/client';
+import { config } from 'dotenv';
+import { resolve } from 'node:path';
+
+// Load .env from project root before PrismaClient initialises so DATABASE_URL
+// is available regardless of how the script is invoked.
+config({ path: resolve(process.cwd(), '.env'), override: false });
 
 const prisma = new PrismaClient();
 
