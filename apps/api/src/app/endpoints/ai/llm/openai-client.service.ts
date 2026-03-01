@@ -16,9 +16,9 @@ export const OPENAI_SDK_CLIENT_TOKEN = 'OPENAI_SDK_CLIENT_TOKEN';
 @Injectable()
 export class OpenAiClientService implements LLMClient {
   private readonly estimatedCostPer1kTokensUsd = Number(
-    process.env.OPENAI_COST_PER_1K_TOKENS_USD ?? '0.002'
+    process.env.OPENAI_COST_PER_1K_TOKENS_USD ?? '0.01'
   );
-  private readonly model = process.env.OPENAI_MODEL ?? 'gpt-4.1-mini';
+  private readonly model = process.env.OPENAI_MODEL ?? 'gpt-4.1';
   private openAIClient: OpenAI;
 
   public constructor(
@@ -221,7 +221,21 @@ export class OpenAiClientService implements LLMClient {
       throw new Error('Missing OPENAI_API_KEY environment variable.');
     }
 
-    this.openAIClient = new OpenAI({ apiKey });
+    // Route through Helicone proxy when key is present.
+    // Helicone captures every LLM call: tokens, cost, latency — no code changes needed.
+    const heliconeKey = process.env['HELICONE_API_KEY'];
+
+    this.openAIClient = new OpenAI({
+      apiKey,
+      ...(heliconeKey
+        ? {
+            baseURL: 'https://oai.hconeai.com/v1',
+            defaultHeaders: {
+              'Helicone-Auth': `Bearer ${heliconeKey}`
+            }
+          }
+        : {})
+    });
 
     return this.openAIClient;
   }

@@ -53,7 +53,7 @@ export const TRANSACTION_HISTORY_OUTPUT_SCHEMA: ToolJsonSchema = {
       properties: {
         cursor: { type: 'number' },
         hasMore: { type: 'boolean' },
-        nextCursor: { type: 'number' },
+        nextCursor: { type: ['number', 'null'] },
         pageSize: { type: 'number' },
         returnedCount: { type: 'number' },
         totalCount: { type: 'number' }

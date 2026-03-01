@@ -4,7 +4,8 @@ import {
   AGENT_COST_LIMIT_USD,
   AGENT_FALLBACK_COST_PER_1K_TOKENS_USD,
   AGENT_MAX_ITERATIONS,
-  AGENT_TIMEOUT_MS
+  AGENT_TIMEOUT_MS,
+  AGENT_TOOL_OUTPUT_MAX_CHARS
 } from '@ghostfolio/api/app/endpoints/ai/agent/agent.constants';
 import {
   LLM_CLIENT_TOKEN,
@@ -16,6 +17,7 @@ import {
 } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
 import { ToolRegistry } from '@ghostfolio/api/app/endpoints/ai/tools/tool.registry';
 import { ToolResultEnvelope } from '@ghostfolio/api/app/endpoints/ai/tools/tool.types';
+import { summarizeToolOutput } from '@ghostfolio/api/app/endpoints/ai/tools/utils/tool-summarizers';
 import type { SseEvent } from '@ghostfolio/common/interfaces';
 
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
@@ -104,9 +106,10 @@ export class ReactAgentService {
    * Single execution path — no logic drift.
    */
   public async run(input: ReactAgentRunInput): Promise<ReactAgentRunResult> {
+    const requestId = input.requestId ?? randomUUID();
     let result: ReactAgentRunResult | undefined;
 
-    for await (const event of this.runStreaming(input)) {
+    for await (const event of this.runStreaming({ ...input, requestId })) {
       if (event.type === '_agent_done') {
         result = (event as SseAgentDoneEvent).result;
       }
@@ -126,11 +129,20 @@ export class ReactAgentService {
     const requestId = input.requestId ?? randomUUID();
     const startedAt = Date.now();
     const signal = input.signal;
+    let finalResult: ReactAgentRunResult | undefined;
+
+    const doneEvent = (result: ReactAgentRunResult): SseAgentDoneEvent => {
+      finalResult = result;
+
+      return {
+        result,
+        type: '_agent_done'
+      };
+    };
 
     if (this.isCircuitBreakerOpen(guardrails, startedAt)) {
-      yield {
-        type: '_agent_done',
-        result: this.buildGuardrailResult({
+      yield doneEvent(
+        this.buildGuardrailResult({
           estimatedCostUsd: 0,
           executedTools: [],
           guardrail: 'CIRCUIT_BREAKER',
@@ -138,7 +150,7 @@ export class ReactAgentService {
           startedAt,
           toolCalls: 0
         })
-      };
+      );
 
       return;
     }
@@ -183,18 +195,15 @@ export class ReactAgentService {
 
         // Check abort signal before each iteration
         if (signal?.aborted) {
-          yield {
-            type: '_agent_done',
-            result: {
-              elapsedMs: Date.now() - startedAt,
-              estimatedCostUsd: this.roundCost(estimatedCostUsd),
-              executedTools: executedToolResults,
-              iterations: iterationCount,
-              response: 'Request was cancelled.',
-              status: 'partial',
-              toolCalls: toolCallsCount
-            }
-          };
+          yield doneEvent({
+            elapsedMs: Date.now() - startedAt,
+            estimatedCostUsd: this.roundCost(estimatedCostUsd),
+            executedTools: executedToolResults,
+            iterations: iterationCount,
+            response: 'Request was cancelled.',
+            status: 'partial',
+            toolCalls: toolCallsCount
+          });
 
           return;
         }
@@ -209,9 +218,8 @@ export class ReactAgentService {
         if (this.hasTimedOut(startedAt, guardrails.timeoutMs)) {
           this.recordSuccess();
 
-          yield {
-            type: '_agent_done',
-            result: this.buildGuardrailResult({
+          yield doneEvent(
+            this.buildGuardrailResult({
               estimatedCostUsd,
               executedTools: executedToolResults,
               guardrail: 'TIMEOUT',
@@ -219,7 +227,7 @@ export class ReactAgentService {
               startedAt,
               toolCalls: toolCallsCount
             })
-          };
+          );
 
           return;
         }
@@ -227,9 +235,8 @@ export class ReactAgentService {
         if (estimatedCostUsd >= guardrails.costLimitUsd) {
           this.recordSuccess();
 
-          yield {
-            type: '_agent_done',
-            result: this.buildGuardrailResult({
+          yield doneEvent(
+            this.buildGuardrailResult({
               estimatedCostUsd,
               executedTools: executedToolResults,
               guardrail: 'COST_LIMIT',
@@ -237,7 +244,7 @@ export class ReactAgentService {
               startedAt,
               toolCalls: toolCallsCount
             })
-          };
+          );
 
           return;
         }
@@ -278,9 +285,8 @@ export class ReactAgentService {
         if (estimatedCostUsd > guardrails.costLimitUsd) {
           this.recordSuccess();
 
-          yield {
-            type: '_agent_done',
-            result: this.buildGuardrailResult({
+          yield doneEvent(
+            this.buildGuardrailResult({
               estimatedCostUsd,
               executedTools: executedToolResults,
               guardrail: 'COST_LIMIT',
@@ -288,7 +294,7 @@ export class ReactAgentService {
               startedAt,
               toolCalls: toolCallsCount
             })
-          };
+          );
 
           return;
         }
@@ -314,19 +320,16 @@ export class ReactAgentService {
           if (consecutiveDuplicateToolCalls >= 3) {
             this.recordSuccess();
 
-            yield {
-              type: '_agent_done',
-              result: {
-                elapsedMs: Date.now() - startedAt,
-                estimatedCostUsd: this.roundCost(estimatedCostUsd),
-                executedTools: executedToolResults,
-                iterations: iterationCount,
-                response:
-                  'The assistant could not make progress and stopped to avoid repeating the same action.',
-                status: 'partial',
-                toolCalls: toolCallsCount
-              }
-            };
+            yield doneEvent({
+              elapsedMs: Date.now() - startedAt,
+              estimatedCostUsd: this.roundCost(estimatedCostUsd),
+              executedTools: executedToolResults,
+              iterations: iterationCount,
+              response:
+                'The assistant could not make progress and stopped to avoid repeating the same action.',
+              status: 'partial',
+              toolCalls: toolCallsCount
+            });
 
             return;
           }
@@ -337,40 +340,52 @@ export class ReactAgentService {
             toolCalls: completion.toolCalls
           });
 
+          // Check abort before tool execution
+          if (signal?.aborted) {
+            yield doneEvent({
+              elapsedMs: Date.now() - startedAt,
+              estimatedCostUsd: this.roundCost(estimatedCostUsd),
+              executedTools: executedToolResults,
+              iterations: iterationCount,
+              response: 'Request was cancelled.',
+              status: 'partial',
+              toolCalls: toolCallsCount
+            });
+
+            return;
+          }
+
+          // Emit tool_call events for all tools before starting parallel execution
           for (const toolCall of completion.toolCalls) {
-            // Check abort before tool execution
-            if (signal?.aborted) {
-              yield {
-                type: '_agent_done',
-                result: {
-                  elapsedMs: Date.now() - startedAt,
-                  estimatedCostUsd: this.roundCost(estimatedCostUsd),
-                  executedTools: executedToolResults,
-                  iterations: iterationCount,
-                  response: 'Request was cancelled.',
-                  status: 'partial',
-                  toolCalls: toolCallsCount
-                }
-              };
-
-              return;
-            }
-
             yield {
               type: 'tool_call',
               toolName: toolCall.name,
               iteration
             };
+          }
 
-            const { envelope, message: toolMessage } =
-              await this.executeToolCall({
+          // Execute all tool calls from this LLM turn in parallel.
+          // Individual tool errors are caught inside executeToolCall and
+          // returned as error envelopes so that one failing tool does not
+          // prevent the others from running.
+          const toolResults = await Promise.all(
+            completion.toolCalls.map((toolCall) =>
+              this.executeToolCall({
                 requestId,
                 startedAt,
                 timeoutMs: guardrails.timeoutMs,
                 toolCall,
                 toolRegistry,
                 userId: input.userId
-              });
+              })
+            )
+          );
+
+          // Collect results: push tool messages, accumulate executed tools,
+          // emit tool_result events (order matches the original toolCalls order).
+          for (let i = 0; i < completion.toolCalls.length; i++) {
+            const toolCall = completion.toolCalls[i];
+            const { envelope, message: toolMessage } = toolResults[i];
 
             messages.push(toolMessage);
             executedToolResults.push({
@@ -391,16 +406,29 @@ export class ReactAgentService {
 
         if (completion.text?.trim()) {
           const responseText = completion.text.trim();
-          const looksLikeRefusal =
-            /\b(?:can'?t|cannot|don'?t|unable to|not able to|outside.{0,20}scope|only help with)\b/i.test(
+
+          // Detect unbacked portfolio claims: the LLM is making specific
+          // assertions about the user's portfolio data without having called
+          // any tools to fetch that data. This is the only scenario where
+          // escalation (forcing tool use) is appropriate.
+          //
+          // We intentionally do NOT detect "refusals" (negative) because the
+          // LLM can refuse in countless ways. Instead we detect the positive
+          // signal: portfolio-specific claims that should be backed by tools.
+          //
+          // The pattern requires a concrete assertion (verb + predicate),
+          // not just a mention of "portfolio" (which could be a greeting
+          // like "How can I help with your portfolio?").
+          const looksLikeUnbackedPortfolioClaim =
+            toolCallsCount === 0 &&
+            /\b(?:your portfolio (?:is|has|shows|contains|looks|total|value|worth)|your holdings (?:are|include|show|consist)|total value (?:is|of)|net worth (?:is|of)|worth (?:about |approximately )?\$[\d,]+|(?:you have|you own|you hold) [\d]+ (?:share|position|holding|stock|asset)|(?:portfolio|account) (?:is worth|has a|total is|value is|contains)|(?:gain|loss|return) of [\d.]+%|risk (?:score|level|rating) (?:is|of) |(?:compliant|non-compliant) with|(?:tax liability|tax estimate) (?:is|of)|your (?:allocation is|exposure is|positions? (?:are|include)))\b/i.test(
               responseText
             );
 
           if (
             toolDefinitions.length > 0 &&
-            toolCallsCount === 0 &&
-            !escalationAttempted &&
-            !looksLikeRefusal
+            looksLikeUnbackedPortfolioClaim &&
+            !escalationAttempted
           ) {
             escalationAttempted = true;
             escalationPending = true;
@@ -408,7 +436,7 @@ export class ReactAgentService {
             messages.push({ content: responseText, role: 'assistant' });
             messages.push({
               content:
-                'You must use the available tools to answer portfolio-specific questions. Do not provide determinations without calling the relevant tool first.',
+                "You appear to be making claims about the user's portfolio without calling any tools to verify. Please call the appropriate tool to get real data, or if the request is outside your scope, decline politely.",
               role: 'user'
             });
 
@@ -417,18 +445,15 @@ export class ReactAgentService {
 
           this.recordSuccess();
 
-          yield {
-            type: '_agent_done',
-            result: {
-              elapsedMs: Date.now() - startedAt,
-              estimatedCostUsd: this.roundCost(estimatedCostUsd),
-              executedTools: executedToolResults,
-              iterations: iterationCount,
-              response: responseText,
-              status: 'completed',
-              toolCalls: toolCallsCount
-            }
-          };
+          yield doneEvent({
+            elapsedMs: Date.now() - startedAt,
+            estimatedCostUsd: this.roundCost(estimatedCostUsd),
+            executedTools: executedToolResults,
+            iterations: iterationCount,
+            response: responseText,
+            status: 'completed',
+            toolCalls: toolCallsCount
+          });
 
           return;
         }
@@ -436,9 +461,8 @@ export class ReactAgentService {
 
       this.recordSuccess();
 
-      yield {
-        type: '_agent_done',
-        result: this.buildGuardrailResult({
+      yield doneEvent(
+        this.buildGuardrailResult({
           estimatedCostUsd,
           executedTools: executedToolResults,
           guardrail: 'MAX_ITERATIONS',
@@ -446,14 +470,13 @@ export class ReactAgentService {
           startedAt,
           toolCalls: toolCallsCount
         })
-      };
+      );
     } catch (error) {
       if (error instanceof AgentTimeoutError) {
         this.recordSuccess();
 
-        yield {
-          type: '_agent_done',
-          result: this.buildGuardrailResult({
+        yield doneEvent(
+          this.buildGuardrailResult({
             estimatedCostUsd,
             executedTools: executedToolResults,
             guardrail: 'TIMEOUT',
@@ -461,7 +484,7 @@ export class ReactAgentService {
             startedAt,
             toolCalls: toolCallsCount
           })
-        };
+        );
 
         return;
       }
@@ -474,19 +497,20 @@ export class ReactAgentService {
 
       this.recordFailure(guardrails, Date.now());
 
-      yield {
-        type: '_agent_done',
-        result: {
-          elapsedMs: Date.now() - startedAt,
-          estimatedCostUsd: this.roundCost(estimatedCostUsd),
-          executedTools: executedToolResults,
-          iterations: iterationCount,
-          response:
-            'The AI assistant is temporarily unavailable. Please try again shortly.',
-          status: 'failed',
-          toolCalls: toolCallsCount
-        }
-      };
+      yield doneEvent({
+        elapsedMs: Date.now() - startedAt,
+        estimatedCostUsd: this.roundCost(estimatedCostUsd),
+        executedTools: executedToolResults,
+        iterations: iterationCount,
+        response:
+          'The AI assistant is temporarily unavailable. Please try again shortly.',
+        status: 'failed',
+        toolCalls: toolCallsCount
+      });
+    } finally {
+      if (finalResult) {
+        this.emitTelemetry(finalResult, requestId);
+      }
     }
   }
 
@@ -626,10 +650,34 @@ export class ReactAgentService {
               status: 'success'
             };
 
+      // Context-window guard: summarize + truncate oversized tool output
+      // before injecting it into the LLM conversation. Without this a single
+      // large response (e.g. a full transaction history) can silently overflow
+      // the context window, causing the LLM to error or produce garbled answers.
+      const TRUNCATION_SUFFIX =
+        '\n[TRUNCATED: tool output exceeded the context window limit]';
+
+      const rawContent = summarizeToolOutput(
+        toolCall.name,
+        // Pass data-only to the summarizer for human-readable output, but
+        // embed the full toolResponse (envelope) as the raw JSON so that
+        // downstream toolEnvelope checks can still find status/error fields.
+        envelope.data ?? toolResponse,
+        toolResponse
+      );
+
+      const content =
+        rawContent.length > AGENT_TOOL_OUTPUT_MAX_CHARS
+          ? rawContent.slice(
+              0,
+              AGENT_TOOL_OUTPUT_MAX_CHARS - TRUNCATION_SUFFIX.length
+            ) + TRUNCATION_SUFFIX
+          : rawContent;
+
       return {
         envelope,
         message: {
-          content: JSON.stringify(toolResponse),
+          content,
           name: toolCall.name,
           role: 'tool',
           toolCallId: toolCall.id
@@ -799,6 +847,34 @@ export class ReactAgentService {
       openedAt: 0,
       state: 'closed'
     };
+  }
+
+  /**
+   * Emits a structured JSON telemetry log after every agent run.
+   *
+   * Log fields:
+   *  - status / guardrail  — outcome classification
+   *  - toolCalls / iterations — reasoning depth
+   *  - estimatedCostUsd / elapsedMs — cost & latency
+   *  - requestId — correlation ID for log tracing
+   *
+   * userId is intentionally omitted from telemetry to avoid PII in logs.
+   */
+  private emitTelemetry(result: ReactAgentRunResult, requestId: string): void {
+    const record: Record<string, unknown> = {
+      elapsedMs: result.elapsedMs,
+      estimatedCostUsd: result.estimatedCostUsd,
+      iterations: result.iterations,
+      requestId,
+      status: result.status,
+      toolCalls: result.toolCalls
+    };
+
+    if (result.guardrail) {
+      record['guardrail'] = result.guardrail;
+    }
+
+    Logger.log(JSON.stringify(record), 'ReactAgentService');
   }
 
   private summarizeToolResult(

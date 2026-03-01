@@ -1,9 +1,12 @@
 /**
- * Golden Sets — Fast Tier (mocked LLM)
+ * Agent Framework Tests (mocked LLM)
  *
  * Runs every commit, no env gate, <30s budget.
- * Tests actual ReactAgentService + ToolRegistry + ResponseVerifierService
- * with deterministic tool stubs and scripted LLM completions.
+ * Tests ReactAgentService + ToolRegistry + ResponseVerifierService plumbing:
+ *   schema validation, auth scoping, guardrails, envelope structure, routing.
+ *
+ * These are NOT golden-set evals — the LLM is a scripted mock so LLM
+ * behaviour is not tested here. See golden-sets-live.spec.ts for that.
  *
  * Cases are loaded at MODULE SCOPE — Jest registers it() blocks at parse time.
  */
@@ -29,6 +32,10 @@ import {
   extractActualToolsCalled,
   assertToolCallCounts,
   assertToolEnvelopes,
+  toolAccuracy,
+  toolEfficiency,
+  contentPrecision,
+  type EvalCaseMetrics,
   type ToolInvocationEntry
 } from './eval-assert';
 import { validateEvalSuite, type EvalCaseDefinition } from './eval-case.schema';
@@ -80,15 +87,88 @@ function buildToolsWithInvocationLog(
   return buildToolsForProfile(evalCase.profile, invocationLog);
 }
 
+// ─── Metrics Collection ────────────────────────────────────────────────────────
+
+const metricsLog: EvalCaseMetrics[] = [];
+
 // ─── Test Suite ────────────────────────────────────────────────────────────────
 
 jest.setTimeout(30_000);
 
-describe('Golden Sets (fast)', () => {
+describe('Agent Framework Tests', () => {
   const verifier = new ResponseVerifierService();
 
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  afterAll(() => {
+    if (metricsLog.length === 0) return;
+
+    const passed = metricsLog.filter((m) => m.passed).length;
+    const total = metricsLog.length;
+    const pct = ((passed / total) * 100).toFixed(1);
+
+    const avgAccuracy = (
+      metricsLog.reduce((s, m) => s + m.toolAccuracyScore, 0) / total
+    ).toFixed(2);
+    const avgEfficiency = (
+      metricsLog.reduce((s, m) => s + m.toolEfficiencyScore, 0) / total
+    ).toFixed(2);
+    const avgPrecision = (
+      metricsLog.reduce((s, m) => s + m.contentPrecisionScore, 0) / total
+    ).toFixed(2);
+
+    // Group by category
+    const byCategory: Record<string, { passed: number; total: number }> = {};
+
+    for (const m of metricsLog) {
+      // Extract category from caseId prefix (e.g. "rich-" → "single-tool", "adv-" → "adversarial")
+      const cat =
+        m.caseId.startsWith('adv-') ||
+        m.caseId.startsWith('prompt-') ||
+        m.caseId.startsWith('malformed-')
+          ? 'adversarial'
+          : m.caseId.startsWith('multi-')
+            ? 'multi-tool'
+            : m.caseId.startsWith('guardrail-')
+              ? 'guardrail'
+              : m.caseId.startsWith('schema-')
+                ? 'schema-safety'
+                : m.caseId.startsWith('auth-')
+                  ? 'auth'
+                  : m.caseId.startsWith('edge-')
+                    ? 'edge-case'
+                    : 'single-tool';
+
+      byCategory[cat] ??= { passed: 0, total: 0 };
+      byCategory[cat].total++;
+
+      if (m.passed) byCategory[cat].passed++;
+    }
+
+    console.log('\n' + '═'.repeat(60));
+    console.log('GOLDEN SET RESULTS');
+    console.log('═'.repeat(60));
+
+    for (const [cat, stats] of Object.entries(byCategory).sort()) {
+      const catPct = ((stats.passed / stats.total) * 100).toFixed(0);
+      const bar =
+        '█'.repeat(Math.round((stats.passed / stats.total) * 20)) +
+        '░'.repeat(20 - Math.round((stats.passed / stats.total) * 20));
+
+      console.log(
+        `  ${cat.padEnd(18)} ${String(stats.passed).padStart(2)}/${stats.total}  (${String(catPct).padStart(3)}%)  ${bar}`
+      );
+    }
+
+    console.log('─'.repeat(60));
+    console.log(`  Overall: ${passed}/${total} passed (${pct}%)`);
+    console.log('─'.repeat(60));
+    console.log(`  Avg Tool Accuracy:   ${avgAccuracy}`);
+    console.log(`  Avg Tool Efficiency: ${avgEfficiency}`);
+    console.log(`  Avg Content Precision: ${avgPrecision}`);
+    console.log('═'.repeat(60) + '\n');
   });
 
   for (const evalCase of genericCases) {
@@ -126,7 +206,7 @@ describe('Golden Sets (fast)', () => {
       // Standard structural checks (status, confidence, content, guardrail)
       assertEvalInvariants(evalCase, verified);
 
-      // Tool call counts from invocationLog (source of truth for actual calls)
+      // Tool call counts — includes mustNotCallTools / forbiddenTools
       assertToolCallCounts(evalCase.expect, invocationLog);
 
       // Envelope checks — inspect serialized tool messages in LLM call history
@@ -138,6 +218,24 @@ describe('Golden Sets (fast)', () => {
       if (invocationLog.length > 0) {
         assertAuthScoping(invocationLog, EVAL_USER_ID);
       }
+
+      // Collect replay metrics (Phase 5)
+      metricsLog.push({
+        caseId: evalCase.id,
+        contentPrecisionScore: contentPrecision(
+          evalCase.expect.mustContainAll,
+          verified.response
+        ),
+        passed: true, // if we reach here, the test passed
+        toolAccuracyScore: toolAccuracy(
+          evalCase.expect.requiredTools,
+          invokedToolNames
+        ),
+        toolEfficiencyScore: toolEfficiency(
+          evalCase.expect.requiredTools,
+          invokedToolNames
+        )
+      });
     });
   }
 

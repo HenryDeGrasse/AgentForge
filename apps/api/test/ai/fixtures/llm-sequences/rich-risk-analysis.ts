@@ -9,7 +9,7 @@ export const richRiskAnalysis: LLMCompletionResponse[] = [
   },
   {
     finishReason: 'stop',
-    text: 'Your portfolio has a medium overall risk level. There is a concentration risk flag: SYM-A represents 40% of your portfolio, exceeding the 25% threshold. Your top 3 holdings account for 90% of the portfolio, and diversification across asset classes shows 70% equity, 20% bonds, and 10% commodities.',
+    text: 'Your portfolio is rated **HIGH** risk based on concentration analysis.\n\n**Key risk flags:**\n- **Single-position concentration**: SYM-A is 40% of your portfolio (threshold: 25%) — HIGH severity\n- **Top-3 concentration**: SYM-A + SYM-B + SYM-C account for 90% of holdings\n- **Asset class exposure**: 70% in equities\n\n**Holdings count**: 4 positions totalling $10,000\n\nRecommendation: Consider diversifying out of SYM-A to reduce concentration risk.',
     toolCalls: [],
     usage: { estimatedCostUsd: 0.001 }
   }

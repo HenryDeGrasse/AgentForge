@@ -244,6 +244,68 @@ describe('ResponseVerifierService', () => {
 
       expect(result.warnings.length).toBeGreaterThanOrEqual(3);
     });
+
+    it('warns about unbacked portfolio claims when toolCalls === 0', () => {
+      const result = service.verify(
+        {
+          ...BASE_RESULT,
+          response:
+            'Your portfolio is worth approximately $50,000 with good diversification.',
+          toolCalls: 0
+        },
+        []
+      );
+
+      expect(result.warnings).toContain(
+        'Response contains portfolio-specific claims but no data tools were used to verify them.'
+      );
+    });
+
+    it('does NOT warn about unbacked claims when tools were called', () => {
+      const result = service.verify(
+        {
+          ...BASE_RESULT,
+          response: 'Your portfolio is worth $50,000.',
+          toolCalls: 1
+        },
+        ['get_portfolio_summary']
+      );
+
+      expect(result.warnings).not.toContain(
+        'Response contains portfolio-specific claims but no data tools were used to verify them.'
+      );
+    });
+
+    it('does NOT warn about unbacked claims for generic refusals', () => {
+      const result = service.verify(
+        {
+          ...BASE_RESULT,
+          response:
+            "I can only help with portfolio analysis. I can't write poems.",
+          toolCalls: 0
+        },
+        []
+      );
+
+      expect(result.warnings).not.toContain(
+        'Response contains portfolio-specific claims but no data tools were used to verify them.'
+      );
+    });
+
+    it('does NOT warn about unbacked claims for greetings mentioning portfolio', () => {
+      const result = service.verify(
+        {
+          ...BASE_RESULT,
+          response: 'How can I help you with your portfolio today?',
+          toolCalls: 0
+        },
+        []
+      );
+
+      expect(result.warnings).not.toContain(
+        'Response contains portfolio-specific claims but no data tools were used to verify them.'
+      );
+    });
   });
 
   // ─── safe fallback response ─────────────────────────────────────────────────
@@ -295,6 +357,64 @@ describe('ResponseVerifierService', () => {
       const result = service.verify(BASE_RESULT, ['get_portfolio_summary']);
 
       expect(result.guardrail).toBeUndefined();
+    });
+  });
+
+  // ─── requiresHumanReview ────────────────────────────────────────────────────
+
+  describe('requiresHumanReview', () => {
+    it('is false for a clean completed response with tool calls', () => {
+      const input: ReactAgentRunResult = {
+        ...BASE_RESULT,
+        status: 'completed',
+        toolCalls: 1,
+        executedTools: [
+          {
+            toolName: 'get_portfolio_summary',
+            envelope: { status: 'success', data: {} }
+          }
+        ]
+      };
+
+      const result = service.verify(input, ['get_portfolio_summary']);
+
+      expect(result.requiresHumanReview).toBe(false);
+    });
+
+    it('is true when confidence is low (failed status)', () => {
+      const input: ReactAgentRunResult = {
+        ...BASE_RESULT,
+        status: 'failed',
+        response: 'An error occurred.'
+      };
+
+      const result = service.verify(input, []);
+
+      expect(result.requiresHumanReview).toBe(true);
+    });
+
+    it('is true when a guardrail fired', () => {
+      const input: ReactAgentRunResult = {
+        ...BASE_RESULT,
+        guardrail: 'TIMEOUT',
+        status: 'partial'
+      };
+
+      const result = service.verify(input, []);
+
+      expect(result.requiresHumanReview).toBe(true);
+    });
+
+    it('includes traceId passed in from caller', () => {
+      const result = service.verify(BASE_RESULT, [], 'trace-abc-123');
+
+      expect(result.traceId).toBe('trace-abc-123');
+    });
+
+    it('defaults traceId to empty string when not provided', () => {
+      const result = service.verify(BASE_RESULT, []);
+
+      expect(result.traceId).toBe('');
     });
   });
 });

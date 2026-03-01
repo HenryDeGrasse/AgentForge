@@ -302,9 +302,9 @@ function buildRichProfileTools(log: ToolInvocationEntry[]): ToolDefinition[] {
           ],
           generatedAt: '2025-06-01T00:00:00.000Z',
           holdingsCount: 4,
-          overallRiskLevel: 'MEDIUM',
+          overallRiskLevel: 'HIGH',
           portfolioValueInBaseCurrency: 10000,
-          volatilityProxyScore: 0.45,
+          volatilityProxyScore: 0.72,
           warnings: []
         };
       },

@@ -100,13 +100,26 @@ describe('Ai chat integration', () => {
     const aiService = new AiService(
       new ActionExtractor(),
       new ChartExtractor(),
+      {
+        startTrace: jest.fn().mockReturnValue({ traceId: '', end: jest.fn() }),
+        addScore: jest.fn(),
+        flush: jest.fn()
+      } as any,
       llmClient,
       {
         getDetails: jest.fn()
       } as any,
       mockPrismaService,
       reactAgentService,
-      new ResponseVerifierService()
+      new ResponseVerifierService(),
+      {
+        selectTools: jest
+          .fn()
+          .mockImplementation((_msg, available, caller) => ({
+            tools: caller ?? available,
+            source: caller ? 'caller_override' : 'fallback_all'
+          }))
+      } as any
     );
 
     const aiController = new AiController(
@@ -115,6 +128,7 @@ describe('Ai chat integration', () => {
         buildFiltersFromQueryParams: jest.fn()
       } as any,
       {} as any,
+      { addScore: jest.fn(), startTrace: jest.fn(), flush: jest.fn() } as any,
       {
         user: {
           id: 'auth-user-1',

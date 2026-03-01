@@ -38,6 +38,8 @@ const STUB_VERIFIED: VerifiedResponse = {
   chartData: [],
   confidence: 'high',
   invokedToolNames: ['get_portfolio_summary'],
+  requiresHumanReview: false,
+  traceId: '',
   warnings: []
 };
 
@@ -104,11 +106,22 @@ function buildService(
   return new AiService(
     { extract: jest.fn().mockReturnValue([]) } as any,
     { extract: jest.fn().mockReturnValue([]) } as any,
+    {
+      startTrace: jest.fn().mockReturnValue({ traceId: '', end: jest.fn() }),
+      addScore: jest.fn(),
+      flush: jest.fn()
+    } as any,
     { complete: jest.fn() } as LLMClient,
     { getDetails: jest.fn() } as any as PortfolioService,
     prismaService,
     { run: agentRun } as any as ReactAgentService,
-    { verify: verifierVerify } as any as ResponseVerifierService
+    { verify: verifierVerify } as any as ResponseVerifierService,
+    {
+      selectTools: jest.fn().mockImplementation((_msg, available, caller) => ({
+        tools: caller ?? available,
+        source: caller ? 'caller_override' : 'fallback_all'
+      }))
+    } as any
   );
 }
 
@@ -401,44 +414,10 @@ describe('AiService.chat() — seq ordering guarantee', () => {
   });
 });
 
-// ─── Ambiguous follow-up routing ─────────────────────────────────────────────
+// ─── Follow-up routing (LLM handles scope) ──────────────────────────────────
 
-describe('AiService.chat() — ambiguous follow-up routing', () => {
-  it('asks for clarification when vague follow-up follows a scope refusal', async () => {
-    const priorDbMessages = [
-      {
-        content:
-          "I can't help with that request. I'm a portfolio analysis assistant and can only help with: portfolio summaries, transaction history, risk analysis.",
-        role: 'assistant',
-        seq: 2
-      },
-      { content: 'Tell me a joke', role: 'user', seq: 1 }
-    ];
-
-    const { prismaService } = buildPrisma({
-      conversationId: 'conv-after-refusal',
-      existingConvSystemPrompt: AGENT_DEFAULT_SYSTEM_PROMPT,
-      priorDbMessages
-    });
-
-    const agentRun = buildAgentRun();
-    const service = buildService(prismaService, agentRun);
-
-    const result = await service.chat({
-      conversationId: 'conv-after-refusal',
-      message: 'based on that, tell me more',
-      userId: 'user-1'
-    });
-
-    // Should NOT call the agent — should ask for clarification
-    expect(agentRun).not.toHaveBeenCalled();
-    expect(result.toolCalls).toBe(0);
-    expect(result.response.toLowerCase()).toMatch(
-      /more specific|which|portfolio summar/
-    );
-  });
-
-  it('allows vague follow-up when last assistant message was portfolio-related', async () => {
+describe('AiService.chat() — follow-up routing', () => {
+  it('forwards all follow-ups to the agent (LLM handles scope via system prompt)', async () => {
     const priorDbMessages = [
       {
         content:
@@ -458,31 +437,14 @@ describe('AiService.chat() — ambiguous follow-up routing', () => {
     const agentRun = buildAgentRun();
     const service = buildService(prismaService, agentRun);
 
+    // Vague follow-up should reach the agent since prior context is available
     await service.chat({
       conversationId: 'conv-after-portfolio',
-      message: 'based on that, analyze the risk',
+      message: 'yes please',
       userId: 'user-1'
     });
 
-    // Should call the agent — valid follow-up to portfolio context
     expect(agentRun).toHaveBeenCalledTimes(1);
-  });
-
-  it('asks for clarification when vague follow-up has no conversation history', async () => {
-    // New conversation (no conversationId) → no prior messages
-    const agentRun = buildAgentRun();
-    const service = buildService(buildPrisma().prismaService, agentRun);
-
-    const result = await service.chat({
-      message: 'tell me more',
-      userId: 'user-1'
-    });
-
-    expect(agentRun).not.toHaveBeenCalled();
-    expect(result.toolCalls).toBe(0);
-    expect(result.response.toLowerCase()).toMatch(
-      /more specific|which|portfolio summar/
-    );
   });
 });
 

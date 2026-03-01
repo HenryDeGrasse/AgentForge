@@ -24,6 +24,7 @@ export type EvalSubcategory =
   | 'guardrail-cost'
   | 'guardrail-iterations'
   | 'guardrail-timeout'
+  | 'jailbreak'
   | 'malformed-query'
   | 'market-data'
   | 'multi-tool-orchestration'
@@ -34,10 +35,12 @@ export type EvalSubcategory =
   | 'rebalance'
   | 'risk-analysis'
   | 'schema-safety'
+  | 'scope-refusal'
   | 'simulate-trades'
   | 'stress-test'
   | 'tax'
   | 'transaction-history'
+  | 'unowned-symbol'
   | 'user-scoping';
 
 export type VerifiedStatus = 'completed' | 'failed' | 'partial';
@@ -72,14 +75,30 @@ export interface ToolEnvelopeCheck {
   warningsInclude?: string[];
 }
 
+export interface DataValueCheck {
+  /** Label used in failure messages */
+  label: string;
+  /** Substring that must appear in the response text (case-insensitive) */
+  valueInResponse: string;
+}
+
 export interface EvalCaseExpect {
+  /** Numeric/data values (from tool output) that must appear in the response */
+  dataValueChecks?: DataValueCheck[];
   expectedGuardrail?: AgentGuardrailType;
+  /** Tools that must NOT have been called — fail if any of these appear in invocationLog */
+  forbiddenTools?: string[];
   maxElapsedMs?: number;
   maxToolCalls?: number;
   minConfidence: ConfidenceLevel;
   minToolCalls: number;
+  /** ALL of these must appear in the response (AND logic, case-insensitive) */
+  mustContainAll?: string[];
+  /** At least one of these must appear in the response (OR logic, case-insensitive) */
   mustIncludeAny: string[];
   mustNotIncludeAny: string[];
+  /** When true, asserts that zero tools were called — primary invariant for adversarial cases */
+  mustNotCallTools?: boolean;
   requiredTools: string[];
   status: VerifiedStatus;
   toolEnvelopeChecks?: ToolEnvelopeCheck[];
@@ -134,6 +153,7 @@ const VALID_SUBCATEGORIES: ReadonlySet<string> = new Set<EvalSubcategory>([
   'guardrail-cost',
   'guardrail-iterations',
   'guardrail-timeout',
+  'jailbreak',
   'malformed-query',
   'market-data',
   'multi-tool-orchestration',
@@ -144,10 +164,12 @@ const VALID_SUBCATEGORIES: ReadonlySet<string> = new Set<EvalSubcategory>([
   'rebalance',
   'risk-analysis',
   'schema-safety',
+  'scope-refusal',
   'simulate-trades',
   'stress-test',
   'tax',
   'transaction-history',
+  'unowned-symbol',
   'user-scoping'
 ]);
 

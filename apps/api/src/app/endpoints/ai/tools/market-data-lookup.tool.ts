@@ -318,8 +318,15 @@ export class MarketDataLookupTool implements ToolDefinition<
     const cacheKey = `${userId}:${query.toLowerCase()}`;
     const negExpiry = lookupNegativeCache.get(cacheKey);
 
-    if (negExpiry !== undefined && Date.now() < negExpiry) {
-      return undefined;
+    if (negExpiry !== undefined) {
+      if (Date.now() < negExpiry) {
+        return undefined;
+      }
+
+      // Entry has expired — remove it to prevent unbounded Map growth.
+      // Without deletion the Map would accumulate stale keys indefinitely,
+      // causing a memory leak in long-running server processes.
+      lookupNegativeCache.delete(cacheKey);
     }
 
     const user = await this.userService.user({ id: userId });

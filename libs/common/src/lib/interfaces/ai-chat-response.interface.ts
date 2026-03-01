@@ -29,10 +29,20 @@ export interface AiChatResponse {
   guardrail?: string;
   invokedToolNames?: string[];
   iterations: number;
+  /**
+   * True when agent confidence is low, a guardrail fired, or the verifier
+   * detected unbacked claims. UI can show a "⚠️ Review recommended" badge.
+   */
+  requiresHumanReview?: boolean;
   response: string;
   sources: string[];
   status: AiChatStatus;
   toolCalls: number;
+  /**
+   * Langfuse trace ID. Pass back to POST /api/v1/ai/feedback to attach
+   * thumbs-up/down scores to this specific response.
+   */
+  traceId?: string;
   warnings: string[];
 }
 

@@ -26,6 +26,12 @@ export interface VerifiedResponse {
   invokedToolNames: string[];
   /** Number of ReAct iterations the agent performed. */
   iterations: number;
+  /**
+   * True when the agent's confidence is low, a guardrail fired, or the
+   * verifier detected unbacked claims. Signals the UI to show a
+   * "⚠️ Human review recommended" badge.
+   */
+  requiresHumanReview: boolean;
   /** Verified, non-empty response text. */
   response: string;
   /** Tool names that contributed to the response (requested/legacy). */
@@ -34,6 +40,11 @@ export interface VerifiedResponse {
   status: ResponseStatus;
   /** Number of tool calls executed. */
   toolCalls: number;
+  /**
+   * Langfuse trace ID for this request. Used by the feedback endpoint
+   * to attach thumbs-up/down scores to the correct trace.
+   */
+  traceId: string;
   /** Domain-level warnings surfaced by the verifier. */
   warnings: string[];
 }

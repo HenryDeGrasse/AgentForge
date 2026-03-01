@@ -10,6 +10,7 @@ describe('AiController', () => {
       aiService as any,
       {} as any,
       {} as any,
+      { addScore: jest.fn(), startTrace: jest.fn(), flush: jest.fn() } as any,
       {} as any
     );
 
@@ -44,6 +45,7 @@ describe('AiController', () => {
       aiService as any,
       apiService as any,
       {} as any,
+      { addScore: jest.fn(), startTrace: jest.fn(), flush: jest.fn() } as any,
       request as any
     );
 
@@ -91,6 +93,7 @@ describe('AiController', () => {
         buildFiltersFromQueryParams: jest.fn()
       } as any,
       {} as any,
+      { addScore: jest.fn(), startTrace: jest.fn(), flush: jest.fn() } as any,
       {
         user: {
           id: 'auth-user-1',

@@ -3,6 +3,7 @@ import { AccountService } from '@ghostfolio/api/app/account/account.service';
 import { ReactAgentService } from '@ghostfolio/api/app/endpoints/ai/agent/react-agent.service';
 import { LLM_CLIENT_TOKEN } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
 import { OpenAiClientService } from '@ghostfolio/api/app/endpoints/ai/llm/openai-client.service';
+import { ToolRouterService } from '@ghostfolio/api/app/endpoints/ai/routing/tool-router.service';
 import { AnalyzeRiskTool } from '@ghostfolio/api/app/endpoints/ai/tools/analyze-risk.tool';
 import { ComplianceCheckTool } from '@ghostfolio/api/app/endpoints/ai/tools/compliance-check.tool';
 import { GetPortfolioSummaryTool } from '@ghostfolio/api/app/endpoints/ai/tools/get-portfolio-summary.tool';
@@ -40,10 +41,12 @@ import { SymbolProfileModule } from '@ghostfolio/api/services/symbol-profile/sym
 import { Module } from '@nestjs/common';
 
 import { ActionExtractorService } from './action-extractor.service';
+import { AiRateLimiterGuard } from './ai-rate-limiter.guard';
 import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
 import { ChartDataExtractorService } from './chart-data-extractor.service';
 import { ChatConversationService } from './chat-conversation.service';
+import { LangfuseService } from './observability/langfuse.service';
 import { ResponseVerifierService } from './verification/response-verifier.service';
 
 @Module({
@@ -70,7 +73,9 @@ import { ResponseVerifierService } from './verification/response-verifier.servic
     AccountBalanceService,
     AccountService,
     ActionExtractorService,
+    AiRateLimiterGuard,
     AiService,
+    LangfuseService,
     ChartDataExtractorService,
     ChatConversationService,
     CurrentRateService,
@@ -79,6 +84,7 @@ import { ResponseVerifierService } from './verification/response-verifier.servic
     PortfolioCalculatorFactory,
     ReactAgentService,
     ResponseVerifierService,
+    ToolRouterService,
     AnalyzeRiskTool,
     ComplianceCheckTool,
     GetPortfolioSummaryTool,

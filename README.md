@@ -14,6 +14,91 @@ AgentForge is a fork of [Ghostfolio](https://ghostfol.io) that adds a full AI ag
 
 Everything under `apps/api/src/app/endpoints/ai/` is new. The upstream Ghostfolio codebase is otherwise unchanged.
 
+### Improvement Log
+
+| Phase       | Description                                                                         | Status     |
+| ----------- | ----------------------------------------------------------------------------------- | ---------- |
+| **Phase 1** | Bug fixes — chart data extraction, benchmark comparison, memory leak                | ✅ Done    |
+| **Phase 2** | Agent reliability — parallel tool calls, context guard, escalation, cost estimation | ✅ Done    |
+| **Phase 3** | Eval coverage expansion — chart extractor tests, multi-turn evals, injection evals  | ✅ Done    |
+| **Phase 4** | Security hardening — rate limiting, scope gate, output sanitization                 | ✅ Done    |
+| **Phase 5** | Operational improvements — structured telemetry, heartbeat tuning                   | 🔜 Planned |
+
+#### Phase 1 Bug Fixes
+
+1. **`ChartDataExtractorService` — 5 silent chart bugs fixed** (`chart-data-extractor.service.ts`):
+   - `analyze_risk`: asset-class and sector exposure charts now read from `data.exposures.*` instead of non-existent top-level fields. Previously, no risk charts were ever generated.
+   - `market_data_lookup`: line-chart values now use `marketPrice` (the actual field name) instead of `close`/`price`. Previously all data points were 0.
+   - `rebalance_suggest`: table columns now use `currentPct`/`targetPct`/`driftPct`. Previously all percentage cells were empty strings.
+   - `tax_estimate`: table cells now show `netInBaseCurrency` numeric values instead of `[object Object]`.
+   - `compliance_check`: rule names now read from `ruleName` instead of `name`. Previously all rule rows had blank first columns.
+   - Added `chart-data-extractor.service.spec.ts` with 38 tests covering all 10 tool extractors.
+
+2. **`performance_compare` — benchmark comparison made honest** (`performance-compare.tool.ts`):
+   - Comparison now requires the portfolio to have **positive** net returns to classify as "outperforming". Previously a portfolio at -5% could appear to "outperform" a benchmark at -10% from ATH — these are different metrics being compared.
+   - Assumption text updated to explain the limitation (ATH drawdown vs period return).
+
+3. **`lookupNegativeCache` — memory leak fixed** (`market-data-lookup.tool.ts`):
+   - Expired entries are now deleted on access instead of just skipped. Previously, the in-memory `Map` grew indefinitely in long-running server processes.
+
+#### Phase 2 Agent Reliability
+
+1. **Parallel tool execution** (`react-agent.service.ts`):
+   - All tool calls returned in a single LLM turn are now executed with `Promise.all()` instead of sequentially. Worst-case latency drops from `n × tool_time` to `max(tool_time)`.
+   - Individual tool failures are caught and wrapped in error envelopes — one failing tool no longer blocks the others.
+
+2. **Context window guard** (`react-agent.service.ts` + `agent.constants.ts`):
+   - Tool outputs exceeding `AGENT_TOOL_OUTPUT_MAX_CHARS` (32,000 chars ≈ 8k tokens) are truncated with a visible `[TRUNCATED]` notice before being injected into the LLM conversation. Previously a large tool response could silently overflow the context window.
+
+3. **Escalation hardening** (`react-agent.service.ts`):
+   - When tools are available but the LLM answers directly on the first turn without calling any tool (and the answer isn't a clear refusal), the agent injects an escalation prompt and sets `toolChoice: 'required'` for the next turn. This was already present but tests were added to pin the behaviour.
+
+4. **Cost estimation fallback** (`react-agent.service.ts`):
+   - When `estimatedCostUsd` is absent from the LLM response, cost is estimated from `totalTokens` (or `promptTokens + completionTokens`) and `fallbackCostPer1kTokensUsd`. Tests were added to pin all three fallback paths.
+
+#### Phase 3 Eval Coverage
+
+New test file: `apps/api/test/ai/phase3-evals.spec.ts`
+
+1. **Multi-turn conversation rehydration** (3 tests):
+   - Verifies `priorMessages` are injected into the LLM conversation in the correct order (prior user → prior assistant → new user prompt).
+   - Verifies cold start (no `priorMessages`) works identically to the explicit empty-array case.
+   - Regression guard for conversation history ordering.
+
+2. **Indirect prompt injection via tool output** (3 tests):
+   - Verifies the agent passes tool output (including attacker-controlled fields) to the LLM without pre-sanitising it — the LLM must see the injection text to decide how to handle it.
+   - Verifies the final `response` does not echo injection text when the LLM correctly ignores it.
+   - Verifies the context-window guard truncates oversized injection payloads before they enter the LLM context.
+
+#### Phase 4 Security Hardening
+
+1. **Per-user rate limiter** (`ai-rate-limiter.guard.ts`):
+   - `AiRateLimiterGuard` implements a sliding-window rate limit: 20 requests per user per 60-second window.
+   - Applied to both `POST /ai/chat` and `POST /ai/chat/stream`. Excess requests receive HTTP 429.
+   - Guard is `@Injectable()` and registered in `AiModule`; stale timestamps are evicted lazily on each access to prevent unbounded memory growth.
+   - 8 tests cover: single request, at-limit, over-limit, HTTP 429 status, per-user isolation, window expiry, stale eviction, unauthenticated pass-through.
+
+2. **Scope gate keyword-stuffing tests** (`ai.service.spec.ts`):
+   - Added 3 regression tests to pin the out-of-scope-before-financial-relevance ordering:
+     - "write a poem about my stock portfolio" → rejected ("write a poem" matches before "stock")
+     - "predict the future price of my ETF" → rejected ("predict the future" matches before "ETF")
+     - "use my portfolio returns to buy lottery tickets" → rejected ("lottery" matches before "portfolio")
+
+#### Phase 5 Operational Improvements
+
+1. **Structured telemetry** (`react-agent.service.ts`):
+   - `emitTelemetry()` emits a JSON-structured `Logger.log` line after every agent run (both `run()` and the streaming path via `run()`).
+   - Fields: `status`, `guardrail`, `toolCalls`, `iterations`, `estimatedCostUsd`, `elapsedMs`, `requestId`. `userId` is intentionally omitted to avoid PII in logs.
+   - 2 tests verify: completed run emits correct telemetry fields; guardrail run includes the `guardrail` field.
+
+2. **Heartbeat interval extracted to `agent.constants.ts`**:
+   - `AGENT_HEARTBEAT_INTERVAL_MS = 15_000` replaces the inline magic number in `ai.service.ts`.
+   - Documented: 15s chosen to stay below typical 30–60s proxy idle timeouts; tune down for strict proxy environments.
+
+> **Known pre-existing issue**: A worker process does not exit gracefully after the test suite (upstream NestJS/BullMQ module teardown). This manifests as a warning but does not affect test correctness. Fixing it requires closing Redis/BullMQ connections in `afterAll` hooks for the modules that import `RedisCacheModule` / `PortfolioSnapshotQueueModule`.
+
+---
+
 ### AI Chat Endpoint
 
 `POST /api/v1/ai/chat` accepts a message and optional `toolNames` list. The server streams a Server-Sent Events (SSE) response with thinking steps, tool calls, and a final verified answer. A traditional JSON response (`/api/v1/ai/chat` without streaming) is also supported.
