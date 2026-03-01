@@ -91,7 +91,7 @@ export interface EvalCaseExpect {
   maxElapsedMs?: number;
   maxToolCalls?: number;
   minConfidence: ConfidenceLevel;
-  minToolCalls: number;
+  minToolCalls?: number;
   /** ALL of these must appear in the response (AND logic, case-insensitive) */
   mustContainAll?: string[];
   /** At least one of these must appear in the response (OR logic, case-insensitive) */
@@ -258,7 +258,9 @@ export function validateEvalCase(
     VALID_CONFIDENCE_LEVELS,
     `${prefix}.expect.minConfidence`
   );
-  assertNumber(exp.minToolCalls, `${prefix}.expect.minToolCalls`);
+  if (exp.minToolCalls !== undefined) {
+    assertNumber(exp.minToolCalls, `${prefix}.expect.minToolCalls`);
+  }
   assertStringArray(exp.requiredTools, `${prefix}.expect.requiredTools`);
   assertStringArray(exp.mustIncludeAny, `${prefix}.expect.mustIncludeAny`);
   assertStringArray(

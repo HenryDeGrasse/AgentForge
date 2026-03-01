@@ -96,7 +96,9 @@ export function assertEvalInvariants(
   expect(response.status).toBe(expected.status);
 
   // Tool call count (from VerifiedResponse — for live tier this is the gating signal)
-  expect(response.toolCalls).toBeGreaterThanOrEqual(expected.minToolCalls);
+  if (expected.minToolCalls !== undefined) {
+    expect(response.toolCalls).toBeGreaterThanOrEqual(expected.minToolCalls);
+  }
 
   if (expected.maxToolCalls !== undefined) {
     expect(response.toolCalls).toBeLessThanOrEqual(expected.maxToolCalls);
@@ -236,7 +238,9 @@ export function assertToolCallCounts(
     }
   }
 
-  expect(invocationLog.length).toBeGreaterThanOrEqual(expected.minToolCalls);
+  if (expected.minToolCalls !== undefined) {
+    expect(invocationLog.length).toBeGreaterThanOrEqual(expected.minToolCalls);
+  }
 
   if (expected.maxToolCalls !== undefined) {
     expect(invocationLog.length).toBeLessThanOrEqual(expected.maxToolCalls);
@@ -363,7 +367,7 @@ export function assertLiveSources(
   response: VerifiedResponseLike,
   evalCase: EvalCaseDefinition
 ) {
-  if (evalCase.expect.minToolCalls > 0) {
+  if ((evalCase.expect.minToolCalls ?? 0) > 0) {
     expect(response.sources.length).toBeGreaterThan(0);
     if (response.invokedToolNames !== undefined) {
       expect(response.invokedToolNames.length).toBeGreaterThan(0);

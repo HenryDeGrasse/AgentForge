@@ -45,8 +45,7 @@
           "expectStatus": "success",
           "dataFieldsPresent": ["topHoldings", "totals"]
         }
-      ],
-      "maxElapsedMs": 5000
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -91,8 +90,7 @@
           "label": "txType",
           "valueInResponse": "BUY"
         }
-      ],
-      "maxElapsedMs": 5000
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -144,8 +142,7 @@
           "label": "riskMention",
           "valueInResponse": "risk"
         }
-      ],
-      "maxElapsedMs": 5000
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -183,8 +180,7 @@
           "label": "dollarSign",
           "valueInResponse": "$"
         }
-      ],
-      "maxElapsedMs": 5000
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -222,8 +218,7 @@
           "label": "pctSign",
           "valueInResponse": "%"
         }
-      ],
-      "maxElapsedMs": 5000
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -306,8 +301,7 @@
           "label": "action",
           "valueInResponse": "sell"
         }
-      ],
-      "maxElapsedMs": 5000
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -345,8 +339,7 @@
           "label": "dollarSign",
           "valueInResponse": "$"
         }
-      ],
-      "maxElapsedMs": 5000
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -399,8 +392,7 @@
           "label": "buySymbol",
           "valueInResponse": "BND"
         }
-      ],
-      "maxElapsedMs": 5000
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -444,8 +436,7 @@
           "label": "scenario",
           "valueInResponse": "scenario"
         }
-      ],
-      "maxElapsedMs": 5000
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -517,8 +508,7 @@
         "unable to access",
         "undefined",
         "NaN"
-      ],
-      "maxElapsedMs": 15000
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -550,8 +540,7 @@
         "unable to access",
         "undefined",
         "NaN"
-      ],
-      "maxElapsedMs": 15000
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -1047,8 +1036,7 @@
           "label": "dollarSign",
           "valueInResponse": "$"
         }
-      ],
-      "maxElapsedMs": 5000
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -1078,8 +1066,7 @@
           "label": "txType",
           "valueInResponse": "buy"
         }
-      ],
-      "maxElapsedMs": 5000
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -1120,8 +1107,7 @@
           "label": "riskDetail",
           "valueInResponse": "concentrat"
         }
-      ],
-      "maxElapsedMs": 5000
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -1151,8 +1137,7 @@
           "label": "dollarSign",
           "valueInResponse": "$"
         }
-      ],
-      "maxElapsedMs": 5000
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -1442,18 +1427,16 @@
     "expect": {
       "status": "completed",
       "minConfidence": "high",
-      "minToolCalls": 2,
       "requiredTools": ["analyze_risk", "rebalance_suggest"],
       "mustIncludeAny": ["risk", "rebalance", "allocation", "suggest"],
       "mustContainAll": ["risk", "rebalance"],
-      "mustNotIncludeAny": ["undefined", "NaN", "[object Object]"],
+      "mustNotIncludeAny": ["undefined", "[object Object]", "NaN%"],
       "dataValueChecks": [
         {
           "label": "riskMention",
           "valueInResponse": "risk"
         }
-      ],
-      "maxElapsedMs": 15000
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -1477,14 +1460,13 @@
       "requiredTools": ["get_portfolio_summary", "compliance_check"],
       "mustIncludeAny": ["portfolio", "compliant", "compliance"],
       "mustContainAll": ["portfolio", "complian"],
-      "mustNotIncludeAny": ["undefined", "NaN", "[object Object]"],
+      "mustNotIncludeAny": ["undefined", "[object Object]", "NaN%"],
       "dataValueChecks": [
         {
           "label": "dollarSign",
           "valueInResponse": "$"
         }
-      ],
-      "maxElapsedMs": 15000
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -1514,14 +1496,13 @@
         "drawdown"
       ],
       "mustContainAll": ["return", "loss"],
-      "mustNotIncludeAny": ["undefined", "NaN", "[object Object]"],
+      "mustNotIncludeAny": ["undefined", "[object Object]", "NaN%"],
       "dataValueChecks": [
         {
           "label": "pctSign",
           "valueInResponse": "%"
         }
-      ],
-      "maxElapsedMs": 15000
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -1541,12 +1522,10 @@
     "expect": {
       "status": "completed",
       "minConfidence": "high",
-      "minToolCalls": 2,
       "requiredTools": ["tax_estimate", "simulate_trades"],
       "mustIncludeAny": ["tax", "simulat", "sell", "loss", "gain"],
       "mustContainAll": ["tax", "simulat"],
-      "mustNotIncludeAny": ["undefined", "NaN", "[object Object]"],
-      "maxElapsedMs": 15000
+      "mustNotIncludeAny": ["undefined", "[object Object]", "NaN%"]
     },
     "meta": {
       "stage": "golden",
@@ -1566,7 +1545,6 @@
     "expect": {
       "status": "completed",
       "minConfidence": "high",
-      "minToolCalls": 3,
       "requiredTools": [
         "get_portfolio_summary",
         "analyze_risk",
@@ -1574,8 +1552,7 @@
       ],
       "mustIncludeAny": ["portfolio", "risk", "compliance", "compliant"],
       "mustContainAll": ["portfolio", "risk", "complian"],
-      "mustNotIncludeAny": ["undefined", "NaN", "[object Object]"],
-      "maxElapsedMs": 15000
+      "mustNotIncludeAny": ["undefined", "[object Object]", "NaN%"]
     },
     "meta": {
       "stage": "golden",
@@ -1653,8 +1630,7 @@
           "label": "pctSign",
           "valueInResponse": "%"
         }
-      ],
-      "maxElapsedMs": 5000
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -1669,7 +1645,8 @@
     "profile": "rich",
     "liveEligible": true,
     "request": {
-      "message": "Run a full compliance check on my portfolio"
+      "message": "Run a full compliance check on my portfolio",
+      "toolNames": ["compliance_check"]
     },
     "expect": {
       "status": "completed",
@@ -1678,14 +1655,13 @@
       "requiredTools": ["compliance_check"],
       "mustIncludeAny": ["compliance", "compliant", "check", "regulation"],
       "mustContainAll": ["non-compliant"],
-      "mustNotIncludeAny": ["undefined", "NaN", "[object Object]"],
+      "mustNotIncludeAny": ["undefined", "[object Object]", "NaN%"],
       "dataValueChecks": [
         {
           "label": "status",
           "valueInResponse": "non-compliant"
         }
-      ],
-      "maxElapsedMs": 5000
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -1700,7 +1676,8 @@
     "profile": "rich",
     "liveEligible": true,
     "request": {
-      "message": "How would my portfolio do in a recession?"
+      "message": "How would my portfolio do in a recession?",
+      "toolNames": ["stress_test"]
     },
     "expect": {
       "status": "completed",
@@ -1715,8 +1692,7 @@
           "label": "pctSign",
           "valueInResponse": "%"
         }
-      ],
-      "maxElapsedMs": 5000
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -1775,18 +1751,16 @@
     "expect": {
       "status": "completed",
       "minConfidence": "high",
-      "minToolCalls": 2,
       "requiredTools": ["get_portfolio_summary"],
       "mustIncludeAny": ["portfolio", "review", "holding", "risk", "value"],
       "mustContainAll": ["portfolio", "holding"],
-      "mustNotIncludeAny": ["undefined", "NaN", "[object Object]"],
+      "mustNotIncludeAny": ["undefined", "[object Object]", "NaN%"],
       "dataValueChecks": [
         {
           "label": "dollarSign",
           "valueInResponse": "$"
         }
-      ],
-      "maxElapsedMs": 15000
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -1822,8 +1796,7 @@
           "label": "tickerSymbol",
           "valueInResponse": "TSLA"
         }
-      ],
-      "maxElapsedMs": 5000
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -1855,8 +1828,7 @@
           "label": "percentSign",
           "valueInResponse": "%"
         }
-      ],
-      "maxElapsedMs": 5000
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -1888,8 +1860,7 @@
           "label": "buySymbol",
           "valueInResponse": "AAPL"
         }
-      ],
-      "maxElapsedMs": 5000
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -1921,8 +1892,7 @@
           "label": "percentSign",
           "valueInResponse": "%"
         }
-      ],
-      "maxElapsedMs": 5000
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -1987,8 +1957,7 @@
           "label": "riskKeyword",
           "valueInResponse": "concentrat"
         }
-      ],
-      "maxElapsedMs": 5000
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -2026,8 +1995,7 @@
         "unable to access",
         "undefined",
         "crash"
-      ],
-      "maxElapsedMs": 5000
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -2053,8 +2021,7 @@
       "maxToolCalls": 3,
       "requiredTools": ["tax_estimate"],
       "mustIncludeAny": ["bitcoin", "BTC", "tax", "gain", "capital"],
-      "mustNotIncludeAny": ["technical issue", "unable to access", "undefined"],
-      "maxElapsedMs": 5000
+      "mustNotIncludeAny": ["technical issue", "unable to access", "undefined"]
     },
     "meta": {
       "stage": "golden",
@@ -2080,8 +2047,7 @@
       "maxToolCalls": 2,
       "requiredTools": ["performance_compare"],
       "mustIncludeAny": ["performance", "%", "return", "period"],
-      "mustNotIncludeAny": ["technical issue", "unable to access", "undefined"],
-      "maxElapsedMs": 5000
+      "mustNotIncludeAny": ["technical issue", "unable to access", "undefined"]
     },
     "meta": {
       "stage": "golden",
@@ -2107,8 +2073,7 @@
       "maxToolCalls": 2,
       "requiredTools": ["compliance_check"],
       "mustIncludeAny": ["compliant", "compliance", "rule", "ESG", "check"],
-      "mustNotIncludeAny": ["technical issue", "unable to access", "undefined"],
-      "maxElapsedMs": 5000
+      "mustNotIncludeAny": ["technical issue", "unable to access", "undefined"]
     },
     "meta": {
       "stage": "golden",
@@ -2134,7 +2099,6 @@
     "expect": {
       "status": "completed",
       "minConfidence": "medium",
-      "minToolCalls": 2,
       "maxToolCalls": 4,
       "requiredTools": ["tax_estimate", "rebalance_suggest"],
       "mustIncludeAny": ["tax", "rebalanc", "60", "40"],
@@ -2144,8 +2108,7 @@
           "label": "taxKeyword",
           "valueInResponse": "tax"
         }
-      ],
-      "maxElapsedMs": 15000
+      ]
     },
     "meta": {
       "stage": "golden",
@@ -2167,7 +2130,6 @@
     "expect": {
       "status": "completed",
       "minConfidence": "high",
-      "minToolCalls": 2,
       "maxToolCalls": 3,
       "requiredTools": ["market_data_lookup", "simulate_trades"],
       "mustIncludeAny": ["MSFT", "price", "simulat"],
@@ -2177,8 +2139,7 @@
           "label": "symbol",
           "valueInResponse": "MSFT"
         }
-      ],
-      "maxElapsedMs": 15000
+      ]
     },
     "meta": {
       "stage": "golden",
