@@ -12,6 +12,7 @@ import { authScopeCrossTool } from './auth-scope-cross-tool';
 import { authScopeIsolation } from './auth-scope-isolation';
 import { edgeMultipleQuestions } from './edge-multiple-questions';
 import { edgeTypoInToolRef } from './edge-typo-in-tool-ref';
+import { edgeUnknownSymbol } from './edge-unknown-symbol';
 import { emptyPortfolioSummary } from './empty-portfolio-summary';
 import { guardrailCircuitBreaker } from './guardrail-circuit-breaker';
 import { guardrailCostLimit } from './guardrail-cost-limit';
@@ -68,6 +69,7 @@ export const LLM_SEQUENCES: Record<string, LLMCompletionResponse[]> = {
   'auth-scope-isolation': authScopeIsolation,
   'edge-multiple-questions': edgeMultipleQuestions,
   'edge-typo-in-tool-ref': edgeTypoInToolRef,
+  'edge-unknown-symbol': edgeUnknownSymbol,
   'empty-portfolio-summary': emptyPortfolioSummary,
   'guardrail-circuit-breaker': guardrailCircuitBreaker,
   'guardrail-cost-limit': guardrailCostLimit,

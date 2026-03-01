@@ -40,6 +40,7 @@ export type EvalSubcategory =
   | 'stress-test'
   | 'tax'
   | 'transaction-history'
+  | 'unowned-symbol'
   | 'user-scoping';
 
 export type VerifiedStatus = 'completed' | 'failed' | 'partial';
@@ -168,6 +169,7 @@ const VALID_SUBCATEGORIES: ReadonlySet<string> = new Set<EvalSubcategory>([
   'stress-test',
   'tax',
   'transaction-history',
+  'unowned-symbol',
   'user-scoping'
 ]);
 
