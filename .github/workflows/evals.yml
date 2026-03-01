@@ -79,7 +79,9 @@ jobs:
     continue-on-error: true # nightly monitor — not a merge gate
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY_EVAL }}
-      OPENAI_MODEL: 'gpt-4.1-mini'
+      # Use gpt-4.1 for evals — measures agent ceiling independent of the
+      # production model choice (app uses gpt-4.1-mini for lower latency).
+      OPENAI_MODEL: 'gpt-4.1'
       EVAL_RECORD: '1'
     steps:
       - name: Check OPENAI_API_KEY_EVAL secret
@@ -112,7 +114,7 @@ jobs:
     env:
       RUN_LABELED_EVALS: '1'
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY_EVAL }}
-      OPENAI_MODEL: 'gpt-4.1-mini'
+      OPENAI_MODEL: 'gpt-4.1'
       MVP_EVAL_BASE_URL: ${{ secrets.EVAL_API_URL }}
     steps:
       - uses: actions/checkout@v4
