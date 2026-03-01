@@ -229,6 +229,9 @@ case "$command" in
     stop_api
     start_api
     wait_for_health
+    echo "[dev] Seeding demo data + market prices..."
+    run_seed_demo
+    DATABASE_URL="$DATABASE_URL" npx tsx prisma/seed-market-data.mts
     echo "[dev] API logs: $API_LOG_FILE"
     ;;
   stop)
