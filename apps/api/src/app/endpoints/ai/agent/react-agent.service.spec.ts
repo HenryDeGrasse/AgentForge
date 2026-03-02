@@ -418,7 +418,7 @@ describe('ReactAgentService', () => {
   });
 
   it('scopes circuit breaker per-user so one user failure does not block another', async () => {
-    let now = 1_000;
+    const now = 1_000;
 
     jest.spyOn(Date, 'now').mockImplementation(() => {
       return now;
@@ -1819,6 +1819,7 @@ describe('Phase 5 structured telemetry', () => {
         return (async function* () {
           yield { delta: 'partial...' };
           // Stall forever — simulating OpenAI hanging mid-stream
+          // eslint-disable-next-line @typescript-eslint/no-empty-function
           await new Promise(() => {});
         })();
       })
