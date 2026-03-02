@@ -26,7 +26,8 @@ export const CREATE_INSIDER_RULE_INPUT_SCHEMA: ToolJsonSchema = {
       type: 'string'
     },
     symbols: {
-      description: 'Specific symbols to monitor (required when scope = symbols)',
+      description:
+        'Specific symbols to monitor (required when scope = symbols)',
       items: { type: 'string' },
       type: 'array'
     },

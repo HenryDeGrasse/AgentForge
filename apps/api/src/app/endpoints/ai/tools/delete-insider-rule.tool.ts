@@ -1,5 +1,3 @@
-import { InsiderService } from '@ghostfolio/api/app/endpoints/insider/insider.service';
-
 import {
   DELETE_INSIDER_RULE_INPUT_SCHEMA,
   DELETE_INSIDER_RULE_OUTPUT_SCHEMA
@@ -10,6 +8,7 @@ import {
   ToolJsonSchema,
   ToolResultEnvelope
 } from '@ghostfolio/api/app/endpoints/ai/tools/tool.types';
+import { InsiderService } from '@ghostfolio/api/app/endpoints/insider/insider.service';
 
 import { Injectable } from '@nestjs/common';
 
@@ -23,17 +22,20 @@ interface DeleteInsiderRuleOutput {
 }
 
 @Injectable()
-export class DeleteInsiderRuleTool
-  implements ToolDefinition<DeleteInsiderRuleInput, DeleteInsiderRuleOutput>
-{
+export class DeleteInsiderRuleTool implements ToolDefinition<
+  DeleteInsiderRuleInput,
+  DeleteInsiderRuleOutput
+> {
   public readonly description =
     'Delete an insider monitoring rule by ID. Only rules owned by the current user can be deleted.';
 
-  public readonly inputSchema: ToolJsonSchema = DELETE_INSIDER_RULE_INPUT_SCHEMA;
+  public readonly inputSchema: ToolJsonSchema =
+    DELETE_INSIDER_RULE_INPUT_SCHEMA;
 
   public readonly name = 'delete_insider_monitoring_rule';
 
-  public readonly outputSchema: ToolJsonSchema = DELETE_INSIDER_RULE_OUTPUT_SCHEMA;
+  public readonly outputSchema: ToolJsonSchema =
+    DELETE_INSIDER_RULE_OUTPUT_SCHEMA;
 
   public constructor(private readonly insiderService: InsiderService) {}
 

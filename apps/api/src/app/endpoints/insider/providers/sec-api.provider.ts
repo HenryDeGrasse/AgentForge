@@ -49,14 +49,29 @@ export class SecApiInsiderDataProvider implements InsiderDataProvider {
         }
 
         const data = await response.json();
-        const transactions = Array.isArray(data) ? data : data?.transactions ?? [];
+        const transactions = Array.isArray(data)
+          ? data
+          : (data?.transactions ?? []);
 
         for (const tx of transactions) {
-          const side = this.normalizeSide(tx.transactionType ?? tx.acquisitionOrDisposition);
+          const side = this.normalizeSide(
+            tx.transactionType ?? tx.acquisitionOrDisposition
+          );
           const shares = parseFloat(tx.securitiesTransacted) || undefined;
           const price = parseFloat(tx.price) || undefined;
           const valueUsd =
             shares != null && price != null ? shares * price : undefined;
+
+          // Include transactionCode to avoid collisions when the same insider
+          // files multiple transactions on the same date (e.g. block grants).
+          const txCode =
+            tx.transactionCode ??
+            tx.acquisitionOrDisposition ??
+            tx.transactionType ??
+            'unknown';
+          const insiderSlug = (tx.reportingOwner ?? tx.insiderName ?? 'unknown')
+            .toLowerCase()
+            .replace(/\s+/g, '-');
 
           results.push({
             insiderName: tx.reportingOwner ?? tx.insiderName ?? 'Unknown',
@@ -64,7 +79,7 @@ export class SecApiInsiderDataProvider implements InsiderDataProvider {
             price,
             shares,
             side,
-            sourceKey: `sec-${symbol}-${tx.filingDate ?? tx.periodOfReport}-${tx.reportingOwner ?? 'unknown'}`,
+            sourceKey: `sec-${symbol.toUpperCase()}-${tx.periodOfReport ?? tx.filingDate}-${insiderSlug}-${txCode}`,
             sourceProvider: this.name,
             sourceUrl: tx.filingUrl ?? tx.linkToFilingDetails,
             symbol: symbol.toUpperCase(),
@@ -86,15 +101,18 @@ export class SecApiInsiderDataProvider implements InsiderDataProvider {
     return results.filter((tx) => tx.txDate >= cutoff);
   }
 
-  private normalizeSide(
-    raw: string | undefined
-  ): 'buy' | 'other' | 'sell' {
+  private normalizeSide(raw: string | undefined): 'buy' | 'other' | 'sell' {
     if (!raw) return 'other';
     const lower = raw.toLowerCase();
     if (lower.includes('purchase') || lower === 'a' || lower === 'buy') {
       return 'buy';
     }
-    if (lower.includes('sale') || lower === 'd' || lower === 'sell' || lower.includes('dispos')) {
+    if (
+      lower.includes('sale') ||
+      lower === 'd' ||
+      lower === 'sell' ||
+      lower.includes('dispos')
+    ) {
       return 'sell';
     }
     return 'other';

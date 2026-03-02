@@ -20,10 +20,11 @@ export class InsiderCacheService {
 
     for (const tx of transactions) {
       try {
-        const existing =
-          await this.prismaService.insiderTransaction.findUnique({
+        const existing = await this.prismaService.insiderTransaction.findUnique(
+          {
             where: { sourceKey: tx.sourceKey }
-          });
+          }
+        );
 
         if (existing) {
           await this.prismaService.insiderTransaction.update({

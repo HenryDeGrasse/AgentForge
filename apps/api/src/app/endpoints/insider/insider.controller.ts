@@ -4,6 +4,7 @@ import { permissions } from '@ghostfolio/common/permissions';
 import type { RequestWithUser } from '@ghostfolio/common/types';
 
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -21,7 +22,9 @@ import { AuthGuard } from '@nestjs/passport';
 
 import { InsiderService } from './insider.service';
 
-@Controller('api/v1/insider')
+const MAX_SYNC_SYMBOLS = 10;
+
+@Controller('insider')
 @UseGuards(AuthGuard('jwt'), HasPermissionGuard)
 export class InsiderController {
   public constructor(private readonly insiderService: InsiderService) {}
@@ -33,7 +36,10 @@ export class InsiderController {
     @Query('days') daysStr?: string
   ) {
     const symbols = symbolsStr
-      ? symbolsStr.split(',').map((s) => s.trim()).filter(Boolean)
+      ? symbolsStr
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
       : [];
     const days = daysStr ? parseInt(daysStr, 10) : 30;
 
@@ -121,13 +127,33 @@ export class InsiderController {
   @HasPermission(permissions.accessAssistant)
   @HttpCode(HttpStatus.OK)
   public async sync(
+    @Req() req: RequestWithUser,
     @Query('symbols') symbolsStr?: string,
     @Query('days') daysStr?: string
   ) {
     const symbols = symbolsStr
-      ? symbolsStr.split(',').map((s) => s.trim()).filter(Boolean)
+      ? symbolsStr
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
       : [];
-    const days = daysStr ? parseInt(daysStr, 10) : 30;
+
+    if (symbols.length > MAX_SYNC_SYMBOLS) {
+      throw new BadRequestException(
+        `Too many symbols — maximum ${MAX_SYNC_SYMBOLS} per sync request`
+      );
+    }
+
+    const days = daysStr ? Math.min(parseInt(daysStr, 10), 90) : 30;
+
+    // Sync is scoped to the requesting user's portfolio when no symbols given
+    if (symbols.length === 0) {
+      return this.insiderService.getPortfolioInsiderActivity({
+        days,
+        topN: MAX_SYNC_SYMBOLS,
+        userId: req.user.id
+      });
+    }
 
     return this.insiderService.getInsiderActivity({ days, symbols });
   }

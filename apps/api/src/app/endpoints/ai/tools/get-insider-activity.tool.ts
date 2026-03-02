@@ -1,5 +1,3 @@
-import { InsiderService } from '@ghostfolio/api/app/endpoints/insider/insider.service';
-
 import {
   INSIDER_ACTIVITY_INPUT_SCHEMA,
   INSIDER_ACTIVITY_OUTPUT_SCHEMA
@@ -10,6 +8,7 @@ import {
   ToolJsonSchema,
   ToolResultEnvelope
 } from '@ghostfolio/api/app/endpoints/ai/tools/tool.types';
+import { InsiderService } from '@ghostfolio/api/app/endpoints/insider/insider.service';
 
 import { Injectable } from '@nestjs/common';
 
@@ -43,9 +42,10 @@ const DISCLAIMERS = [
 ];
 
 @Injectable()
-export class GetInsiderActivityTool
-  implements ToolDefinition<GetInsiderActivityInput, GetInsiderActivityOutput>
-{
+export class GetInsiderActivityTool implements ToolDefinition<
+  GetInsiderActivityInput,
+  GetInsiderActivityOutput
+> {
   public readonly description =
     'Fetch recent insider buy/sell activity (Form 4 filings) for given stock symbols. Returns insider names, transaction details, and source links.';
 
@@ -78,8 +78,8 @@ export class GetInsiderActivityTool
       });
     }
 
-    const transactions: InsiderActivityTransaction[] =
-      result.transactions.map((tx) => ({
+    const transactions: InsiderActivityTransaction[] = result.transactions.map(
+      (tx) => ({
         insiderName: tx.insiderName,
         insiderRelation: tx.insiderRelation,
         price: tx.price,
@@ -87,11 +87,13 @@ export class GetInsiderActivityTool
         side: tx.side,
         sourceUrl: tx.sourceUrl,
         symbol: tx.symbol,
-        txDate: tx.txDate instanceof Date
-          ? tx.txDate.toISOString().split('T')[0]
-          : String(tx.txDate),
+        txDate:
+          tx.txDate instanceof Date
+            ? tx.txDate.toISOString().split('T')[0]
+            : String(tx.txDate),
         valueUsd: tx.valueUsd
-      }));
+      })
+    );
 
     return {
       data: {
@@ -100,9 +102,10 @@ export class GetInsiderActivityTool
         transactions,
         warnings: result.warnings
       },
-      status: result.warnings.length > 0 && transactions.length === 0
-        ? 'partial'
-        : 'success'
+      status:
+        result.warnings.length > 0 && transactions.length === 0
+          ? 'partial'
+          : 'success'
     };
   }
 }

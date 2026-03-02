@@ -740,15 +740,9 @@ export class AiService {
         )
         .join('\n');
 
-      // Mark rules as notified
-      const ruleIds = [...new Set(briefingItems.map((item) => item.ruleId))];
-      await this.insiderService.markRulesNotified({
-        notes: `Briefing delivered with ${briefingItems.length} trigger(s)`,
-        ruleIds,
-        userId
-      });
-
-      return [
+      // Build the full briefing string first — only mark rules notified once
+      // we have confirmed the string is ready to be returned to the caller.
+      const briefing = [
         '## Monitoring Briefing',
         `Your insider monitoring rules detected ${briefingItems.length} trigger(s):`,
         '',
@@ -758,6 +752,16 @@ export class AiService {
         '',
         'Proactively mention this monitoring update to the user at the start of the conversation. This is not investment advice — encourage verification via source URLs.'
       ].join('\n');
+
+      // Mark rules as notified only after the briefing string is confirmed built.
+      const ruleIds = [...new Set(briefingItems.map((item) => item.ruleId))];
+      await this.insiderService.markRulesNotified({
+        notes: `Briefing delivered with ${briefingItems.length} trigger(s)`,
+        ruleIds,
+        userId
+      });
+
+      return briefing;
     } catch (error) {
       Logger.warn(
         `Failed to build insider briefing: ${error instanceof Error ? error.message : error}`,
