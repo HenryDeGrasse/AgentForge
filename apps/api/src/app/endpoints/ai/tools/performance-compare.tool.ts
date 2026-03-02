@@ -148,12 +148,50 @@ export class PerformanceCompareTool implements ToolDefinition<
       });
     }
 
+    // For 'max' range align the benchmark query start with the portfolio's first
+    // order date so the benchmark period covers the same window as the portfolio
+    // return. Without this, 'max' defaults startDate to epoch (new Date(0)) and
+    // the query only retrieves whatever sparse recent data exists in the
+    // database, producing a misleadingly small benchmark return.
+    const benchmarkStartDate =
+      dateRange === 'max' && portfolioResponse.firstOrderDate
+        ? new Date(portfolioResponse.firstOrderDate)
+        : startDate;
+
     // Fetch period return market data for all filtered benchmarks in a single query
     const periodReturnMap = await this.getBenchmarkPeriodReturns(
       filteredBenchmarks,
-      startDate,
+      benchmarkStartDate,
       endDate
     );
+
+    // Warn when the earliest benchmark data point is more than 30 days after
+    // the requested start — the period return covers a shorter window than the
+    // portfolio return, making the comparison unreliable.
+    const COVERAGE_GAP_THRESHOLD_MS = 30 * 24 * 60 * 60 * 1000;
+
+    for (const benchmark of filteredBenchmarks) {
+      const periodReturn = periodReturnMap.get(benchmark.symbol);
+
+      if (periodReturn) {
+        const dataStartMs = new Date(periodReturn.startDate).getTime();
+
+        if (
+          dataStartMs - benchmarkStartDate.getTime() >
+          COVERAGE_GAP_THRESHOLD_MS
+        ) {
+          warnings.push({
+            code: 'benchmark_data_coverage_gap',
+            message:
+              `Benchmark data for ${benchmark.symbol} only starts at ` +
+              `${new Date(periodReturn.startDate).toISOString().slice(0, 10)}, ` +
+              `not at the requested start of ` +
+              `${benchmarkStartDate.toISOString().slice(0, 10)}. ` +
+              `The period return may not reflect the full comparison window.`
+          });
+        }
+      }
+    }
 
     const benchmarks = await Promise.all(
       filteredBenchmarks.map(async (benchmark) => {

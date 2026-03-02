@@ -26,5 +26,8 @@ else
   echo "Skipping demo seed (DEMO_ACCESS_TOKEN not set)"
 fi
 
+echo "Seeding market data (idempotent)..."
+npx tsx prisma/seed-market-data.mts || true
+
 echo "Starting the server"
 exec node main
