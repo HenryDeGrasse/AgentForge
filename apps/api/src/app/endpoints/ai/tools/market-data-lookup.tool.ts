@@ -68,22 +68,6 @@ const MIN_HISTORY_DAYS = 1;
  * not burn extra quota.
  */
 const LOOKUP_NOT_FOUND_TTL_MS = 5 * 60 * 1000; // 5 min negative-result cache
-const lookupNegativeCache = new Map<string, number>(); // query → expiry epoch
-
-/** Sweep entries whose TTL has elapsed. Called before every insert to prevent unbounded Map growth. */
-function pruneExpiredNegativeCacheEntries(): void {
-  const now = Date.now();
-
-  for (const [key, expiry] of lookupNegativeCache) {
-    if (now >= expiry) {
-      lookupNegativeCache.delete(key);
-    }
-  }
-}
-
-// Test-only exports — NOT part of the public API.
-export const _clearNegativeCache = () => lookupNegativeCache.clear();
-export const _getNegativeCacheSize = () => lookupNegativeCache.size;
 
 @Injectable()
 export class MarketDataLookupTool implements ToolDefinition<
@@ -95,6 +79,15 @@ export class MarketDataLookupTool implements ToolDefinition<
 
   public readonly inputSchema: ToolJsonSchema = MARKET_DATA_LOOKUP_INPUT_SCHEMA;
 
+  /**
+   * Per-instance negative-result cache. Maps query keys to expiry timestamps.
+   * Moved from module scope to instance scope so each tool instance (and each
+   * test) has its own isolated cache. In production the NestJS DI container
+   * creates a single instance per module, so the behaviour is identical to
+   * the previous global — but without the test-pollution and DI-leakage issues.
+   */
+  private readonly lookupNegativeCache = new Map<string, number>();
+
   public readonly name = 'market_data_lookup';
 
   public readonly outputSchema: ToolJsonSchema =
@@ -105,6 +98,29 @@ export class MarketDataLookupTool implements ToolDefinition<
     private readonly symbolProfileService: SymbolProfileService,
     private readonly userService: UserService
   ) {}
+
+  // ─── Test-only accessors (not part of the public API) ─────────────────
+
+  /** @internal Clear negative cache — for tests only. */
+  public _clearNegativeCache(): void {
+    this.lookupNegativeCache.clear();
+  }
+
+  /** @internal Get negative cache size — for tests only. */
+  public _getNegativeCacheSize(): number {
+    return this.lookupNegativeCache.size;
+  }
+
+  /** Sweep entries whose TTL has elapsed to prevent unbounded Map growth. */
+  private pruneExpiredNegativeCacheEntries(): void {
+    const now = Date.now();
+
+    for (const [key, expiry] of this.lookupNegativeCache) {
+      if (now >= expiry) {
+        this.lookupNegativeCache.delete(key);
+      }
+    }
+  }
 
   public async execute(
     input: MarketDataLookupInput,
@@ -331,7 +347,7 @@ export class MarketDataLookupTool implements ToolDefinition<
     // Negative cache: skip Yahoo lookup for recently-unresolved queries to
     // avoid burning rate-limit quota on repeated unknown symbols.
     const cacheKey = `${userId}:${query.toLowerCase()}`;
-    const negExpiry = lookupNegativeCache.get(cacheKey);
+    const negExpiry = this.lookupNegativeCache.get(cacheKey);
 
     if (negExpiry !== undefined) {
       if (Date.now() < negExpiry) {
@@ -341,7 +357,7 @@ export class MarketDataLookupTool implements ToolDefinition<
       // Entry has expired — remove it to prevent unbounded Map growth.
       // Without deletion the Map would accumulate stale keys indefinitely,
       // causing a memory leak in long-running server processes.
-      lookupNegativeCache.delete(cacheKey);
+      this.lookupNegativeCache.delete(cacheKey);
     }
 
     const user = await this.userService.user({ id: userId });
@@ -368,8 +384,8 @@ export class MarketDataLookupTool implements ToolDefinition<
         if (!lookupItem) {
           // Prune expired entries before inserting to prevent unbounded Map growth,
           // then cache this negative result to avoid repeat quota burn.
-          pruneExpiredNegativeCacheEntries();
-          lookupNegativeCache.set(
+          this.pruneExpiredNegativeCacheEntries();
+          this.lookupNegativeCache.set(
             cacheKey,
             Date.now() + LOOKUP_NOT_FOUND_TTL_MS
           );

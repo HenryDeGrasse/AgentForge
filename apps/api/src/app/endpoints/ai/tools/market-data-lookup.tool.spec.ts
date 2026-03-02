@@ -1,8 +1,4 @@
-import {
-  MarketDataLookupTool,
-  _clearNegativeCache,
-  _getNegativeCacheSize
-} from './market-data-lookup.tool';
+import { MarketDataLookupTool } from './market-data-lookup.tool';
 
 function buildLookupTool(lookupImpl: jest.Mock) {
   return new MarketDataLookupTool(
@@ -16,9 +12,6 @@ function buildLookupTool(lookupImpl: jest.Mock) {
 }
 
 describe('MarketDataLookupTool', () => {
-  beforeEach(() => {
-    _clearNegativeCache();
-  });
   it('returns quote and profile metadata for a valid symbol', async () => {
     const symbolService = {
       get: jest.fn().mockResolvedValue({
@@ -302,6 +295,27 @@ describe('MarketDataLookupTool', () => {
     ]);
   });
 
+  it('isolates negative cache per tool instance (no global state leak)', async () => {
+    jest.useFakeTimers();
+
+    const lookup1 = jest.fn().mockResolvedValue({ items: [] });
+    const lookup2 = jest.fn().mockResolvedValue({ items: [] });
+    const tool1 = buildLookupTool(lookup1);
+    const tool2 = buildLookupTool(lookup2);
+    const ctx = { userId: 'u1' };
+
+    // tool1 caches a negative result for GHOST
+    await tool1.execute({ symbol: 'GHOST' }, ctx);
+    expect(lookup1).toHaveBeenCalledTimes(1);
+
+    // tool2 is a fresh instance — should NOT share tool1's negative cache
+    // If the cache is global (module-scoped), lookup2 will never be called
+    await tool2.execute({ symbol: 'GHOST' }, ctx);
+    expect(lookup2).toHaveBeenCalledTimes(1);
+
+    jest.useRealTimers();
+  });
+
   describe('negative-cache memory management', () => {
     it('expired entries are pruned from the cache when a new failed lookup is inserted', async () => {
       jest.useFakeTimers();
@@ -314,14 +328,14 @@ describe('MarketDataLookupTool', () => {
       await tool.execute({ symbol: 'SYM1' }, ctx);
       await tool.execute({ symbol: 'SYM2' }, ctx);
       await tool.execute({ symbol: 'SYM3' }, ctx);
-      expect(_getNegativeCacheSize()).toBe(3);
+      expect(tool._getNegativeCacheSize()).toBe(3);
 
       // Advance past the 5-minute TTL so all three entries expire
       jest.advanceTimersByTime(6 * 60 * 1000);
 
       // Inserting a fourth entry should prune the three expired ones
       await tool.execute({ symbol: 'SYM4' }, ctx);
-      expect(_getNegativeCacheSize()).toBe(1); // only SYM4 remains
+      expect(tool._getNegativeCacheSize()).toBe(1); // only SYM4 remains
 
       jest.useRealTimers();
     });
