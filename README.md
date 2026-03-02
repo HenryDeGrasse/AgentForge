@@ -50,136 +50,44 @@ A premium slide-in chat panel built with Angular Material that provides a conver
 - **Escape key** dismissal, auto-focus on open, legal disclaimer footer
 - **Responsive** — works on desktop and mobile viewports
 
-### Improvement Log
+### Development Timeline
 
-| Phase       | Description                                                                                              | Status  |
-| ----------- | -------------------------------------------------------------------------------------------------------- | ------- |
-| **Phase 1** | Bug fixes — chart data extraction, benchmark comparison, memory leak                                     | ✅ Done |
-| **Phase 2** | Agent reliability — parallel tool calls, context guard, escalation, cost estimation                      | ✅ Done |
-| **Phase 3** | Eval coverage expansion — chart extractor tests, multi-turn evals, injection evals                       | ✅ Done |
-| **Phase 4** | Security hardening — rate limiting, scope gate, output sanitization, guardrail bypass prevention         | ✅ Done |
-| **Phase 5** | Operational improvements — structured error codes, dynamic system prompt, stream backpressure, telemetry | ✅ Done |
+| Week                  | Focus                           | What shipped                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| --------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Day 1** (Feb 23)    | **MVP**                         | ReAct agent core, tool registry, guardrails (max iterations, cost limit, circuit breaker, timeout), 3 tools (portfolio summary, transactions, risk analysis), response verification layer, Angular AI chat page, premium slide-in advisor panel, Railway deployment, MVP eval pack                                                                                                                                                                                            |
+| **Day 2** (Feb 24)    | **Tool Expansion & Evals**      | 5 new tools (market data, performance compare, tax estimate, compliance check, rebalance suggest), demo portfolio seeding, two-speed eval suites, persisted conversation history, scope gate for out-of-scope rejection, escalation retry for tool enforcement                                                                                                                                                                                                                |
+| **Day 3** (Feb 25–26) | **Streaming & Insider Trading** | SSE streaming with unified agent execution engine, action chips + tool indicator in UI, 2 more tools (simulate trades, stress test), insider trading monitoring module with 4 SEC EDGAR tools (bounty branch), CI pipeline improvements                                                                                                                                                                                                                                       |
+| **Day 4** (Feb 27)    | **Hardening & Reliability**     | 3 critical vulnerability fixes, 7 reliability improvements, parallel tool execution, context window guard, cost estimation fallback, chart data extractor bug fixes, Yahoo Finance rate limit handling (backoff + negative cache), keyword router → tool summarizers, unbacked-claim detection                                                                                                                                                                                |
+| **Day 5** (Feb 28)    | **GPT-4.1 & Observability**     | Upgraded to GPT-4.1, statistical risk metrics (Sharpe, Sortino, CVaR), golden set rewrite (50 cases with realistic LLM behavior), Tier 2 live evals (27/27 pass), Langfuse + Helicone observability, user feedback endpoint, `requiresHumanReview` flag, replay tier with session recording                                                                                                                                                                                   |
+| **Day 6** (Mar 1)     | **Polish & Open Source**        | UI polish (⌘K shortcut, tool timeline, animations, capability list, thinking pill, feedback, legal disclaimer), Railway deploy fixes, 3 tool bug fixes, output sanitizer, conversation history validator, dynamic system prompt builder, stream backpressure, per-user circuit breaker, rate limiter atomicity fix, `systemPrompt` removed from public API, structured error codes, architecture docs, published `@agentforge/finance-eval-dataset` as standalone OSS package |
 
-#### Phase 1 Bug Fixes
+### Key Improvements
 
-1. **`ChartDataExtractorService` — 5 silent chart bugs fixed** (`chart-data-extractor.service.ts`):
-   - `analyze_risk`: asset-class and sector exposure charts now read from `data.exposures.*` instead of non-existent top-level fields. Previously, no risk charts were ever generated.
-   - `market_data_lookup`: line-chart values now use `marketPrice` (the actual field name) instead of `close`/`price`. Previously all data points were 0.
-   - `rebalance_suggest`: table columns now use `currentPct`/`targetPct`/`driftPct`. Previously all percentage cells were empty strings.
-   - `tax_estimate`: table cells now show `netInBaseCurrency` numeric values instead of `[object Object]`.
-   - `compliance_check`: rule names now read from `ruleName` instead of `name`. Previously all rule rows had blank first columns.
-   - Added `chart-data-extractor.service.spec.ts` with 38 tests covering all 10 tool extractors.
+#### Agent Reliability
 
-2. **`performance_compare` — benchmark comparison made honest** (`performance-compare.tool.ts`):
-   - Comparison now requires the portfolio to have **positive** net returns to classify as "outperforming". Previously a portfolio at -5% could appear to "outperform" a benchmark at -10% from ATH — these are different metrics being compared.
-   - Assumption text updated to explain the limitation (ATH drawdown vs period return).
+- **Parallel tool execution** — all tool calls in a single LLM turn execute via `Promise.all()`. Latency drops from `n × tool_time` to `max(tool_time)`. Individual failures are caught and wrapped — one failing tool doesn't block the others.
+- **Context window guard** — tool outputs exceeding 32,000 chars are truncated with a `[TRUNCATED]` notice before entering the LLM conversation.
+- **Escalation hardening** — when the LLM answers without calling any tool on the first turn, the agent injects an escalation prompt and sets `toolChoice: 'required'`.
+- **Conversation history validator** — repairs `priorMessages` before they enter the LLM: drops leading assistant messages, deduplicates consecutive same-role messages.
+- **Cost estimation** — accurate per-model pricing (prompt, completion, cached tokens separately) with fallback paths.
 
-3. **`lookupNegativeCache` — memory leak fixed** (`market-data-lookup.tool.ts`):
-   - Expired entries are now deleted on access instead of just skipped. Previously, the in-memory `Map` grew indefinitely in long-running server processes.
+#### Security
 
-#### Phase 2 Agent Reliability
+- **Per-user rate limiter** — sliding-window, 20 req/user/60s, HTTP 429 on excess. Atomic check (TOCTOU race fixed).
+- **Scope gate** — deterministic keyword-based rejection of non-financial queries before hitting the LLM.
+- **Output sanitizer** — strips HTML tags, neutralizes markdown-image exfiltration, removes zero-width Unicode. Preserves valid markdown.
+- **Per-user circuit breaker** — scoped by `userId` to prevent cross-user DoS.
+- **`systemPrompt` removed from public API** — callers can no longer inject arbitrary system prompts to bypass guardrails.
+- **`new Function()` removed** — dynamic code evaluation replaced with plain inline markdown builder.
 
-1. **Parallel tool execution** (`react-agent.service.ts`):
-   - All tool calls returned in a single LLM turn are now executed with `Promise.all()` instead of sequentially. Worst-case latency drops from `n × tool_time` to `max(tool_time)`.
-   - Individual tool failures are caught and wrapped in error envelopes — one failing tool no longer blocks the others.
+#### Operational
 
-2. **Context window guard** (`react-agent.service.ts` + `agent.constants.ts`):
-   - Tool outputs exceeding `AGENT_TOOL_OUTPUT_MAX_CHARS` (32,000 chars ≈ 8k tokens) are truncated with a visible `[TRUNCATED]` notice before being injected into the LLM conversation. Previously a large tool response could silently overflow the context window.
+- **Structured error codes** — `CIRCUIT_BREAKER`, `COST_LIMIT`, `MAX_ITERATIONS`, `TIMEOUT`, `EMPTY_RESPONSE`, `CANCELLED`, `INTERNAL_ERROR` on every failed response. No second LLM call needed.
+- **Dynamic system prompt** — assembled at request time from injected context (date, tools, locale) instead of a static string.
+- **Stream backpressure** — `AbortController` enforces timeout on the streaming LLM path. No more indefinitely held connections.
+- **Structured telemetry** — JSON log line after every agent run with status, guardrail, tool calls, iterations, cost, latency, and request ID.
 
-3. **Escalation hardening** (`react-agent.service.ts`):
-   - When tools are available but the LLM answers directly on the first turn without calling any tool (and the answer isn't a clear refusal), the agent injects an escalation prompt and sets `toolChoice: 'required'` for the next turn. This was already present but tests were added to pin the behaviour.
-
-4. **Cost estimation fallback** (`react-agent.service.ts`):
-   - When `estimatedCostUsd` is absent from the LLM response, cost is estimated from `totalTokens` (or `promptTokens + completionTokens`) and `fallbackCostPer1kTokensUsd`. Tests were added to pin all three fallback paths.
-
-#### Phase 3 Eval Coverage
-
-New test file: `apps/api/test/ai/phase3-evals.spec.ts`
-
-1. **Multi-turn conversation rehydration** (3 tests):
-   - Verifies `priorMessages` are injected into the LLM conversation in the correct order (prior user → prior assistant → new user prompt).
-   - Verifies cold start (no `priorMessages`) works identically to the explicit empty-array case.
-   - Regression guard for conversation history ordering.
-
-2. **Indirect prompt injection via tool output** (3 tests):
-   - Verifies the agent passes tool output (including attacker-controlled fields) to the LLM without pre-sanitising it — the LLM must see the injection text to decide how to handle it.
-   - Verifies the final `response` does not echo injection text when the LLM correctly ignores it.
-   - Verifies the context-window guard truncates oversized injection payloads before they enter the LLM context.
-
-#### Phase 4 Security Hardening
-
-1. **Per-user rate limiter** (`ai-rate-limiter.guard.ts`):
-   - `AiRateLimiterGuard` implements a sliding-window rate limit: 20 requests per user per 60-second window.
-   - Applied to both `POST /ai/chat` and `POST /ai/chat/stream`. Excess requests receive HTTP 429.
-   - Guard is `@Injectable()` and registered in `AiModule`; stale timestamps are evicted lazily on each access to prevent unbounded memory growth.
-   - **Note:** This is an in-memory guard — it does not share state across multiple server instances. For multi-instance deployments a Redis-backed throttler should replace it.
-   - 8 tests cover: single request, at-limit, over-limit, HTTP 429 status, per-user isolation, window expiry, stale eviction, unauthenticated pass-through.
-
-2. **Scope gate keyword-stuffing tests** (`ai.service.spec.ts`):
-   - Added 3 regression tests to pin the out-of-scope-before-financial-relevance ordering:
-     - "write a poem about my stock portfolio" → rejected ("write a poem" matches before "stock")
-     - "predict the future price of my ETF" → rejected ("predict the future" matches before "ETF")
-     - "use my portfolio returns to buy lottery tickets" → rejected ("lottery" matches before "portfolio")
-
-3. **Output sanitization** (`utils/output-sanitizer.ts`):
-   - LLM responses are sanitized before reaching the frontend: HTML tags stripped, markdown-image exfiltration links neutralized, zero-width Unicode characters removed.
-   - Preserves all valid markdown (bold, italic, tables, lists, code blocks).
-   - Applied in `ResponseVerifierService.verify()` before building the final response envelope.
-
-4. **Atomic rate limiter** (`ai-rate-limiter.guard.ts`):
-   - Fixed a TOCTOU race: the request counter is now incremented _before_ the limit check and rolled back only if the request is rejected. Previously a burst of concurrent requests could all read the same counter value and all be let through.
-
-5. **`new Function()` removed** (`system-prompt-builder.ts`):
-   - Dynamic code evaluation replaced with a plain inline markdown builder. Eliminates a CSP violation and a potential sandbox-escape vector if the system prompt template was ever sourced from user-controlled input.
-
-6. **Per-user circuit breaker** (`react-agent.service.ts`):
-   - The circuit breaker state is now keyed by `userId` instead of being global. Previously a single user's repeated tool failures could trip the circuit breaker for all other users (cross-user DoS).
-
-7. **`systemPrompt` removed from public API** (`chat.dto.ts` / `ai.controller.ts`):
-   - The `systemPrompt` field was removed from the `ChatDto` request body. Callers can no longer inject an arbitrary system prompt to override safety instructions or escalation guardrails.
-
-#### Phase 5 Operational Improvements
-
-1. **Structured error codes** (`contracts/final-response.schema.ts`):
-   - Every `VerifiedResponse` now carries an optional `errorCode` field (`AgentErrorCode`) when the agent does not complete cleanly: `CIRCUIT_BREAKER`, `COST_LIMIT`, `MAX_ITERATIONS`, `TIMEOUT`, `EMPTY_RESPONSE`, `CANCELLED`, `INTERNAL_ERROR`.
-   - Derived deterministically in `ResponseVerifierService.deriveErrorCode()` — no second LLM call.
-   - Enables the frontend to display specific, actionable error states instead of a generic failure message.
-
-2. **Dynamic system prompt builder** (`agent/system-prompt-builder.ts`):
-   - `SystemPromptBuilderService` assembles the system prompt at request time from injected context (current date, available tools, user locale). Previously the prompt was a static string defined at module load.
-   - Eliminates the `systemPrompt` override vulnerability (see Phase 4, item 7) and allows per-request prompt tuning without restarting the server.
-   - Fully unit-tested (`system-prompt-builder.spec.ts`, 10 tests).
-
-3. **Accurate cost model** (`react-agent.service.ts`):
-   - Cost estimation now accounts for prompt tokens, completion tokens, and cached prompt tokens separately using per-model pricing from `agent.constants.ts`. Previously all tokens were billed at a single flat rate, underestimating cost on cache-heavy workloads.
-
-4. **Stream backpressure** (`ai.service.ts` / `openai-client.service.ts`):
-   - The streaming path now enforces a request timeout via `AbortController` threaded through to the OpenAI client. Previously a stalled stream would hold the connection open indefinitely until the proxy timed out, with no server-side cancellation.
-
-5. **Conversation history validator** (`utils/conversation-history-validator.ts`):
-   - `validateConversationHistory()` repairs the `priorMessages` array before it enters the LLM conversation: leading assistant messages are dropped (LLMs require user-first turn ordering), and consecutive same-role messages are deduplicated (keeping the newer one).
-   - Handles persistence inconsistencies where a user message was saved but the assistant reply was lost.
-   - Logs a `WARN` when repair is applied; never throws. 20 tests cover all repair rules.
-
-6. **Keyword router removed** (`routing/tool-router.service.ts`):
-   - The keyword-scoring pre-filter that mapped user messages to a subset of tools was replaced with a pass-through that sends all available tools to the LLM. The LLM is significantly better at tool selection than substring matching — the keyword router caused real misrouting (e.g. "history of Apple stock" → `get_transaction_history` instead of `market_data_lookup`; "risky question" → `analyze_risk`). Token cost of the full tool list is negligible on a 128 k context window.
-   - `callerOverrideTools` is still honoured unchanged.
-
-7. **Portfolio claim detector extracted** (`utils/portfolio-claim-detector.ts`):
-   - `containsUnbackedPortfolioClaim()` is now a shared utility used by both `ReactAgentService` (escalation trigger) and `ResponseVerifierService` (warning generation). Previously each had its own regex — they had already drifted, producing inconsistent escalation vs. warning behaviour.
-
-8. **Precision numerical regression tests** (`tools/utils/statistical-helpers.spec.ts`):
-   - Four hand-calculated test cases with tight tolerance (±0.005) guard against formula changes: Sharpe ratio, Sortino > Sharpe when upside dominates, CVaR(95%), and annualized return identity at exactly one year.
-
-9. **Structured telemetry** (`react-agent.service.ts`):
-   - `emitTelemetry()` emits a JSON-structured `Logger.log` line after every agent run.
-   - Fields: `status`, `guardrail`, `toolCalls`, `iterations`, `estimatedCostUsd`, `elapsedMs`, `requestId`. `userId` is intentionally omitted to avoid PII in logs.
-
-10. **Heartbeat interval extracted to `agent.constants.ts`**:
-    - `AGENT_HEARTBEAT_INTERVAL_MS = 15_000` replaces the inline magic number in `ai.service.ts`.
-    - Documented: 15 s chosen to stay below typical 30–60 s proxy idle timeouts.
-
-> **Known pre-existing issue**: A worker process does not exit gracefully after the test suite (upstream NestJS/BullMQ module teardown). This manifests as a warning but does not affect test correctness. Fixing it requires closing Redis/BullMQ connections in `afterAll` hooks for the modules that import `RedisCacheModule` / `PortfolioSnapshotQueueModule`.
+> **Known pre-existing issue**: A worker process does not exit gracefully after the test suite (upstream NestJS/BullMQ module teardown). This manifests as a warning but does not affect test correctness.
 
 ---
 
