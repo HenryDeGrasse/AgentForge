@@ -621,32 +621,22 @@ export class AiService {
   }
 
   /**
-   * Routes tool selection through the ToolRouterService.
+   * Returns the sanitized tool list directly.
    *
-   * @param message User message for keyword scoring
-   * @param sanitizedToolNames Already-validated tool names (all allowed tools)
-   * @param originalToolNames Caller-provided tool names (undefined if not specified)
+   * Tool-use models select the right tool from the full definition list;
+   * a keyword pre-filter is not needed and introduces misrouting risk.
+   * The ToolRouterService is kept in the DI graph for caller-override
+   * support and future extensibility.
    */
   private routeTools(
     message: string,
     sanitizedToolNames: string[],
     originalToolNames: string[] | undefined
   ): string[] {
-    // If the caller explicitly provided toolNames, treat the already-sanitized
-    // list as a caller override (sanitizeToolNames already de-duped + trimmed).
-    const callerOverride = originalToolNames?.length
-      ? sanitizedToolNames
-      : undefined;
-
     const routingResult = this.toolRouterService.selectTools(
       message,
       sanitizedToolNames,
-      callerOverride
-    );
-
-    Logger.debug(
-      `Tool router [${routingResult.source}]: ${routingResult.tools.join(', ')}`,
-      'AiService'
+      originalToolNames?.length ? sanitizedToolNames : undefined
     );
 
     return routingResult.tools;
