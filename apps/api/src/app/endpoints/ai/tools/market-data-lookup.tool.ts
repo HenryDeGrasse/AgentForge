@@ -70,6 +70,21 @@ const MIN_HISTORY_DAYS = 1;
 const LOOKUP_NOT_FOUND_TTL_MS = 5 * 60 * 1000; // 5 min negative-result cache
 const lookupNegativeCache = new Map<string, number>(); // query → expiry epoch
 
+/** Sweep entries whose TTL has elapsed. Called before every insert to prevent unbounded Map growth. */
+function pruneExpiredNegativeCacheEntries(): void {
+  const now = Date.now();
+
+  for (const [key, expiry] of lookupNegativeCache) {
+    if (now >= expiry) {
+      lookupNegativeCache.delete(key);
+    }
+  }
+}
+
+// Test-only exports — NOT part of the public API.
+export const _clearNegativeCache = () => lookupNegativeCache.clear();
+export const _getNegativeCacheSize = () => lookupNegativeCache.size;
+
 @Injectable()
 export class MarketDataLookupTool implements ToolDefinition<
   MarketDataLookupInput,
@@ -351,7 +366,9 @@ export class MarketDataLookupTool implements ToolDefinition<
         const lookupItem = lookupResponse.items?.[0];
 
         if (!lookupItem) {
-          // Cache negative result to avoid repeat quota burn
+          // Prune expired entries before inserting to prevent unbounded Map growth,
+          // then cache this negative result to avoid repeat quota burn.
+          pruneExpiredNegativeCacheEntries();
           lookupNegativeCache.set(
             cacheKey,
             Date.now() + LOOKUP_NOT_FOUND_TTL_MS

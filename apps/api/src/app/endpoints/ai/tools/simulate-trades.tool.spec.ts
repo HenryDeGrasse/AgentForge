@@ -334,6 +334,26 @@ describe('SimulateTradesTool', () => {
     expect(result.data.hypotheticalPortfolio.cashBalance).toBeCloseTo(0, 0);
   });
 
+  it('caps buy at zero quantity and marks as capped when cash balance is exactly zero', async () => {
+    const zeroCashSummary = { cash: 0, totalValueInBaseCurrency: 10000 };
+    const tool = createTool(MOCK_HOLDINGS, zeroCashSummary);
+    const result = await tool.execute(
+      { trades: [{ action: 'buy', quantity: 10, symbol: 'AAPL' }] },
+      CTX
+    );
+
+    // With zero cash the buy cannot proceed at all — it must be capped, not executed
+    expect(result.data.tradeResults[0].status).toBe('capped');
+    expect(result.data.tradeResults[0].acceptedQuantity).toBe(0);
+    expect(result.data.tradeResults[0].warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'buy_capped_insufficient_cash' })
+      ])
+    );
+    // Cash should remain at zero
+    expect(result.data.hypotheticalPortfolio.cashBalance).toBe(0);
+  });
+
   it('executes buy fully when cash is sufficient', async () => {
     const tool = createTool(MOCK_HOLDINGS, MOCK_SUMMARY);
     const result = await tool.execute(
