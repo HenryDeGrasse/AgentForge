@@ -858,6 +858,149 @@ describe('PerformanceCompareTool', () => {
       );
     });
 
+    it('aligns benchmark period start date with portfolio firstOrderDate when dateRange is max', async () => {
+      const firstOrderDate = new Date('2023-01-09T00:00:00.000Z');
+      const getRange = jest.fn().mockResolvedValue([
+        {
+          dataSource: 'YAHOO',
+          symbol: 'VOO',
+          date: new Date('2023-01-09'),
+          marketPrice: 350
+        },
+        {
+          dataSource: 'YAHOO',
+          symbol: 'VOO',
+          date: new Date('2026-03-01'),
+          marketPrice: 490
+        }
+      ]);
+
+      const tool = buildTool({
+        portfolioService: {
+          getPerformance: jest.fn().mockResolvedValue({
+            firstOrderDate,
+            hasErrors: false,
+            performance: {
+              currentNetWorth: 14000,
+              currentValueInBaseCurrency: 14000,
+              netPerformance: 4000,
+              netPerformancePercentage: 0.392,
+              netPerformancePercentageWithCurrencyEffect: 0.392,
+              netPerformanceWithCurrencyEffect: 4000,
+              totalInvestment: 10000
+            }
+          })
+        },
+        benchmarkService: {
+          getBenchmarkTrends: jest.fn().mockResolvedValue({
+            trend200d: 'UP',
+            trend50d: 'UP'
+          }),
+          getBenchmarks: jest.fn().mockResolvedValue([
+            {
+              dataSource: 'YAHOO',
+              marketCondition: 'ALL_TIME_HIGH',
+              name: 'Vanguard S&P 500 ETF',
+              performances: {
+                allTimeHigh: {
+                  date: new Date('2025-01-10T00:00:00.000Z'),
+                  performancePercent: 0
+                }
+              },
+              symbol: 'VOO',
+              trend200d: 'UP',
+              trend50d: 'UP'
+            }
+          ])
+        },
+        marketDataService: { getRange }
+      });
+
+      await tool.execute({ dateRange: 'max' }, { userId: 'u1' });
+
+      expect(getRange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          dateQuery: expect.objectContaining({
+            gte: firstOrderDate
+          })
+        })
+      );
+    });
+
+    it('emits benchmark_data_coverage_gap warning when benchmark data starts significantly later than the portfolio start', async () => {
+      // Portfolio started Jan 9 2023, but VOO market data only starts Dec 2025 (2+ years late)
+      const firstOrderDate = new Date('2023-01-09T00:00:00.000Z');
+
+      const tool = buildTool({
+        portfolioService: {
+          getPerformance: jest.fn().mockResolvedValue({
+            firstOrderDate,
+            hasErrors: false,
+            performance: {
+              currentNetWorth: 14000,
+              currentValueInBaseCurrency: 14000,
+              netPerformance: 4000,
+              netPerformancePercentage: 0.392,
+              netPerformancePercentageWithCurrencyEffect: 0.392,
+              netPerformanceWithCurrencyEffect: 4000,
+              totalInvestment: 10000
+            }
+          })
+        },
+        benchmarkService: {
+          getBenchmarkTrends: jest.fn().mockResolvedValue({
+            trend200d: 'UP',
+            trend50d: 'UP'
+          }),
+          getBenchmarks: jest.fn().mockResolvedValue([
+            {
+              dataSource: 'YAHOO',
+              marketCondition: 'ALL_TIME_HIGH',
+              name: 'Vanguard S&P 500 ETF',
+              performances: {
+                allTimeHigh: {
+                  date: new Date('2025-01-10T00:00:00.000Z'),
+                  performancePercent: 0
+                }
+              },
+              symbol: 'VOO',
+              trend200d: 'UP',
+              trend50d: 'UP'
+            }
+          ])
+        },
+        // Data only covers Dec 2025 – Mar 2026 (a few months), not from Jan 2023
+        marketDataService: {
+          getRange: jest.fn().mockResolvedValue([
+            {
+              dataSource: 'YAHOO',
+              symbol: 'VOO',
+              date: new Date('2025-12-01'),
+              marketPrice: 488
+            },
+            {
+              dataSource: 'YAHOO',
+              symbol: 'VOO',
+              date: new Date('2026-03-01'),
+              marketPrice: 490
+            }
+          ])
+        }
+      });
+
+      const result = await tool.execute({ dateRange: 'max' }, { userId: 'u1' });
+
+      expect(result.warnings).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'benchmark_data_coverage_gap'
+          })
+        ])
+      );
+      // Period return is still computed (we have ≥2 points) but warned as incomplete
+      expect(result.benchmarks[0].performances.periodReturn).toBeDefined();
+    });
+
     it('updates assumptions text when period return is used', async () => {
       const tool = buildTool({
         portfolioService: {
