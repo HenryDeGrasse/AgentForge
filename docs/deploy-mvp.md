@@ -15,7 +15,7 @@
 └─────────│───────────────────────────────────────┘
           │ public URL
           ▼
-   https://<app>.up.railway.app
+   https://agentforge-production-6b51.up.railway.app
 ```
 
 Three Railway services:
@@ -96,17 +96,17 @@ All variables are set in the app service → **Variables** tab → **New Variabl
 > **To log in:** Exchange the token for a JWT:
 >
 > ```
-> curl https://<app>.up.railway.app/api/v1/auth/anonymous/<DEMO_ACCESS_TOKEN>
+> curl https://agentforge-production-6b51.up.railway.app/api/v1/auth/anonymous/<DEMO_ACCESS_TOKEN>
 > ```
 >
 > Use the returned `authToken` as `Authorization: Bearer <jwt>` for all API calls.
 
 ### Optional
 
-| Variable                        | Default | Description                                                                 |
-| ------------------------------- | ------- | --------------------------------------------------------------------------- |
-| `OPENAI_COST_PER_1K_TOKENS_USD` | `0.002` | Cost tracking accuracy                                                      |
-| `ROOT_URL`                      | —       | Set to `https://<app>.up.railway.app` after first deploy for OIDC/callbacks |
+| Variable                        | Default | Description                                                                                      |
+| ------------------------------- | ------- | ------------------------------------------------------------------------------------------------ |
+| `OPENAI_COST_PER_1K_TOKENS_USD` | `0.002` | Cost tracking accuracy                                                                           |
+| `ROOT_URL`                      | —       | Set to `https://agentforge-production-6b51.up.railway.app` after first deploy for OIDC/callbacks |
 
 ## Step 5: Deploy
 
@@ -144,14 +144,14 @@ Then in Railway: delete the GitHub service, click **+ New** → **Docker Image**
 ### Quick health check
 
 ```bash
-curl https://<app>.up.railway.app/api/v1/health
+curl https://agentforge-production-6b51.up.railway.app/api/v1/health
 # Expected: {"status":"OK"}
 ```
 
 ### Full smoke test
 
 ```bash
-./scripts/smoke-test.sh https://<app>.up.railway.app/api/v1
+./scripts/smoke-test.sh https://agentforge-production-6b51.up.railway.app/api/v1
 ```
 
 Expected output: 6/6 smoke tests passed.

@@ -4,9 +4,13 @@
 
 **AI-powered portfolio intelligence — built on [Ghostfolio](https://ghostfol.io)**
 
+🚀 **[Live Demo](https://agentforge-production-6b51.up.railway.app/en/home)**
+
 </div>
 
 AgentForge is a fork of [Ghostfolio](https://ghostfol.io) that adds a full AI agent layer on top of the existing wealth management platform. Users can ask natural-language questions about their portfolio and get grounded, data-driven answers powered by a ReAct agent that calls real portfolio tools.
+
+> **Try it now:** [https://agentforge-production-6b51.up.railway.app/en/home](https://agentforge-production-6b51.up.railway.app/en/home)
 
 ---
 
@@ -199,6 +203,18 @@ RUN_GOLDEN_EVALS=1 MVP_EVAL_BASE_URL=http://127.0.0.1:3333/api/v1 \
   npx dotenv-cli -e .env -- npx nx test api \
   --testPathPattern='golden-sets.spec' --runInBand
 ```
+
+---
+
+## Deployed Application
+
+The production instance is hosted on [Railway](https://railway.app):
+
+| Environment | URL                                                                                                                    |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Production  | [https://agentforge-production-6b51.up.railway.app/en/home](https://agentforge-production-6b51.up.railway.app/en/home) |
+
+A demo user is pre-seeded with a realistic 10-stock portfolio. Log in with the demo account to try the AI advisor — click the **✦** button in the bottom-right corner or press **⌘K**.
 
 ---
 
