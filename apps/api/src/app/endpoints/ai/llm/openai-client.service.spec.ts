@@ -73,7 +73,7 @@ describe('OpenAiClientService', () => {
       ],
       usage: {
         completionTokens: 12,
-        estimatedCostUsd: 0.0002,
+        estimatedCostUsd: 0.000112, // gpt-4.1: 8 prompt @ $0.002/1k + 12 completion @ $0.008/1k
         promptTokens: 8,
         totalTokens: 20
       }

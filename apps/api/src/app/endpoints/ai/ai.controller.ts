@@ -97,7 +97,15 @@ export class AiController {
           break;
         }
 
-        res.write(`data: ${JSON.stringify(event)}\n\n`);
+        const canContinue = res.write(`data: ${JSON.stringify(event)}\n\n`);
+
+        // Backpressure: if the kernel write buffer is full (write() returned
+        // false), wait for it to drain before writing more data. Without this,
+        // a slow client causes unbounded server-side buffering and potential
+        // memory exhaustion under load.
+        if (!canContinue) {
+          await new Promise<void>((resolve) => res.once('drain', resolve));
+        }
       }
     } catch {
       // Stream error — write error event if connection still open

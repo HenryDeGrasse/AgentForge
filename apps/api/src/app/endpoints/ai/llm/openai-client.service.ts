@@ -13,11 +13,26 @@ import OpenAI from 'openai';
 
 export const OPENAI_SDK_CLIENT_TOKEN = 'OPENAI_SDK_CLIENT_TOKEN';
 
+/**
+ * Per-model pricing (USD per 1K tokens).
+ * Input and output tokens are priced differently on most models.
+ * Used when the API response does not include a cost breakdown.
+ *
+ * Source: https://openai.com/api/pricing (spot-checked 2026-02)
+ * Update this table when OpenAI changes pricing.
+ */
+const MODEL_PRICING: Record<string, { input: number; output: number }> = {
+  'gpt-4.1': { input: 0.002, output: 0.008 },
+  'gpt-4.1-mini': { input: 0.0004, output: 0.0016 },
+  'gpt-4o': { input: 0.0025, output: 0.01 },
+  'gpt-4o-mini': { input: 0.00015, output: 0.0006 }
+};
+
+/** Fallback flat rate when the model is unknown and no token breakdown exists. */
+const FALLBACK_COST_PER_1K_TOKENS = 0.002;
+
 @Injectable()
 export class OpenAiClientService implements LLMClient {
-  private readonly estimatedCostPer1kTokensUsd = Number(
-    process.env.OPENAI_COST_PER_1K_TOKENS_USD ?? '0.01'
-  );
   private readonly model = process.env.OPENAI_MODEL ?? 'gpt-4.1';
   private openAIClient: OpenAI;
 
@@ -349,12 +364,7 @@ export class OpenAiClientService implements LLMClient {
           ? promptTokens + completionTokens
           : undefined;
 
-    const estimatedCostUsd =
-      totalTokens !== undefined
-        ? Number(
-            ((totalTokens / 1000) * this.estimatedCostPer1kTokensUsd).toFixed(6)
-          )
-        : undefined;
+    const estimatedCostUsd = this.computeCost(promptTokens, completionTokens);
 
     if (
       completionTokens === undefined &&
@@ -370,6 +380,37 @@ export class OpenAiClientService implements LLMClient {
       promptTokens,
       totalTokens
     };
+  }
+
+  /**
+   * Compute estimated cost using split input/output pricing when available.
+   *
+   * Priority:
+   *  1. Split pricing from MODEL_PRICING table (most accurate)
+   *  2. Flat fallback rate when model is unknown
+   *  3. undefined when no token data is available
+   */
+  private computeCost(
+    promptTokens: number | undefined,
+    completionTokens: number | undefined
+  ): number | undefined {
+    if (promptTokens === undefined && completionTokens === undefined) {
+      return undefined;
+    }
+
+    const pricing = MODEL_PRICING[this.model];
+
+    if (pricing) {
+      const inputCost = ((promptTokens ?? 0) / 1000) * pricing.input;
+      const outputCost = ((completionTokens ?? 0) / 1000) * pricing.output;
+
+      return Number((inputCost + outputCost).toFixed(6));
+    }
+
+    // Unknown model — flat fallback using total tokens
+    const total = (promptTokens ?? 0) + (completionTokens ?? 0);
+
+    return Number(((total / 1000) * FALLBACK_COST_PER_1K_TOKENS).toFixed(6));
   }
 
   private isRetryableError(error: unknown): boolean {

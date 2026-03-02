@@ -1,7 +1,6 @@
 import { ActionExtractorService } from '@ghostfolio/api/app/endpoints/ai/action-extractor.service';
 import {
   AGENT_ALLOWED_TOOL_NAMES,
-  AGENT_DEFAULT_SYSTEM_PROMPT,
   AGENT_HEARTBEAT_INTERVAL_MS,
   AGENT_MAX_HISTORY_PAIRS
 } from '@ghostfolio/api/app/endpoints/ai/agent/agent.constants';
@@ -9,6 +8,7 @@ import {
   ReactAgentService,
   SseAgentDoneEvent
 } from '@ghostfolio/api/app/endpoints/ai/agent/react-agent.service';
+import { buildSystemPrompt } from '@ghostfolio/api/app/endpoints/ai/agent/system-prompt-builder';
 import { ChartDataExtractorService } from '@ghostfolio/api/app/endpoints/ai/chart-data-extractor.service';
 import { toToolNameArray } from '@ghostfolio/api/app/endpoints/ai/chat-conversation.service';
 import { VerifiedResponse } from '@ghostfolio/api/app/endpoints/ai/contracts/final-response.schema';
@@ -158,8 +158,10 @@ export class AiService {
         'AiService.chat'
       );
     } else {
-      // New conversation — resolve and freeze the effective system prompt
-      effectiveSystemPrompt = systemPrompt ?? AGENT_DEFAULT_SYSTEM_PROMPT;
+      // New conversation — build a prompt tailored to the selected tool set.
+      // buildSystemPrompt returns the custom prompt unchanged when provided,
+      // or assembles the minimal set of prompt sections for the routed tools.
+      effectiveSystemPrompt = buildSystemPrompt(routedToolNames, systemPrompt);
     }
 
     // 3. Run the agent (outside any transaction — failure = no DB writes)
@@ -349,7 +351,7 @@ export class AiService {
         'AiService.chatStream'
       );
     } else {
-      effectiveSystemPrompt = systemPrompt ?? AGENT_DEFAULT_SYSTEM_PROMPT;
+      effectiveSystemPrompt = buildSystemPrompt(routedToolNames, systemPrompt);
     }
 
     // 3. Start heartbeat timer (top-level, not inside agent)
