@@ -19,6 +19,7 @@ import {
 } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
 import { LangfuseService } from '@ghostfolio/api/app/endpoints/ai/observability/langfuse.service';
 import { ToolRouterService } from '@ghostfolio/api/app/endpoints/ai/routing/tool-router.service';
+import { validateConversationHistory } from '@ghostfolio/api/app/endpoints/ai/utils/conversation-history-validator';
 import { ResponseVerifierService } from '@ghostfolio/api/app/endpoints/ai/verification/response-verifier.service';
 import { PortfolioService } from '@ghostfolio/api/app/portfolio/portfolio.service';
 import { PrismaService } from '@ghostfolio/api/services/prisma/prisma.service';
@@ -149,10 +150,13 @@ export class AiService {
 
       // Restore chronological order
       recentMessages.reverse();
-      priorMessages = recentMessages.map((m) => ({
-        content: m.content,
-        role: m.role as LLMMessage['role']
-      }));
+      priorMessages = validateConversationHistory(
+        recentMessages.map((m) => ({
+          content: m.content,
+          role: m.role as LLMMessage['role']
+        })),
+        'AiService.chat'
+      );
     } else {
       // New conversation — resolve and freeze the effective system prompt
       effectiveSystemPrompt = systemPrompt ?? AGENT_DEFAULT_SYSTEM_PROMPT;
@@ -337,10 +341,13 @@ export class AiService {
       });
 
       recentMessages.reverse();
-      priorMessages = recentMessages.map((m) => ({
-        content: m.content,
-        role: m.role as LLMMessage['role']
-      }));
+      priorMessages = validateConversationHistory(
+        recentMessages.map((m) => ({
+          content: m.content,
+          role: m.role as LLMMessage['role']
+        })),
+        'AiService.chatStream'
+      );
     } else {
       effectiveSystemPrompt = systemPrompt ?? AGENT_DEFAULT_SYSTEM_PROMPT;
     }

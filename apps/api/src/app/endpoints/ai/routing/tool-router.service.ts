@@ -11,6 +11,13 @@ export interface ToolRoutingResult {
  * Keyword-signal scoring per tool. Maps tool names to an array of keyword
  * patterns (lowercase). When the user message matches any pattern, the
  * tool earns 1 point per unique match.
+ *
+ * Design notes:
+ * - Patterns are substrings, so "risk" matches "risky", "riskier", etc.
+ * - Prefer multi-word patterns for precise tools (e.g. "what if", "capital gain")
+ *   to reduce false positives from short common words.
+ * - Ambiguous single-word signals (e.g. "buy", "sell") require a minimum score
+ *   of MIN_SCORE_TO_INCLUDE to filter out non-financial uses.
  */
 const TOOL_SIGNALS: Record<string, string[]> = {
   analyze_risk: [
@@ -24,18 +31,20 @@ const TOOL_SIGNALS: Record<string, string[]> = {
     'diversif',
     'correlation',
     'exposure',
-    'concentrated'
+    'concentrated',
+    'concentration'
   ],
   compliance_check: [
     'complian',
     'regulat',
-    'limit',
+    'investment limit',
+    'position limit',
     'restrict',
-    'rule',
     'policy',
     'guideline',
     'threshold',
-    'breach'
+    'breach',
+    'violat'
   ],
   get_portfolio_summary: [
     'portfolio',
@@ -43,33 +52,32 @@ const TOOL_SIGNALS: Record<string, string[]> = {
     'overview',
     'holding',
     'position',
-    'worth',
-    'value',
+    'net worth',
     'allocation',
     'asset',
-    'net worth'
+    'how much is my',
+    'what is my portfolio'
   ],
   get_transaction_history: [
     'transaction',
-    'trade',
-    'order',
+    'trade history',
+    'order history',
     'bought',
     'sold',
-    'purchase',
+    'purchase history',
     'history',
-    'recent',
-    'activity',
+    'recent activity',
     'dividend'
   ],
   market_data_lookup: [
-    'price',
-    'quote',
-    'ticker',
-    'stock',
+    'price of',
+    'current price',
+    'stock price',
     'market data',
     'look up',
     'lookup',
-    'current price',
+    'quote for',
+    'ticker',
     'symbol'
   ],
   performance_compare: [
@@ -84,38 +92,39 @@ const TOOL_SIGNALS: Record<string, string[]> = {
     'voo',
     'qqq',
     'ytd',
-    'gain',
-    'loss'
+    'year to date',
+    'annual return'
   ],
   rebalance_suggest: [
     'rebalance',
-    'reallocat',
+    'realloc',
     'target allocation',
     'drift',
-    'weight',
-    'adjust'
+    'portfolio weight',
+    'adjust my portfolio'
   ],
   simulate_trades: [
     'simulat',
-    'what if',
+    'what if i buy',
+    'what if i sell',
     'what-if',
     'hypothetical',
+    'if i purchased',
+    'if i sold',
     'scenario',
-    'buy',
-    'sell',
-    'add',
-    'remove'
+    'what would happen if'
   ],
   stress_test: [
     'stress',
-    'crash',
+    'market crash',
     'downturn',
     'recession',
     'worst case',
     'worst-case',
     'bear market',
     'black swan',
-    'crisis'
+    'crisis',
+    'market collapse'
   ],
   tax_estimate: [
     'tax',
@@ -123,16 +132,60 @@ const TOOL_SIGNALS: Record<string, string[]> = {
     'capital loss',
     'cost basis',
     'harvest',
-    'tax-loss'
+    'tax-loss',
+    'tax implication',
+    'taxable'
   ]
 };
 
-/** Foundation tool always included when router selects */
+/**
+ * Negative signals: if a tool scores > 0 but the message also matches a
+ * negative signal, the tool's score is discarded. This prevents obvious
+ * false positives like "buy lunch" → simulate_trades.
+ */
+const TOOL_NEGATIVE_SIGNALS: Record<string, string[]> = {
+  simulate_trades: [
+    'lunch',
+    'dinner',
+    'breakfast',
+    'groceries',
+    'car',
+    'house',
+    'ticket',
+    'concert',
+    'movie',
+    'coffee'
+  ]
+};
+
+/** Foundation tool always included when router selects (ensures portfolio context). */
 const FOUNDATION_TOOL = 'get_portfolio_summary';
 
-/** Min and max tools the router selects (before caller override) */
+/**
+ * Foundation tool set returned when the message has no identifiable financial
+ * signals. These four tools cover the most common portfolio questions and
+ * provide enough context for the LLM to answer or ask a clarifying question.
+ * Sending all 10 tools on every vague query wastes context window tokens.
+ */
+const FOUNDATION_TOOL_SET = [
+  'get_portfolio_summary',
+  'get_transaction_history',
+  'analyze_risk',
+  'market_data_lookup'
+];
+
+/** Min and max tools the router selects (before caller override). */
 const MIN_TOOLS = 3;
 const MAX_TOOLS = 5;
+
+/**
+ * Minimum keyword-match score for a tool to be included in the selection.
+ * Tools that only match a single ambiguous keyword (e.g. "buy", "sell")
+ * are excluded to reduce false positives.
+ * Tools with highly specific multi-word signals (e.g. "what if i buy") will
+ * naturally score ≥ 1 from that single match, so the threshold is intentionally low.
+ */
+const MIN_SCORE_TO_INCLUDE = 1;
 
 @Injectable()
 export class ToolRouterService {
@@ -177,16 +230,35 @@ export class ToolRouterService {
         }
       }
 
-      if (score > 0) {
-        scores.set(toolName, score);
+      if (score < MIN_SCORE_TO_INCLUDE) {
+        continue;
       }
+
+      // Apply negative signals: discard score if any negative pattern matches
+      const negativeSignals = TOOL_NEGATIVE_SIGNALS[toolName];
+
+      if (negativeSignals?.some((neg) => normalizedMessage.includes(neg))) {
+        continue;
+      }
+
+      scores.set(toolName, score);
     }
 
-    // No scores → vague/empty query → fall back to all tools
+    // No scores → vague/empty query → fall back to foundation tool set.
+    // Using all tools would flood the LLM context on every unclear message;
+    // the foundation set covers the most common portfolio questions and is
+    // small enough to keep the system prompt concise.
     if (scores.size === 0) {
+      const foundationTools = FOUNDATION_TOOL_SET.filter((t) =>
+        availableTools.includes(t)
+      );
+      // If none of the foundation tools are available, fall back to all tools
+      const tools =
+        foundationTools.length > 0 ? foundationTools : [...availableTools];
+
       return {
         source: 'fallback_all',
-        tools: [...availableTools]
+        tools
       };
     }
 

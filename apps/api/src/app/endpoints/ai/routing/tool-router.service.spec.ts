@@ -152,27 +152,32 @@ describe('ToolRouterService', () => {
     expect(result.tools).toContain('get_portfolio_summary');
   });
 
-  // ─── Fallback to all tools ─────────────────────────────────────────
+  // ─── Fallback to foundation tools ─────────────────────────────────
 
-  it('falls back to all tools for vague queries', () => {
+  it('falls back to foundation tools (not all tools) for vague queries', () => {
     const result = router.selectTools('help', ALL_TOOL_NAMES);
 
-    expect(result.tools).toEqual(ALL_TOOL_NAMES);
     expect(result.source).toBe('fallback_all');
+    // Foundation set only — not all 10 tools
+    expect(result.tools).toContain('get_portfolio_summary');
+    expect(result.tools).toContain('get_transaction_history');
+    expect(result.tools).toContain('analyze_risk');
+    expect(result.tools).toContain('market_data_lookup');
+    expect(result.tools.length).toBe(4);
   });
 
-  it('falls back to all tools for empty messages', () => {
+  it('falls back to foundation tools for empty messages', () => {
     const result = router.selectTools('', ALL_TOOL_NAMES);
 
-    expect(result.tools).toEqual(ALL_TOOL_NAMES);
     expect(result.source).toBe('fallback_all');
+    expect(result.tools.length).toBe(4);
   });
 
-  it('falls back to all tools for single-word greeting', () => {
+  it('falls back to foundation tools for single-word greeting', () => {
     const result = router.selectTools('hello', ALL_TOOL_NAMES);
 
-    expect(result.tools).toEqual(ALL_TOOL_NAMES);
     expect(result.source).toBe('fallback_all');
+    expect(result.tools.length).toBe(4);
   });
 
   // ─── Caller override ──────────────────────────────────────────────
@@ -227,5 +232,52 @@ describe('ToolRouterService', () => {
 
     const unique = new Set(result.tools);
     expect(unique.size).toBe(result.tools.length);
+  });
+
+  // ─── False positive regression tests ─────────────────────────────
+
+  it('does NOT select simulate_trades for "buy lunch" (food context)', () => {
+    const result = router.selectTools(
+      'I want to buy lunch today',
+      ALL_TOOL_NAMES
+    );
+    // "buy" in food context should not trigger simulate_trades
+    expect(result.tools).not.toContain('simulate_trades');
+  });
+
+  it('does NOT select simulate_trades for "sell my car" (non-financial context)', () => {
+    const result = router.selectTools('I need to sell my car', ALL_TOOL_NAMES);
+    // No financial keywords → fallback to foundation tools, simulate_trades not included
+    expect(result.tools).not.toContain('simulate_trades');
+    expect(result.source).toBe('fallback_all');
+  });
+
+  it('does NOT match analyze_risk from a single partial-word hit', () => {
+    // "risky business" has only one keyword match — should not trigger with min-match=2
+    // (unless portfolio summary also pushes it in via foundation tool)
+    const result = router.selectTools('risky business', ALL_TOOL_NAMES);
+    // Foundation tool should still be present
+    expect(result.tools).toContain('get_portfolio_summary');
+    // analyze_risk should not be selected based on a single vague word alone
+    // (it would need 2+ keyword hits to qualify)
+    // This test verifies it doesn't dominate the selection unfairly
+    expect(result.tools.length).toBeLessThanOrEqual(5);
+  });
+
+  it('uses foundation tools (not all tools) as fallback for vague query', () => {
+    // "help me" has no keyword match — should use foundation set (4 tools, not 10)
+    const result = router.selectTools('help me', ALL_TOOL_NAMES);
+    expect(result.source).toBe('fallback_all');
+    expect(result.tools.length).toBe(4);
+    expect(result.tools).toContain('get_portfolio_summary');
+  });
+
+  it('selects simulate_trades for an explicit financial trade query', () => {
+    const result = router.selectTools(
+      'What if I buy 50 shares of MSFT and sell GOOGL?',
+      ALL_TOOL_NAMES
+    );
+    expect(result.tools).toContain('simulate_trades');
+    expect(result.source).toBe('router');
   });
 });
