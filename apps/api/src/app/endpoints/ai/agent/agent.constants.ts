@@ -105,7 +105,22 @@ export const AGENT_DEFAULT_SYSTEM_PROMPT = [
 export const AGENT_FALLBACK_COST_PER_1K_TOKENS_USD = 0.002;
 export const AGENT_MAX_HISTORY_PAIRS = 10; // user+assistant pairs sent to LLM as prior context
 export const AGENT_MAX_ITERATIONS = 15;
-export const AGENT_TIMEOUT_MS = 15_000;
+
+/**
+ * Total wall-clock deadline for one agent run (milliseconds).
+ *
+ * 60 s gives the ReAct loop enough headroom for two full LLM round trips
+ * (each up to ~10 s with gpt-4.1) plus parallel tool execution, while still
+ * staying well under the typical 90–120 s HTTP gateway timeout.
+ *
+ * Relationship to heartbeat: AGENT_TIMEOUT_MS >> AGENT_HEARTBEAT_INTERVAL_MS
+ * so at least one heartbeat is emitted before the timeout fires.
+ * With AGENT_TIMEOUT_MS=60s and AGENT_HEARTBEAT_INTERVAL_MS=15s, clients
+ * receive up to 3 heartbeats during a long run.
+ *
+ * Can be overridden per-request via ReactAgentRunInput.guardrails.timeoutMs.
+ */
+export const AGENT_TIMEOUT_MS = 60_000;
 
 /** Tool names that the AI agent is allowed to invoke */
 export const AGENT_ALLOWED_TOOL_NAMES = [

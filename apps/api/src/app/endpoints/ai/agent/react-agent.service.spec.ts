@@ -1504,6 +1504,96 @@ describe('Phase 2 reliability improvements', () => {
       expect(result.estimatedCostUsd).toBe(0);
     });
   });
+
+  describe('empty LLM response handling', () => {
+    it('retries once when LLM returns empty and succeeds on second attempt', async () => {
+      (llmClient2.complete as jest.Mock)
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: '',
+          toolCalls: [],
+          usage: { estimatedCostUsd: 0.001 }
+        })
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: 'Here is your portfolio summary.',
+          toolCalls: [],
+          usage: { estimatedCostUsd: 0.001 }
+        });
+
+      const result = await agent2.run({
+        guardrails: reliabilityGuardrails,
+        prompt: 'Summarize my portfolio',
+        userId: 'u1'
+      });
+
+      expect(result.status).toBe('completed');
+      expect(result.response).toBe('Here is your portfolio summary.');
+      expect(llmClient2.complete).toHaveBeenCalledTimes(2);
+    });
+
+    it('fails fast with status=failed after two consecutive empty responses', async () => {
+      (llmClient2.complete as jest.Mock).mockResolvedValue({
+        finishReason: 'stop',
+        text: '',
+        toolCalls: [],
+        usage: { estimatedCostUsd: 0.001 }
+      });
+
+      const result = await agent2.run({
+        guardrails: reliabilityGuardrails,
+        prompt: 'Summarize my portfolio',
+        userId: 'u1'
+      });
+
+      expect(result.status).toBe('failed');
+      expect(result.response).toBe(
+        'The AI assistant could not generate a response. Please try again.'
+      );
+      // Should stop after 2 empty responses, not burn all iterations
+      expect(llmClient2.complete).toHaveBeenCalledTimes(2);
+    });
+
+    it('resets empty counter after a tool-call turn', async () => {
+      toolRegistry2.register({
+        description: 'get summary',
+        execute: jest.fn().mockResolvedValue({ status: 'success', data: {} }),
+        inputSchema: { type: 'object' as const },
+        name: 'get_portfolio_summary'
+      });
+
+      (llmClient2.complete as jest.Mock)
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: '',
+          toolCalls: [],
+          usage: { estimatedCostUsd: 0.001 }
+        })
+        .mockResolvedValueOnce({
+          finishReason: 'tool_calls',
+          text: '',
+          toolCalls: [
+            { arguments: {}, id: 'tc1', name: 'get_portfolio_summary' }
+          ],
+          usage: { estimatedCostUsd: 0.001 }
+        })
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: 'Your portfolio looks good.',
+          toolCalls: [],
+          usage: { estimatedCostUsd: 0.001 }
+        });
+
+      const result = await agent2.run({
+        guardrails: reliabilityGuardrails,
+        prompt: 'Summarize my portfolio',
+        userId: 'u1'
+      });
+
+      expect(result.status).toBe('completed');
+      expect(result.response).toBe('Your portfolio looks good.');
+    });
+  });
 });
 
 // ─── Phase 5: Structured Telemetry ────────────────────────────────────────────

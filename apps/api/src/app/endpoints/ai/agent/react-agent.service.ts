@@ -180,6 +180,7 @@ export class ReactAgentService {
     const executedToolResults: ExecutedToolEntry[] = [];
     let estimatedCostUsd = 0;
     let consecutiveDuplicateToolCalls = 0;
+    let consecutiveEmptyResponses = 0;
     let escalationAttempted = false;
     let escalationPending = false;
     let iterationCount = 0;
@@ -404,6 +405,41 @@ export class ReactAgentService {
 
           continue;
         }
+
+        // Neither tool calls nor text — LLM returned an empty response.
+        // Retry once with an explicit prompt, then fail fast to avoid
+        // burning all remaining iterations on empty turns.
+        if (!completion.text?.trim()) {
+          consecutiveEmptyResponses++;
+
+          if (consecutiveEmptyResponses >= 2) {
+            this.recordSuccess();
+
+            yield doneEvent({
+              elapsedMs: Date.now() - startedAt,
+              estimatedCostUsd: this.roundCost(estimatedCostUsd),
+              executedTools: executedToolResults,
+              iterations: iterationCount,
+              response:
+                'The AI assistant could not generate a response. Please try again.',
+              status: 'failed',
+              toolCalls: toolCallsCount
+            });
+
+            return;
+          }
+
+          messages.push({
+            content:
+              'Your previous response was empty. Please respond with either a text answer or the appropriate tool calls.',
+            role: 'user'
+          });
+
+          continue;
+        }
+
+        // Reset empty-response counter on any non-empty response
+        consecutiveEmptyResponses = 0;
 
         if (completion.text?.trim()) {
           const responseText = completion.text.trim();

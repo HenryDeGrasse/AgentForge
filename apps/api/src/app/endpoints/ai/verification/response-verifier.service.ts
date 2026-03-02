@@ -6,6 +6,7 @@ import {
   SLOW_RESPONSE_THRESHOLD_MS,
   VerifiedResponse
 } from '@ghostfolio/api/app/endpoints/ai/contracts/final-response.schema';
+import { sanitizeAgentResponse } from '@ghostfolio/api/app/endpoints/ai/utils/output-sanitizer';
 import { containsUnbackedPortfolioClaim } from '@ghostfolio/api/app/endpoints/ai/utils/portfolio-claim-detector';
 
 import { Injectable } from '@nestjs/common';
@@ -46,9 +47,11 @@ export class ResponseVerifierService {
       result.toolCalls > 0 && invokedToolNames.length > 0
         ? invokedToolNames
         : [];
-    const response = result.response?.trim()
-      ? result.response
-      : SAFE_FALLBACK_RESPONSE;
+    // Sanitize before fallback check so we don't accidentally blank a response
+    // that only contained injected HTML (the sanitized form being empty is
+    // correct — it means there was no legitimate content).
+    const sanitized = sanitizeAgentResponse(result.response ?? '');
+    const response = sanitized.trim() ? sanitized : SAFE_FALLBACK_RESPONSE;
 
     // Human review is recommended when:
     //  - confidence is low (failed status, tool errors)
