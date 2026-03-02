@@ -1,5 +1,16 @@
 import { MarketDataLookupTool } from './market-data-lookup.tool';
 
+function buildLookupTool(lookupImpl: jest.Mock) {
+  return new MarketDataLookupTool(
+    {
+      get: jest.fn().mockResolvedValue(null),
+      lookup: lookupImpl
+    } as any,
+    { getSymbolProfiles: jest.fn().mockResolvedValue([]) } as any,
+    { user: jest.fn().mockResolvedValue({ settings: { settings: {} } }) } as any
+  );
+}
+
 describe('MarketDataLookupTool', () => {
   it('returns quote and profile metadata for a valid symbol', async () => {
     const symbolService = {
@@ -128,7 +139,7 @@ describe('MarketDataLookupTool', () => {
 
     expect(result.priceChange).toEqual({
       absoluteChange: 25,
-      percentChange: 0.25,
+      percentChange: 25, // whole-number percentage: 25/100 * 100 = 25%
       periodDays: 30
     });
 
@@ -282,5 +293,73 @@ describe('MarketDataLookupTool', () => {
         message: 'Market price is missing or non-positive for YAHOO:QQQ.'
       }
     ]);
+  });
+
+  it('isolates negative cache per tool instance (no global state leak)', async () => {
+    jest.useFakeTimers();
+
+    const lookup1 = jest.fn().mockResolvedValue({ items: [] });
+    const lookup2 = jest.fn().mockResolvedValue({ items: [] });
+    const tool1 = buildLookupTool(lookup1);
+    const tool2 = buildLookupTool(lookup2);
+    const ctx = { userId: 'u1' };
+
+    // tool1 caches a negative result for GHOST
+    await tool1.execute({ symbol: 'GHOST' }, ctx);
+    expect(lookup1).toHaveBeenCalledTimes(1);
+
+    // tool2 is a fresh instance — should NOT share tool1's negative cache
+    // If the cache is global (module-scoped), lookup2 will never be called
+    await tool2.execute({ symbol: 'GHOST' }, ctx);
+    expect(lookup2).toHaveBeenCalledTimes(1);
+
+    jest.useRealTimers();
+  });
+
+  describe('negative-cache memory management', () => {
+    it('expired entries are pruned from the cache when a new failed lookup is inserted', async () => {
+      jest.useFakeTimers();
+
+      const lookup = jest.fn().mockResolvedValue({ items: [] });
+      const tool = buildLookupTool(lookup);
+      const ctx = { userId: 'u1' };
+
+      // Three unique failed lookups → three negative-cache entries
+      await tool.execute({ symbol: 'SYM1' }, ctx);
+      await tool.execute({ symbol: 'SYM2' }, ctx);
+      await tool.execute({ symbol: 'SYM3' }, ctx);
+      expect(tool._getNegativeCacheSize()).toBe(3);
+
+      // Advance past the 5-minute TTL so all three entries expire
+      jest.advanceTimersByTime(6 * 60 * 1000);
+
+      // Inserting a fourth entry should prune the three expired ones
+      await tool.execute({ symbol: 'SYM4' }, ctx);
+      expect(tool._getNegativeCacheSize()).toBe(1); // only SYM4 remains
+
+      jest.useRealTimers();
+    });
+
+    it('does not call lookup again for the same symbol within the TTL window', async () => {
+      jest.useFakeTimers();
+
+      const lookup = jest.fn().mockResolvedValue({ items: [] });
+      const tool = buildLookupTool(lookup);
+      const ctx = { userId: 'u1' };
+
+      await tool.execute({ symbol: 'GHOST' }, ctx);
+      expect(lookup).toHaveBeenCalledTimes(1);
+
+      // Within TTL — should be served from negative cache (no second lookup call)
+      await tool.execute({ symbol: 'GHOST' }, ctx);
+      expect(lookup).toHaveBeenCalledTimes(1);
+
+      // After TTL expiry — should call lookup again
+      jest.advanceTimersByTime(6 * 60 * 1000);
+      await tool.execute({ symbol: 'GHOST' }, ctx);
+      expect(lookup).toHaveBeenCalledTimes(2);
+
+      jest.useRealTimers();
+    });
   });
 });

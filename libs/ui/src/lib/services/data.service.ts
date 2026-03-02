@@ -1005,6 +1005,20 @@ export class DataService {
     return this.http.delete<void>(`/api/v1/ai/conversations/${id}`);
   }
 
+  /**
+   * Submit thumbs-up / thumbs-down feedback for a specific AI response.
+   * The traceId is returned by the streaming `done` event payload.
+   */
+  public postAiFeedback({
+    score,
+    traceId
+  }: {
+    score: 'down' | 'up';
+    traceId: string;
+  }) {
+    return this.http.post<void>('/api/v1/ai/feedback', { score, traceId });
+  }
+
   public updateInfo() {
     this.http.get<InfoItem>('/api/v1/info').subscribe((info) => {
       const utmSource = window.localStorage.getItem('utm_source') as

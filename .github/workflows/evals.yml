@@ -19,14 +19,18 @@ on:
     branches: [main]
   schedule:
     - cron: '0 6 * * *' # nightly at 6 AM UTC
+  workflow_dispatch: {} # manual trigger (e.g. to re-record sessions)
 
 concurrency:
-  group: ai-evals-live-${{ github.ref }}
+  group: ai-evals-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  fast-evals:
-    name: 'Golden Sets (fast, mocked LLM)'
+  # ─── Tier 1: Framework tests (mocked LLM) ────────────────────────────────────
+  # Runs every commit. Tests schema validation, auth scoping, guardrails,
+  # tool registry wiring, and envelope structure. Does NOT test LLM behaviour.
+  framework-tests:
+    name: 'Agent Framework Tests (mocked LLM)'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -36,54 +40,81 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'npm'
       - run: npm ci
-      - run: npx nx test api --testPathPattern='golden-sets-fast'
+      - run: npx nx test api --testPathPattern='agent-framework'
 
-  pre-merge-evals:
-    name: 'Golden Sets (live LLM)'
-    if: >-
-      github.event_name == 'merge_group' ||
-      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false)
-    needs: fast-evals
+  # ─── Tier 3: Replay evals (recorded real gpt-4.1) ────────────────────────────
+  # Runs every commit. Replays the recorded gpt-4.1 sessions from
+  # fixtures/recorded/*.json — no OpenAI calls, $0, <15s.
+  # Catches: assertion tightening regressions, tool-logic changes that
+  # break recorded output, new mustNotIncludeAny violations.
+  # Re-record when: model changes, system prompt changes, new cases added.
+  replay-evals:
+    name: 'Golden Sets (replay — recorded gpt-4.1)'
+    needs: framework-tests
     runs-on: ubuntu-latest
-    timeout-minutes: 8
-    env:
-      RUN_GOLDEN_EVALS: '1'
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY_EVAL }}
-      MVP_EVAL_BASE_URL: ${{ secrets.EVAL_API_URL }}
+    timeout-minutes: 5
     steps:
-      - name: Check required secrets
-        run: |
-          if [ -z "$MVP_EVAL_BASE_URL" ]; then
-            echo "::error::EVAL_API_URL secret is not set — cannot reach live API"
-            exit 1
-          fi
-          if [ -z "$OPENAI_API_KEY" ]; then
-            echo "::error::OPENAI_API_KEY_EVAL secret is not set"
-            exit 1
-          fi
-      - name: Pre-flight API health check
-        run: |
-          echo "Checking API at $MVP_EVAL_BASE_URL ..."
-          curl --fail --silent --max-time 10 \
-            "${MVP_EVAL_BASE_URL%/api/v1}/api/v1/info" \
-            || (echo "::error::API not reachable at $MVP_EVAL_BASE_URL" && exit 1)
-          echo "API is healthy ✓"
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
       - run: npm ci
-      - run: npx nx test api --testPathPattern='golden-sets.spec' --runInBand
+      - run: npx nx test api --testPathPattern='golden-sets-replay'
 
+  # ─── Tier 2: Live evals (real gpt-4.1-mini in-process) ──────────────────────
+  # Runs nightly and on manual workflow_dispatch only.
+  # Cost: ~$0.30/run. Saves fresh recordings as a build artifact.
+  # Non-blocking: a missing or invalid OPENAI_API_KEY_EVAL skips gracefully
+  # rather than failing the whole pipeline.
+  live-evals:
+    name: 'Golden Sets (live gpt-4.1)'
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'push'
+    needs: framework-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true # nightly monitor — not a merge gate
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY_EVAL }}
+      # Use gpt-4.1 for evals — measures agent ceiling independent of the
+      # production model choice (app uses gpt-4.1-mini for lower latency).
+      OPENAI_MODEL: 'gpt-4.1'
+      EVAL_RECORD: '1'
+    steps:
+      - name: Check OPENAI_API_KEY_EVAL secret
+        run: |
+          if [ -z "$OPENAI_API_KEY" ] || [[ "$OPENAI_API_KEY" == *"INSERT"* ]]; then
+            echo "::warning::OPENAI_API_KEY_EVAL secret is missing or is still the placeholder value."
+            echo "::warning::Go to repo Settings → Secrets → Actions and add OPENAI_API_KEY_EVAL."
+            echo "SKIP_LIVE=true" >> "$GITHUB_ENV"
+          fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+      - run: npm ci
+      - if: env.SKIP_LIVE != 'true'
+        run: npx nx test api --testPathPattern='golden-sets-live' --runInBand
+      - uses: actions/upload-artifact@v4
+        if: env.SKIP_LIVE != 'true'
+        with:
+          name: recorded-sessions-${{ github.run_id }}
+          path: apps/api/test/ai/fixtures/recorded/
+  # ─── Nightly: Labeled scenarios (coverage report) ────────────────────────────
   nightly-evals:
     name: 'Labeled Scenarios (coverage)'
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    continue-on-error: true
     env:
       RUN_LABELED_EVALS: '1'
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY_EVAL }}
+      OPENAI_MODEL: 'gpt-4.1'
       MVP_EVAL_BASE_URL: ${{ secrets.EVAL_API_URL }}
     steps:
       - uses: actions/checkout@v4

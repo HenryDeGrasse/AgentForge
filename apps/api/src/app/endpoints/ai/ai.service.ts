@@ -1,13 +1,14 @@
 import { ActionExtractorService } from '@ghostfolio/api/app/endpoints/ai/action-extractor.service';
 import {
   AGENT_ALLOWED_TOOL_NAMES,
-  AGENT_DEFAULT_SYSTEM_PROMPT,
+  AGENT_HEARTBEAT_INTERVAL_MS,
   AGENT_MAX_HISTORY_PAIRS
 } from '@ghostfolio/api/app/endpoints/ai/agent/agent.constants';
 import {
   ReactAgentService,
   SseAgentDoneEvent
 } from '@ghostfolio/api/app/endpoints/ai/agent/react-agent.service';
+import { buildSystemPrompt } from '@ghostfolio/api/app/endpoints/ai/agent/system-prompt-builder';
 import { ChartDataExtractorService } from '@ghostfolio/api/app/endpoints/ai/chart-data-extractor.service';
 import { toToolNameArray } from '@ghostfolio/api/app/endpoints/ai/chat-conversation.service';
 import { VerifiedResponse } from '@ghostfolio/api/app/endpoints/ai/contracts/final-response.schema';
@@ -16,6 +17,9 @@ import {
   LLMClient,
   LLMMessage
 } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
+import { LangfuseService } from '@ghostfolio/api/app/endpoints/ai/observability/langfuse.service';
+import { ToolRouterService } from '@ghostfolio/api/app/endpoints/ai/routing/tool-router.service';
+import { validateConversationHistory } from '@ghostfolio/api/app/endpoints/ai/utils/conversation-history-validator';
 import { ResponseVerifierService } from '@ghostfolio/api/app/endpoints/ai/verification/response-verifier.service';
 import { InsiderService } from '@ghostfolio/api/app/endpoints/insider/insider.service';
 import { PortfolioService } from '@ghostfolio/api/app/portfolio/portfolio.service';
@@ -31,6 +35,7 @@ import {
   Logger
 } from '@nestjs/common';
 import { StatusCodes, getReasonPhrase } from 'http-status-codes';
+import { randomUUID } from 'node:crypto';
 import type { ColumnDescriptor } from 'tablemark';
 
 export interface ChatResponse extends VerifiedResponse {
@@ -64,12 +69,14 @@ export class AiService {
     private readonly actionExtractorService: ActionExtractorService,
     private readonly chartDataExtractorService: ChartDataExtractorService,
     private readonly insiderService: InsiderService,
+    private readonly langfuseService: LangfuseService,
     @Inject(LLM_CLIENT_TOKEN)
     private readonly llmClient: LLMClient,
     private readonly portfolioService: PortfolioService,
     private readonly prismaService: PrismaService,
     private readonly reactAgentService: ReactAgentService,
-    private readonly responseVerifierService: ResponseVerifierService
+    private readonly responseVerifierService: ResponseVerifierService,
+    private readonly toolRouterService: ToolRouterService
   ) {}
 
   public getHealth() {
@@ -144,31 +151,23 @@ export class AiService {
   public async chat({
     conversationId,
     message,
-    systemPrompt,
     toolNames,
     userId
   }: {
     conversationId?: string;
     message: string;
-    systemPrompt?: string;
     toolNames?: string[];
     userId: string;
   }): Promise<ChatResponse> {
     // 1. Validate toolNames against allowlist
     const sanitizedToolNames = this.sanitizeToolNames(toolNames);
 
-    // 1b. Deterministic scope gate — classify request before reaching the LLM
-    const scopeResult = this.checkScopeGate(message);
-
-    if (scopeResult.type === 'REJECT') {
-      return this.buildScopedRefusal({
-        conversationId,
-        message,
-        refusalText: scopeResult.reason,
-        systemPrompt: systemPrompt ?? AGENT_DEFAULT_SYSTEM_PROMPT,
-        userId
-      });
-    }
+    // 1a. Route tools based on message content
+    const routedToolNames = this.routeTools(
+      message,
+      sanitizedToolNames,
+      toolNames
+    );
 
     // 2. Resolve prior context and effective system prompt
     let priorMessages: LLMMessage[] = [];
@@ -176,13 +175,6 @@ export class AiService {
     let resolvedConversationId: string | undefined = conversationId;
 
     if (conversationId) {
-      // Continuing an existing conversation
-      if (systemPrompt) {
-        throw new BadRequestException(
-          'Cannot change the system prompt of an existing conversation'
-        );
-      }
-
       // Load stored system prompt (ownership enforced — throws 404 if wrong user)
       const conversation = await this.prismaService.chatConversation.findFirst({
         select: { systemPrompt: true },
@@ -207,45 +199,18 @@ export class AiService {
 
       // Restore chronological order
       recentMessages.reverse();
-      priorMessages = recentMessages.map((m) => ({
-        content: m.content,
-        role: m.role as LLMMessage['role']
-      }));
+      priorMessages = validateConversationHistory(
+        recentMessages.map((m) => ({
+          content: m.content,
+          role: m.role as LLMMessage['role']
+        })),
+        'AiService.chat'
+      );
     } else {
-      // New conversation — resolve and freeze the effective system prompt
-      effectiveSystemPrompt = systemPrompt ?? AGENT_DEFAULT_SYSTEM_PROMPT;
-    }
-
-    // 2b. Handle AMBIGUOUS messages now that we have conversation history.
-    //     Vague follow-ups are only valid when the prior conversation was on-topic.
-    if (scopeResult.type === 'AMBIGUOUS') {
-      const lastAssistantMsg = [...priorMessages]
-        .reverse()
-        .find((m) => m.role === 'assistant');
-
-      if (!lastAssistantMsg) {
-        // No prior context — ask for clarification
-        return this.buildScopedRefusal({
-          conversationId,
-          message,
-          refusalText: AiService.AMBIGUOUS_CLARIFICATION_RESPONSE,
-          systemPrompt: effectiveSystemPrompt,
-          userId
-        });
-      }
-
-      if (AiService.REFUSAL_RESPONSE_PATTERN.test(lastAssistantMsg.content)) {
-        // Last response was a refusal — don't let "based on that" sneak past
-        return this.buildScopedRefusal({
-          conversationId,
-          message,
-          refusalText: AiService.AMBIGUOUS_CLARIFICATION_RESPONSE,
-          systemPrompt: effectiveSystemPrompt,
-          userId
-        });
-      }
-
-      // Last response was portfolio-related — allow the follow-up through
+      // New conversation — build a prompt tailored to the selected tool set.
+      // Always uses the server-controlled prompt builder; caller-supplied
+      // system prompts are not accepted to prevent guardrail bypass.
+      effectiveSystemPrompt = buildSystemPrompt(routedToolNames);
     }
 
     // 2c. Session briefing injection (new conversations only)
@@ -257,11 +222,23 @@ export class AiService {
     }
 
     // 3. Run the agent (outside any transaction — failure = no DB writes)
+    const requestId = randomUUID();
+
+    // Start Langfuse trace (no-ops when LANGFUSE_PUBLIC_KEY is not set)
+    const { traceId, end: endTrace } = this.langfuseService.startTrace({
+      conversationId,
+      message,
+      requestId,
+      toolNames: routedToolNames,
+      userId
+    });
+
     const result = await this.reactAgentService.run({
       prompt: message,
       priorMessages,
+      requestId,
       systemPrompt: effectiveSystemPrompt,
-      toolNames: sanitizedToolNames,
+      toolNames: routedToolNames,
       userId
     });
 
@@ -273,8 +250,22 @@ export class AiService {
 
     const verified = this.responseVerifierService.verify(
       result,
-      invokedToolNames
+      invokedToolNames,
+      traceId
     );
+
+    // Finalise the Langfuse trace with outcome metadata
+    endTrace({
+      confidence: verified.confidence,
+      elapsedMs: verified.elapsedMs,
+      estimatedCostUsd: verified.estimatedCostUsd,
+      invokedToolNames: verified.invokedToolNames,
+      iterations: verified.iterations,
+      requiresHumanReview: verified.requiresHumanReview,
+      status: verified.status,
+      toolCalls: verified.toolCalls,
+      warnings: verified.warnings
+    });
 
     // 4b. Extract chart data from tool results
     const chartData = this.chartDataExtractorService.extract(
@@ -361,68 +352,30 @@ export class AiService {
     conversationId,
     message,
     signal,
-    systemPrompt,
     toolNames,
     userId
   }: {
     conversationId?: string;
     message: string;
     signal?: AbortSignal;
-    systemPrompt?: string;
     toolNames?: string[];
     userId: string;
   }): AsyncIterable<SseEvent> {
     // 1. Validate toolNames against allowlist
     const sanitizedToolNames = this.sanitizeToolNames(toolNames);
 
-    // 1b. Deterministic scope gate
-    const scopeResult = this.checkScopeGate(message);
-
-    if (scopeResult.type === 'REJECT') {
-      const refusalResponse = await this.buildScopedRefusal({
-        conversationId,
-        message,
-        refusalText: scopeResult.reason,
-        systemPrompt: systemPrompt ?? AGENT_DEFAULT_SYSTEM_PROMPT,
-        userId
-      });
-
-      yield {
-        type: 'done',
-        payload: {
-          actions: refusalResponse.actions,
-          chartData: refusalResponse.chartData,
-          confidence: refusalResponse.confidence,
-          conversationId: refusalResponse.conversationId,
-          elapsedMs: refusalResponse.elapsedMs,
-          estimatedCostUsd: refusalResponse.estimatedCostUsd,
-          invokedToolNames: refusalResponse.invokedToolNames,
-          iterations: refusalResponse.iterations,
-          response: refusalResponse.response,
-          sources: refusalResponse.sources,
-          status: refusalResponse.status,
-          toolCalls: refusalResponse.toolCalls,
-          warnings: refusalResponse.warnings
-        }
-      };
-
-      return;
-    }
+    // 1a. Route tools based on message content
+    const routedToolNames = this.routeTools(
+      message,
+      sanitizedToolNames,
+      toolNames
+    );
 
     // 2. Resolve prior context and effective system prompt
     let priorMessages: LLMMessage[] = [];
     let effectiveSystemPrompt: string;
 
     if (conversationId) {
-      if (systemPrompt) {
-        yield {
-          type: 'error',
-          message: 'Cannot change the system prompt of an existing conversation'
-        };
-
-        return;
-      }
-
       const conversation = await this.prismaService.chatConversation.findFirst({
         select: { systemPrompt: true },
         where: { id: conversationId, userId }
@@ -447,53 +400,15 @@ export class AiService {
       });
 
       recentMessages.reverse();
-      priorMessages = recentMessages.map((m) => ({
-        content: m.content,
-        role: m.role as LLMMessage['role']
-      }));
+      priorMessages = validateConversationHistory(
+        recentMessages.map((m) => ({
+          content: m.content,
+          role: m.role as LLMMessage['role']
+        })),
+        'AiService.chatStream'
+      );
     } else {
-      effectiveSystemPrompt = systemPrompt ?? AGENT_DEFAULT_SYSTEM_PROMPT;
-    }
-
-    // 2b. Handle AMBIGUOUS messages
-    if (scopeResult.type === 'AMBIGUOUS') {
-      const lastAssistantMsg = [...priorMessages]
-        .reverse()
-        .find((m) => m.role === 'assistant');
-
-      if (
-        !lastAssistantMsg ||
-        AiService.REFUSAL_RESPONSE_PATTERN.test(lastAssistantMsg.content)
-      ) {
-        const refusalResponse = await this.buildScopedRefusal({
-          conversationId,
-          message,
-          refusalText: AiService.AMBIGUOUS_CLARIFICATION_RESPONSE,
-          systemPrompt: effectiveSystemPrompt,
-          userId
-        });
-
-        yield {
-          type: 'done',
-          payload: {
-            actions: refusalResponse.actions,
-            chartData: refusalResponse.chartData,
-            confidence: refusalResponse.confidence,
-            conversationId: refusalResponse.conversationId,
-            elapsedMs: refusalResponse.elapsedMs,
-            estimatedCostUsd: refusalResponse.estimatedCostUsd,
-            invokedToolNames: refusalResponse.invokedToolNames,
-            iterations: refusalResponse.iterations,
-            response: refusalResponse.response,
-            sources: refusalResponse.sources,
-            status: refusalResponse.status,
-            toolCalls: refusalResponse.toolCalls,
-            warnings: refusalResponse.warnings
-          }
-        };
-
-        return;
-      }
+      effectiveSystemPrompt = buildSystemPrompt(routedToolNames);
     }
 
     // 2c. Session briefing injection (new conversations only)
@@ -505,22 +420,34 @@ export class AiService {
     }
 
     // 3. Start heartbeat timer (top-level, not inside agent)
-    const HEARTBEAT_INTERVAL_MS = 15_000;
     const heartbeatQueue: SseEvent[] = [];
     const heartbeatTimer = setInterval(() => {
       heartbeatQueue.push({ type: 'heartbeat' });
-    }, HEARTBEAT_INTERVAL_MS);
+    }, AGENT_HEARTBEAT_INTERVAL_MS);
 
     try {
       // 4. Run the streaming agent
+      const requestId = randomUUID();
+
+      // Start Langfuse trace (mirrors the non-streaming chat() path)
+      const { traceId: streamTraceId, end: endStreamTrace } =
+        this.langfuseService.startTrace({
+          conversationId,
+          message,
+          requestId,
+          toolNames: routedToolNames,
+          userId
+        });
+
       let agentResult: SseAgentDoneEvent['result'] | undefined;
 
       for await (const event of this.reactAgentService.runStreaming({
         priorMessages,
         prompt: message,
+        requestId,
         signal,
         systemPrompt: effectiveSystemPrompt,
-        toolNames: sanitizedToolNames,
+        toolNames: routedToolNames,
         userId
       })) {
         if (signal?.aborted) {
@@ -550,8 +477,22 @@ export class AiService {
 
       const verified = this.responseVerifierService.verify(
         agentResult,
-        invokedToolNames
+        invokedToolNames,
+        streamTraceId
       );
+
+      // Finalise Langfuse trace with outcome metadata
+      endStreamTrace({
+        confidence: verified.confidence,
+        elapsedMs: verified.elapsedMs,
+        estimatedCostUsd: verified.estimatedCostUsd,
+        invokedToolNames: verified.invokedToolNames,
+        iterations: verified.iterations,
+        requiresHumanReview: verified.requiresHumanReview,
+        status: verified.status,
+        toolCalls: verified.toolCalls,
+        warnings: verified.warnings
+      });
 
       verified.chartData = this.chartDataExtractorService.extract(
         agentResult.executedTools ?? []
@@ -648,10 +589,12 @@ export class AiService {
           estimatedCostUsd: verified.estimatedCostUsd,
           invokedToolNames: verified.invokedToolNames,
           iterations: verified.iterations,
+          requiresHumanReview: verified.requiresHumanReview,
           response: verified.response,
           sources: verified.sources,
           status: verified.status,
           toolCalls: verified.toolCalls,
+          traceId: verified.traceId,
           warnings: verified.warnings
         }
       };
@@ -749,7 +692,7 @@ export class AiService {
         }
       );
 
-    const holdingsTableString = await this.toMarkdownTable({
+    const holdingsTableString = this.toMarkdownTable({
       columns: holdingsTableColumns,
       rows: holdingsTableRows
     });
@@ -824,302 +767,28 @@ export class AiService {
     }
   }
 
-  // ─── Deterministic scope gate ──────────────────────────────────────────────
-
   /**
-   * Pattern: "use my X tool" / "use the X tool" / "run X tool" where X
-   * is NOT in AGENT_ALLOWED_TOOL_NAMES. Captures the tool-like token.
+   * Returns the sanitized tool list directly.
+   *
+   * Tool-use models select the right tool from the full definition list;
+   * a keyword pre-filter is not needed and introduces misrouting risk.
+   * The ToolRouterService is kept in the DI graph for caller-override
+   * support and future extensibility.
    */
-  private static readonly UNKNOWN_TOOL_PATTERN =
-    /\b(?:use|run|invoke|call|execute)\b.*?\b(\w+?)(?:_tool|_helper)?\s+tool\b/i;
-
-  /**
-   * Hard out-of-scope phrases. Matched as case-insensitive substrings.
-   */
-  private static readonly OUT_OF_SCOPE_PATTERNS: readonly string[] = [
-    'predict the future',
-    'medical advice',
-    'legal advice',
-    'diagnose',
-    'prescription',
-    'write code',
-    'generate code',
-    'write a poem',
-    'tell me a joke',
-    'lottery',
-    'gambling advice'
-  ];
-
-  /**
-   * Regex patterns that indicate the request is plausibly about finance or
-   * portfolio analysis. If a message does NOT match any of these AND is not
-   * a short conversational follow-up (e.g. "yes", "tell me more"), it is
-   * treated as out-of-scope.
-   */
-  private static readonly FINANCIAL_RELEVANCE_PATTERNS: readonly RegExp[] = [
-    /portfoli/i,
-    /hold(?:ing|s)/i,
-    /stock/i,
-    /bond/i,
-    /etf/i,
-    /fund/i,
-    /equit/i,
-    /asset/i,
-    /invest/i,
-    /market/i,
-    /trad(?:e|ing)/i,
-    /transact/i,
-    /dividend/i,
-    /return/i,
-    /performance/i,
-    /risk/i,
-    /rebalanc/i,
-    /allocat/i,
-    /tax/i,
-    /compliance/i,
-    /ticker/i,
-    /share/i,
-    /crypto/i,
-    /bitcoin/i,
-    /price/i,
-    /value/i,
-    /gain/i,
-    /loss/i,
-    /profit/i,
-    /sector/i,
-    /diversif/i,
-    /volatil/i,
-    /yield/i,
-    /interest rate/i,
-    /inflation/i,
-    /s&p/i,
-    /nasdaq/i,
-    /dow/i,
-    /vanguard/i,
-    /fidelity/i,
-    /schwab/i,
-    /brokerage/i,
-    /401k/i,
-    /ira/i,
-    /roth/i,
-    /capital/i,
-    /financ/i,
-    /money/i,
-    /wealth/i,
-    /budget/i,
-    /expense/i,
-    /earning/i,
-    /revenue/i,
-    /fiscal/i,
-    /currency/i,
-    /forex/i,
-    /commodit/i,
-    /option/i,
-    /futures/i,
-    /hedge/i,
-    /mutual/i,
-    /index/i,
-    /benchmark/i,
-    /annuali[sz]/i,
-    /net\s*worth/i,
-    /cost\s*basis/i,
-    /unreali[sz]ed/i,
-    /reali[sz]ed/i,
-    /simulat/i,
-    /what.if/i,
-    /hypothetical/i,
-    /stress.test/i,
-    /scenario/i,
-    /insider/i,
-    /form\s*4/i,
-    /sec\s*filing/i,
-    /insider\s*(?:buy|sell|trad)/i,
-    /monitor(?:ing)?\s*rule/i,
-    /alert/i,
-    /briefing/i
-  ];
-
-  /**
-   * Short acknowledgements / greetings that are safe to let through.
-   * These are so short and generic they can't carry portfolio context-bleed.
-   */
-  private static readonly SAFE_SMALLTALK_PATTERN =
-    /^(yes|no|yeah|yep|nope|sure|ok|okay|please|thanks|thank you|go ahead|do it|sounds good|got it|right|hello|hi|hey|help)[\s?!.]*$/i;
-
-  /**
-   * Vague follow-ups that depend on prior conversation context.
-   * These need history-aware routing: allowed only when the last exchange
-   * was portfolio-related, otherwise ask for clarification.
-   */
-  private static readonly AMBIGUOUS_FOLLOWUP_PATTERN =
-    /^(tell me more|more details?|explain|why|how|what do you (?:mean|think|suggest)|can you|show me|based on (?:that|this|the above)|what about (?:that|this|it)|and (?:that|this|the)|how about|what else|anything else|go on|continue|elaborate|compared? to|versus|vs|now (?:do|show|what|how|compare|analyze|check))[\s\w?!.,]*$/i;
-
-  /**
-   * Pattern to detect if an assistant message was a scope refusal.
-   * Used to prevent vague follow-ups from bypassing a prior refusal.
-   */
-  private static readonly REFUSAL_RESPONSE_PATTERN =
-    /\b(?:can.t help|cannot help|only help with|outside.{0,20}scope|can only help|portfolio.related questions)\b/i;
-
-  private static readonly AMBIGUOUS_CLARIFICATION_RESPONSE =
-    "Could you be more specific about what you'd like to do? I can help with: portfolio summaries, risk analysis, compliance checks, transaction history, market data lookups, performance comparisons, rebalancing suggestions, tax estimates, trade simulations (what-if analysis), portfolio stress testing, insider activity monitoring, and insider monitoring rules.";
-
-  private static readonly SCOPE_REFUSAL_RESPONSE =
-    "I can't help with that request. I'm a portfolio analysis assistant and can only help with: portfolio summaries, transaction history, risk analysis, compliance checks, market data lookups, performance comparisons, rebalancing suggestions, tax estimates, trade simulations, stress testing, and insider activity monitoring. Please ask me about your portfolio and I'll be happy to help!";
-
-  /**
-   * Deterministic request router. Classifies the message into one of:
-   * - ALLOW: message has clear financial/portfolio relevance → run agent
-   * - REJECT: message is clearly out-of-scope → refuse with reason
-   * - AMBIGUOUS: vague follow-up that needs history context to decide
-   */
-  private checkScopeGate(
-    message: string
-  ):
-    | { type: 'ALLOW' }
-    | { type: 'REJECT'; reason: string }
-    | { type: 'AMBIGUOUS' } {
-    const normalized = message.toLowerCase();
-
-    // Check for explicit references to unknown/non-existent tools
-    const toolMatch = message.match(AiService.UNKNOWN_TOOL_PATTERN);
-
-    if (toolMatch) {
-      const extractedName = toolMatch[1].toLowerCase().replace(/[_\s]/g, '_');
-      const isKnown = (AGENT_ALLOWED_TOOL_NAMES as readonly string[]).some(
-        (allowed) => {
-          return (
-            allowed.includes(extractedName) ||
-            extractedName.includes(allowed.replace(/_/g, ''))
-          );
-        }
-      );
-
-      if (!isKnown) {
-        return {
-          reason: `I don't have a "${toolMatch[1]}" tool. ${AiService.SCOPE_REFUSAL_RESPONSE}`,
-          type: 'REJECT'
-        };
-      }
-    }
-
-    // Check hard out-of-scope patterns
-    for (const pattern of AiService.OUT_OF_SCOPE_PATTERNS) {
-      if (normalized.includes(pattern)) {
-        return { reason: AiService.SCOPE_REFUSAL_RESPONSE, type: 'REJECT' };
-      }
-    }
-
-    // Check for clear financial relevance first — if present, always allow
-    const hasFinancialRelevance = AiService.FINANCIAL_RELEVANCE_PATTERNS.some(
-      (pattern) => pattern.test(message)
+  private routeTools(
+    message: string,
+    sanitizedToolNames: string[],
+    originalToolNames: string[] | undefined
+  ): string[] {
+    const routingResult = this.toolRouterService.selectTools(
+      message,
+      sanitizedToolNames,
+      originalToolNames?.length ? sanitizedToolNames : undefined
     );
 
-    if (hasFinancialRelevance) {
-      return { type: 'ALLOW' };
-    }
-
-    // Safe smalltalk (greetings, acks) — let through without history check
-    if (AiService.SAFE_SMALLTALK_PATTERN.test(message.trim())) {
-      return { type: 'ALLOW' };
-    }
-
-    // Vague follow-ups ("based on that", "tell me more", "explain") —
-    // need history context to decide if they're valid
-    if (AiService.AMBIGUOUS_FOLLOWUP_PATTERN.test(message.trim())) {
-      return { type: 'AMBIGUOUS' };
-    }
-
-    // No financial relevance and not a recognized follow-up → reject
-    return {
-      reason:
-        "Sorry, but I can only help you with financial and portfolio-related questions. Try asking about your holdings, transactions, risk analysis, market data, or other portfolio topics and I'll be happy to assist!",
-      type: 'REJECT'
-    };
+    return routingResult.tools;
   }
 
-  /**
-   * Builds a complete ChatResponse for a scope-gated refusal without
-   * calling the agent. Still persists the exchange in conversation history.
-   */
-  private async buildScopedRefusal({
-    conversationId,
-    message,
-    refusalText,
-    systemPrompt,
-    userId
-  }: {
-    conversationId?: string;
-    message: string;
-    refusalText: string;
-    systemPrompt: string;
-    userId: string;
-  }): Promise<ChatResponse> {
-    const verified: VerifiedResponse = {
-      actions: [],
-      chartData: [],
-      confidence: 'high',
-      elapsedMs: 0,
-      estimatedCostUsd: 0,
-      invokedToolNames: [],
-      iterations: 0,
-      response: refusalText,
-      sources: [],
-      status: 'completed',
-      toolCalls: 0,
-      warnings: []
-    };
-
-    const title = message.replace(/\s+/g, ' ').trim().slice(0, 60);
-
-    const resolvedConversationId = await this.prismaService.$transaction(
-      async (tx) => {
-        let convId = conversationId;
-
-        if (!convId) {
-          const conv = await tx.chatConversation.create({
-            data: { systemPrompt, title, userId },
-            select: { id: true }
-          });
-
-          convId = conv.id;
-        } else {
-          await tx.chatConversation.update({
-            data: { updatedAt: new Date() },
-            where: { id: convId }
-          });
-        }
-
-        await tx.chatMessage.create({
-          data: {
-            content: message,
-            conversationId: convId,
-            requestedToolNames: [],
-            role: 'user'
-          }
-        });
-
-        await tx.chatMessage.create({
-          data: {
-            content: refusalText,
-            conversationId: convId,
-            estimatedCostUsd: 0,
-            requestedToolNames: [],
-            role: 'assistant'
-          }
-        });
-
-        return convId;
-      }
-    );
-
-    return { ...verified, conversationId: resolvedConversationId };
-  }
-
-  /**
-   * Validates toolNames against the allowlist. Returns undefined if input is
-   * undefined (agent uses all tools). Throws 400 for unknown tool names.
-   */
   private sanitizeToolNames(toolNames: string[] | undefined): string[] {
     if (!toolNames) {
       return [...AGENT_ALLOWED_TOOL_NAMES];
@@ -1181,26 +850,26 @@ export class AiService {
     return [header, separator, ...body].join('\n');
   }
 
-  private async toMarkdownTable({
+  private toMarkdownTable({
     columns,
     rows
   }: {
     columns: ColumnDescriptor[];
     rows: Record<string, string>[];
-  }) {
-    try {
-      // Dynamic import to load ESM module from CommonJS context
-      // eslint-disable-next-line @typescript-eslint/no-implied-eval
-      const dynamicImport = new Function('s', 'return import(s)') as (
-        s: string
-      ) => Promise<typeof import('tablemark')>;
-      const { tablemark } = await dynamicImport('tablemark');
-
-      return tablemark(rows, {
-        columns
-      });
-    } catch {
-      return this.getMarkdownFallback({ columns, rows });
-    }
+  }): string {
+    // Use the inline fallback directly.
+    //
+    // The previous implementation used new Function('s','return import(s)')
+    // (functionally equivalent to eval) to load the ESM-only `tablemark`
+    // package at runtime.  This pattern:
+    //  - Violates Content-Security-Policy (CSP) in strict environments
+    //  - Triggers security scanners (SonarQube, Semgrep unsafe-function-new)
+    //  - Fails silently in environments that block eval
+    //
+    // The fallback produces correct pipe-delimited markdown and is already
+    // the safety net — there is no reason to prefer tablemark over it.
+    // If column-alignment formatting becomes important, configure the build
+    // system for ESM interop instead of using runtime eval.
+    return this.getMarkdownFallback({ columns, rows });
   }
 }

@@ -1,4 +1,43 @@
+import {
+  ANALYZE_RISK_INPUT_SCHEMA,
+  COMPLIANCE_CHECK_INPUT_SCHEMA,
+  MARKET_DATA_LOOKUP_INPUT_SCHEMA,
+  PERFORMANCE_COMPARE_INPUT_SCHEMA,
+  PORTFOLIO_SUMMARY_INPUT_SCHEMA,
+  REBALANCE_SUGGEST_INPUT_SCHEMA,
+  SIMULATE_TRADES_INPUT_SCHEMA,
+  STRESS_TEST_INPUT_SCHEMA,
+  TAX_ESTIMATE_INPUT_SCHEMA,
+  TRANSACTION_HISTORY_INPUT_SCHEMA
+} from '@ghostfolio/api/app/endpoints/ai/tools/schemas';
 import { ToolRegistry } from '@ghostfolio/api/app/endpoints/ai/tools/tool.registry';
+import { ToolJsonSchema } from '@ghostfolio/api/app/endpoints/ai/tools/tool.types';
+
+const ALL_INPUT_SCHEMAS: [string, ToolJsonSchema][] = [
+  ['analyze_risk', ANALYZE_RISK_INPUT_SCHEMA],
+  ['compliance_check', COMPLIANCE_CHECK_INPUT_SCHEMA],
+  ['market_data_lookup', MARKET_DATA_LOOKUP_INPUT_SCHEMA],
+  ['performance_compare', PERFORMANCE_COMPARE_INPUT_SCHEMA],
+  ['get_portfolio_summary', PORTFOLIO_SUMMARY_INPUT_SCHEMA],
+  ['rebalance_suggest', REBALANCE_SUGGEST_INPUT_SCHEMA],
+  ['simulate_trades', SIMULATE_TRADES_INPUT_SCHEMA],
+  ['stress_test', STRESS_TEST_INPUT_SCHEMA],
+  ['tax_estimate', TAX_ESTIMATE_INPUT_SCHEMA],
+  ['get_transaction_history', TRANSACTION_HISTORY_INPUT_SCHEMA]
+];
+
+describe('Tool input schema descriptions', () => {
+  it.each(ALL_INPUT_SCHEMAS)(
+    '%s — every top-level property has a description',
+    (_toolName, schema) => {
+      const properties = schema.properties ?? {};
+
+      for (const [, def] of Object.entries(properties)) {
+        expect((def as any).description).toBeTruthy();
+      }
+    }
+  );
+});
 
 describe('ToolRegistry', () => {
   it('lists registered tools as descriptors and supports tool name filtering', () => {

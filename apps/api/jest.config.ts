@@ -11,6 +11,11 @@ export default {
 
   globals: {},
   setupFiles: ['<rootDir>/test/jest-global-setup.ts'],
+  moduleNameMapper: {
+    // Prevent langfuse's internal dynamic-import from crashing CommonJS Jest
+    '^langfuse$': '<rootDir>/src/__mocks__/langfuse.js',
+    '^langfuse-core$': '<rootDir>/src/__mocks__/langfuse.js'
+  },
   transform: {
     '^.+\\.[tj]s$': [
       'ts-jest',

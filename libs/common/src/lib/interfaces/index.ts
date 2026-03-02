@@ -19,7 +19,9 @@ import type {
   ChartType,
   ChatMessage,
   ConversationDetail,
-  ConversationSummary
+  ConversationSummary,
+  ThinkingStep,
+  ToolCallRecord
 } from './ai-chat-response.interface';
 import type {
   SseDoneEvent,
@@ -141,6 +143,8 @@ export {
   ChatMessage,
   ConversationDetail,
   ConversationSummary,
+  ThinkingStep,
+  ToolCallRecord,
   AdminData,
   AdminJobs,
   AdminMarketData,

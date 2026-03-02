@@ -349,6 +349,64 @@ describe('RebalanceSuggestTool', () => {
     expect(result.summary.tradesLimitedByConstraints).toBe(true);
   });
 
+  it('marks tradeSuggested=true only on positions with an actual suggested trade', async () => {
+    // VOO is overweight but the 20% turnover cap means it gets no trade — only
+    // the two highest-drift symbols should have tradeSuggested=true.
+    const tool = buildTool({
+      holdings: {
+        AAPL: {
+          marketPrice: 100,
+          name: 'Apple',
+          symbol: 'AAPL',
+          valueInBaseCurrency: 200
+        },
+        MSFT: {
+          marketPrice: 100,
+          name: 'Microsoft',
+          symbol: 'MSFT',
+          valueInBaseCurrency: 300
+        },
+        VOO: {
+          marketPrice: 100,
+          name: 'Vanguard S&P 500',
+          symbol: 'VOO',
+          valueInBaseCurrency: 500
+        }
+      },
+      summary: {
+        cash: 0,
+        totalValueInBaseCurrency: 1000
+      }
+    });
+
+    const result = await tool.execute(
+      {
+        constraints: {
+          cashReservePct: 0,
+          maxTrades: 2,
+          maxTurnoverPct: 1,
+          minTradeValueInBaseCurrency: 0
+        },
+        strategy: 'equal_weight'
+      },
+      { userId: 'u1' }
+    );
+
+    // Only 2 trades allowed — VOO and one other get trades, AAPL (smallest drift)
+    // should NOT have a suggested trade
+    const tradedSymbols = new Set(result.suggestedTrades.map((t) => t.symbol));
+
+    for (const allocation of result.targetAllocations) {
+      if (tradedSymbols.has(allocation.symbol)) {
+        expect(allocation.tradeSuggested).toBe(true);
+        expect(allocation.tradeAction).toBeDefined();
+      } else {
+        expect(allocation.tradeSuggested).toBe(false);
+        expect(allocation.tradeAction).toBeUndefined();
+      }
+    }
+  });
+
   it('returns helpful warning for empty portfolio', async () => {
     const tool = buildTool({
       holdings: {},

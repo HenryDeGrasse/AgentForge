@@ -26,6 +26,10 @@ import {
   PORTFOLIO_SUMMARY_OUTPUT_SCHEMA,
   REBALANCE_SUGGEST_INPUT_SCHEMA,
   REBALANCE_SUGGEST_OUTPUT_SCHEMA,
+  SIMULATE_TRADES_INPUT_SCHEMA,
+  SIMULATE_TRADES_OUTPUT_SCHEMA,
+  STRESS_TEST_INPUT_SCHEMA,
+  STRESS_TEST_OUTPUT_SCHEMA,
   TAX_ESTIMATE_INPUT_SCHEMA,
   TAX_ESTIMATE_OUTPUT_SCHEMA,
   TRANSACTION_HISTORY_INPUT_SCHEMA,
@@ -308,9 +312,9 @@ function buildRichProfileTools(log: ToolInvocationEntry[]): ToolDefinition[] {
           ],
           generatedAt: '2025-06-01T00:00:00.000Z',
           holdingsCount: 4,
-          overallRiskLevel: 'MEDIUM',
+          overallRiskLevel: 'HIGH',
           portfolioValueInBaseCurrency: 10000,
-          volatilityProxyScore: 0.45,
+          volatilityProxyScore: 0.72,
           warnings: []
         };
       },
@@ -576,25 +580,33 @@ function buildRichProfileTools(log: ToolInvocationEntry[]): ToolDefinition[] {
               name: 'Asset A',
               symbol: 'SYM-A',
               targetPct: 0.25,
-              targetValueInBaseCurrency: 2500
+              targetValueInBaseCurrency: 2500,
+              tradeAction: 'SELL' as const,
+              tradeSuggested: true
             },
             {
               name: 'Asset B',
               symbol: 'SYM-B',
               targetPct: 0.25,
-              targetValueInBaseCurrency: 2500
+              targetValueInBaseCurrency: 2500,
+              tradeAction: 'SELL' as const,
+              tradeSuggested: true
             },
             {
               name: 'Asset C',
               symbol: 'SYM-C',
               targetPct: 0.25,
-              targetValueInBaseCurrency: 2500
+              targetValueInBaseCurrency: 2500,
+              tradeAction: 'BUY' as const,
+              tradeSuggested: true
             },
             {
               name: 'Asset D',
               symbol: 'SYM-D',
               targetPct: 0.25,
-              targetValueInBaseCurrency: 2500
+              targetValueInBaseCurrency: 2500,
+              tradeAction: 'BUY' as const,
+              tradeSuggested: true
             }
           ],
           warnings: []
@@ -604,7 +616,191 @@ function buildRichProfileTools(log: ToolInvocationEntry[]): ToolDefinition[] {
       name: 'rebalance_suggest',
       outputSchema: REBALANCE_SUGGEST_OUTPUT_SCHEMA
     },
-    // ─── Insider Tools ─────────────────────────────────────────────────────────
+    // ─── Simulate Trades & Stress Test (from main) ─────────────────────────────
+    {
+      description: 'Simulate hypothetical trades against the portfolio.',
+      execute: (input, context) => {
+        log.push({
+          input,
+          toolName: 'simulate_trades',
+          userId: context.userId
+        });
+
+        return {
+          data: {
+            status: 'success',
+            portfolioBefore: {
+              cashBalance: 500,
+              positions: [
+                {
+                  allocationPct: 0.38,
+                  symbol: 'SYM-A',
+                  valueInBaseCurrency: 4000
+                },
+                {
+                  allocationPct: 0.29,
+                  symbol: 'SYM-B',
+                  valueInBaseCurrency: 3000
+                },
+                {
+                  allocationPct: 0.19,
+                  symbol: 'SYM-C',
+                  valueInBaseCurrency: 2000
+                },
+                {
+                  allocationPct: 0.095,
+                  symbol: 'SYM-D',
+                  valueInBaseCurrency: 1000
+                }
+              ],
+              totalValueInBaseCurrency: 10500
+            },
+            hypotheticalPortfolio: {
+              cashBalance: 350,
+              positions: [
+                {
+                  allocationPct: 0.33,
+                  symbol: 'SYM-A',
+                  valueInBaseCurrency: 3500
+                },
+                {
+                  allocationPct: 0.33,
+                  symbol: 'SYM-B',
+                  valueInBaseCurrency: 3500
+                },
+                {
+                  allocationPct: 0.19,
+                  symbol: 'SYM-C',
+                  valueInBaseCurrency: 2000
+                },
+                {
+                  allocationPct: 0.14,
+                  symbol: 'SYM-D',
+                  valueInBaseCurrency: 1450
+                }
+              ],
+              totalValueInBaseCurrency: 10450
+            },
+            tradeResults: [
+              {
+                acceptedQuantity: 10,
+                action: 'sell',
+                costInBaseCurrency: 1500,
+                priceUsed: 150,
+                requestedQuantity: 10,
+                status: 'executed',
+                symbol: 'SYM-A',
+                warnings: []
+              },
+              {
+                acceptedQuantity: 5,
+                action: 'buy',
+                costInBaseCurrency: 600,
+                priceUsed: 120,
+                requestedQuantity: 5,
+                status: 'executed',
+                symbol: 'SYM-B',
+                warnings: []
+              }
+            ],
+            impact: {
+              allocationChanges: [
+                {
+                  changePct: -0.05,
+                  currentPct: 0.38,
+                  newPct: 0.33,
+                  symbol: 'SYM-A'
+                },
+                {
+                  changePct: 0.04,
+                  currentPct: 0.29,
+                  newPct: 0.33,
+                  symbol: 'SYM-B'
+                }
+              ],
+              cashDelta: -150,
+              concentrationWarnings: [],
+              totalValueChangeInBaseCurrency: -50
+            },
+            disclaimers: ['Hypothetical simulation only.'],
+            warnings: []
+          },
+          status: 'success'
+        };
+      },
+      inputSchema: SIMULATE_TRADES_INPUT_SCHEMA,
+      name: 'simulate_trades',
+      outputSchema: SIMULATE_TRADES_OUTPUT_SCHEMA
+    },
+    {
+      description: 'Run portfolio stress tests against predefined scenarios.',
+      execute: (input, context) => {
+        log.push({
+          input,
+          toolName: 'stress_test',
+          userId: context.userId
+        });
+
+        return {
+          data: {
+            status: 'success',
+            scenario: {
+              description:
+                'Simulates a 2008-style financial crisis: equities -50%, bonds +5%, commodities +25%, real estate -35%.',
+              id: 'market_crash_2008',
+              name: '2008 Financial Crisis',
+              shocks: [
+                { assetClass: 'EQUITY', shockPercent: -0.3 },
+                { assetClass: 'BOND', shockPercent: -0.05 }
+              ]
+            },
+            currentValueInBaseCurrency: 10500,
+            stressedValueInBaseCurrency: 8500,
+            totalLossInBaseCurrency: 2000,
+            totalLossPct: 0.19,
+            positionImpacts: [
+              {
+                currentValueInBaseCurrency: 4000,
+                lossInBaseCurrency: 1200,
+                lossPct: 0.3,
+                stressedValueInBaseCurrency: 2800,
+                symbol: 'SYM-A'
+              },
+              {
+                currentValueInBaseCurrency: 3000,
+                lossInBaseCurrency: 750,
+                lossPct: 0.25,
+                stressedValueInBaseCurrency: 2250,
+                symbol: 'SYM-B'
+              }
+            ],
+            assetClassImpacts: [
+              {
+                currentValueInBaseCurrency: 7000,
+                lossPct: 0.3,
+                name: 'EQUITY',
+                stressedValueInBaseCurrency: 4900
+              },
+              {
+                currentValueInBaseCurrency: 2000,
+                lossPct: 0.05,
+                name: 'BOND',
+                stressedValueInBaseCurrency: 1900
+              }
+            ],
+            mostVulnerable: [{ lossPct: 0.3, symbol: 'SYM-A' }],
+            recoveryNeededPct: 0.25,
+            disclaimers: ['Stress test results are hypothetical.'],
+            warnings: []
+          },
+          status: 'success'
+        };
+      },
+      inputSchema: STRESS_TEST_INPUT_SCHEMA,
+      name: 'stress_test',
+      outputSchema: STRESS_TEST_OUTPUT_SCHEMA
+    },
+    // ─── Insider Tools (from HEAD) ─────────────────────────────────────────────
     {
       description:
         'Fetch recent insider buy/sell activity (Form 4 filings) for given stock symbols.',
@@ -1021,6 +1217,88 @@ function buildEmptyProfileTools(log: ToolInvocationEntry[]): ToolDefinition[] {
       inputSchema: REBALANCE_SUGGEST_INPUT_SCHEMA,
       name: 'rebalance_suggest',
       outputSchema: REBALANCE_SUGGEST_OUTPUT_SCHEMA
+    },
+    {
+      description: 'Simulate hypothetical trades against the portfolio.',
+      execute: (input, context) => {
+        log.push({
+          input,
+          toolName: 'simulate_trades',
+          userId: context.userId
+        });
+
+        return {
+          data: {
+            status: 'partial',
+            portfolioBefore: {
+              cashBalance: 0,
+              positions: [],
+              totalValueInBaseCurrency: 0
+            },
+            hypotheticalPortfolio: {
+              cashBalance: 0,
+              positions: [],
+              totalValueInBaseCurrency: 0
+            },
+            tradeResults: [],
+            impact: {
+              allocationChanges: [],
+              cashDelta: 0,
+              concentrationWarnings: [],
+              totalValueChangeInBaseCurrency: 0
+            },
+            disclaimers: ['Hypothetical simulation only.'],
+            warnings: [
+              { code: 'no_holdings_data', message: 'No holdings to simulate.' }
+            ]
+          },
+          status: 'partial'
+        };
+      },
+      inputSchema: SIMULATE_TRADES_INPUT_SCHEMA,
+      name: 'simulate_trades',
+      outputSchema: SIMULATE_TRADES_OUTPUT_SCHEMA
+    },
+    {
+      description: 'Run portfolio stress tests against predefined scenarios.',
+      execute: (input, context) => {
+        log.push({
+          input,
+          toolName: 'stress_test',
+          userId: context.userId
+        });
+
+        return {
+          data: {
+            status: 'partial',
+            scenario: {
+              description: 'No holdings available for stress testing.',
+              id: 'market_crash_2008',
+              name: '2008 Financial Crisis',
+              shocks: [{ assetClass: 'EQUITY', shockPercent: -0.3 }]
+            },
+            currentValueInBaseCurrency: 0,
+            stressedValueInBaseCurrency: 0,
+            totalLossInBaseCurrency: 0,
+            totalLossPct: 0,
+            positionImpacts: [],
+            assetClassImpacts: [],
+            mostVulnerable: [],
+            recoveryNeededPct: 0,
+            disclaimers: ['Stress test results are hypothetical.'],
+            warnings: [
+              {
+                code: 'no_holdings_data',
+                message: 'No holdings to stress test.'
+              }
+            ]
+          },
+          status: 'partial'
+        };
+      },
+      inputSchema: STRESS_TEST_INPUT_SCHEMA,
+      name: 'stress_test',
+      outputSchema: STRESS_TEST_OUTPUT_SCHEMA
     }
   ];
 }

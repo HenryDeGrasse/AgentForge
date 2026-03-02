@@ -3,8 +3,15 @@ import type { ToolJsonSchema } from '@ghostfolio/api/app/endpoints/ai/tools/tool
 export const PERFORMANCE_COMPARE_INPUT_SCHEMA: ToolJsonSchema = {
   additionalProperties: false,
   properties: {
-    benchmarkSymbols: { items: { type: 'string' }, type: 'array' },
+    benchmarkSymbols: {
+      description:
+        'Benchmark ticker symbols to compare against (e.g. ["SPY", "QQQ"]).',
+      items: { type: 'string' },
+      type: 'array'
+    },
     dateRange: {
+      description:
+        'Time range for comparison. Options: 1d, wtd, mtd, ytd, 1y, 5y, max.',
       enum: ['1d', 'wtd', 'mtd', 'ytd', '1y', '5y', 'max'],
       type: 'string'
     }
@@ -31,9 +38,38 @@ export const PERFORMANCE_COMPARE_OUTPUT_SCHEMA: ToolJsonSchema = {
                 additionalProperties: false,
                 properties: {
                   date: { type: 'string' },
-                  performancePercent: { type: 'number' }
+                  performancePercent: {
+                    description:
+                      'Whole-number percentage return (e.g. 12.4 = +12.4%). Already multiplied by 100; display as-is.',
+                    type: 'number'
+                  }
                 },
                 required: ['date', 'performancePercent'],
+                type: 'object'
+              },
+              periodReturn: {
+                additionalProperties: false,
+                description:
+                  'Period return for the selected date range, computed from market data. Present only when sufficient historical data exists (>= 2 data points with a non-zero start price).',
+                properties: {
+                  dataPoints: {
+                    description: 'Number of market data points used.',
+                    type: 'number'
+                  },
+                  endDate: { type: 'string' },
+                  periodReturnPct: {
+                    description:
+                      'Simple period return as a fraction (e.g. 0.125 = +12.5%). Computed as (end - start) / start. Comparable to portfolio netPerformancePercentage.',
+                    type: 'number'
+                  },
+                  startDate: { type: 'string' }
+                },
+                required: [
+                  'dataPoints',
+                  'endDate',
+                  'periodReturnPct',
+                  'startDate'
+                ],
                 type: 'object'
               }
             },
@@ -84,8 +120,16 @@ export const PERFORMANCE_COMPARE_OUTPUT_SCHEMA: ToolJsonSchema = {
         firstOrderDate: { type: 'string' },
         hasErrors: { type: 'boolean' },
         netPerformance: { type: 'number' },
-        netPerformancePercentage: { type: 'number' },
-        netPerformancePercentageWithCurrencyEffect: { type: 'number' },
+        netPerformancePercentage: {
+          description:
+            'Whole-number percentage net return (e.g. 8.2 = +8.2%). Already multiplied by 100; display as-is.',
+          type: 'number'
+        },
+        netPerformancePercentageWithCurrencyEffect: {
+          description:
+            'Same as netPerformancePercentage but adjusted for currency effects. Already multiplied by 100.',
+          type: 'number'
+        },
         netPerformanceWithCurrencyEffect: { type: 'number' },
         totalInvestment: { type: 'number' }
       },

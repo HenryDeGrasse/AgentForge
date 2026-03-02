@@ -3,13 +3,38 @@ import type { ToolJsonSchema } from '@ghostfolio/api/app/endpoints/ai/tools/tool
 export const TRANSACTION_HISTORY_INPUT_SCHEMA: ToolJsonSchema = {
   additionalProperties: false,
   properties: {
-    accountIds: { items: { type: 'string' }, type: 'array' },
-    cursor: { minimum: 0, type: 'number' },
-    endDate: { type: 'string' },
-    pageSize: { maximum: 100, minimum: 1, type: 'number' },
-    sortDirection: { enum: ['asc', 'desc'], type: 'string' },
-    startDate: { type: 'string' },
+    accountIds: {
+      description: 'Filter to specific account IDs. Omit for all accounts.',
+      items: { type: 'string' },
+      type: 'array'
+    },
+    cursor: {
+      description:
+        'Pagination cursor (0-based offset). Use nextCursor from previous response.',
+      minimum: 0,
+      type: 'number'
+    },
+    endDate: {
+      description: 'End date filter (ISO 8601, e.g. "2025-12-31").',
+      type: 'string'
+    },
+    pageSize: {
+      description: 'Results per page (1–100). Default 50.',
+      maximum: 100,
+      minimum: 1,
+      type: 'number'
+    },
+    sortDirection: {
+      description: 'Sort order by date.',
+      enum: ['asc', 'desc'],
+      type: 'string'
+    },
+    startDate: {
+      description: 'Start date filter (ISO 8601, e.g. "2025-01-01").',
+      type: 'string'
+    },
     types: {
+      description: 'Filter by transaction types.',
       items: {
         enum: ['BUY', 'DIVIDEND', 'FEE', 'INTEREST', 'LIABILITY', 'SELL'],
         type: 'string'
@@ -28,7 +53,7 @@ export const TRANSACTION_HISTORY_OUTPUT_SCHEMA: ToolJsonSchema = {
       properties: {
         cursor: { type: 'number' },
         hasMore: { type: 'boolean' },
-        nextCursor: { type: 'number' },
+        nextCursor: { type: ['number', 'null'] },
         pageSize: { type: 'number' },
         returnedCount: { type: 'number' },
         totalCount: { type: 'number' }

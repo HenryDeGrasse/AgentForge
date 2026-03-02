@@ -123,9 +123,12 @@ export class ChartDataExtractorService {
   private extractRiskAnalysis(data: Record<string, unknown>): ChartDataItem[] {
     const charts: ChartDataItem[] = [];
 
-    // actual field: assetClassExposures (plural), value: allocationInPortfolio (decimal 0-1)
-    const assetClassExposure =
-      data['assetClassExposures'] ?? data['assetClassExposure'];
+    // analyze_risk nests exposure arrays inside data.exposures — read from there.
+    // Bug fixed: previously accessed data['assetClassExposures'] (top-level) which
+    // was always undefined since the real path is data.exposures.assetClassExposures.
+    const exposures = data['exposures'] as Record<string, unknown> | undefined;
+
+    const assetClassExposure = exposures?.['assetClassExposures'];
 
     if (Array.isArray(assetClassExposure) && assetClassExposure.length > 0) {
       charts.push({
@@ -135,14 +138,10 @@ export class ChartDataExtractorService {
             .slice(0, ChartDataExtractorService.MAX_DOUGHNUT_ITEMS)
             .map((e: Record<string, unknown>) => ({
               name: String(e['assetClass'] ?? e['name'] ?? 'Unknown'),
+              // allocationInPortfolio is decimal (0-1); multiply by 100 for %
               value:
                 Math.round(
-                  Number(
-                    e['allocationInPortfolio'] ??
-                      e['percentage'] ??
-                      e['value'] ??
-                      0
-                  ) *
+                  Number(e['allocationInPortfolio'] ?? e['percentage'] ?? 0) *
                     100 *
                     100
                 ) / 100
@@ -153,8 +152,9 @@ export class ChartDataExtractorService {
       });
     }
 
-    // actual field: topSectorExposures, value: allocationInPortfolio (decimal 0-1)
-    const sectorExposure = data['topSectorExposures'] ?? data['sectorExposure'];
+    // Bug fixed: previously accessed data['topSectorExposures'] (top-level) which
+    // was always undefined since the real path is data.exposures.topSectorExposures.
+    const sectorExposure = exposures?.['topSectorExposures'];
 
     if (Array.isArray(sectorExposure) && sectorExposure.length > 0) {
       charts.push({
@@ -164,14 +164,10 @@ export class ChartDataExtractorService {
             .slice(0, 5)
             .map((s: Record<string, unknown>) => ({
               name: String(s['sector'] ?? s['name'] ?? 'Unknown'),
+              // allocationInPortfolio is decimal (0-1); multiply by 100 for %
               value:
                 Math.round(
-                  Number(
-                    s['allocationInPortfolio'] ??
-                      s['percentage'] ??
-                      s['value'] ??
-                      0
-                  ) *
+                  Number(s['allocationInPortfolio'] ?? s['percentage'] ?? 0) *
                     100 *
                     100
                 ) / 100
@@ -210,7 +206,11 @@ export class ChartDataExtractorService {
         data: {
           items: points.map((p: Record<string, unknown>) => ({
             date: String(p['date'] ?? ''),
-            value: Number(p['close'] ?? p['price'] ?? p['value'] ?? 0)
+            // Bug fixed: tool returns `marketPrice`, not `close` or `price`.
+            // Added marketPrice as the primary lookup key.
+            value: Number(
+              p['marketPrice'] ?? p['close'] ?? p['price'] ?? p['value'] ?? 0
+            )
           }))
         },
         label: String(data['symbol'] ?? 'Market Data'),
@@ -238,9 +238,15 @@ export class ChartDataExtractorService {
             .map((t: Record<string, unknown>) => [
               String(t['symbol'] ?? ''),
               String(t['action'] ?? ''),
-              String(t['currentPercentage'] ?? t['current'] ?? ''),
-              String(t['targetPercentage'] ?? t['target'] ?? ''),
-              String(t['drift'] ?? t['driftPercentage'] ?? '')
+              // Bug fixed: tool uses currentPct/targetPct/driftPct, not
+              // currentPercentage/targetPercentage/drift/driftPercentage.
+              String(
+                t['currentPct'] ?? t['currentPercentage'] ?? t['current'] ?? ''
+              ),
+              String(
+                t['targetPct'] ?? t['targetPercentage'] ?? t['target'] ?? ''
+              ),
+              String(t['driftPct'] ?? t['drift'] ?? t['driftPercentage'] ?? '')
             ])
         },
         label: 'Suggested Trades',
@@ -258,15 +264,29 @@ export class ChartDataExtractorService {
 
     const gainsObj = gains as Record<string, unknown>;
 
+    // Bug fixed: shortTerm/longTerm/total are bucket OBJECTS, not scalars.
+    // Stringify them directly produced "[object Object]".
+    // Now we read the netInBaseCurrency field from each bucket.
+    const bucketNet = (key: string): string => {
+      const bucket = gainsObj[key] as Record<string, unknown> | undefined;
+
+      if (bucket && typeof bucket === 'object') {
+        return String(bucket['netInBaseCurrency'] ?? 0);
+      }
+
+      // Fallback: if it's already a primitive (e.g. legacy shape)
+      return String(gainsObj[key] ?? '$0');
+    };
+
     return [
       {
         chartType: 'table',
         data: {
-          columns: ['Category', 'Amount'],
+          columns: ['Category', 'Net Amount'],
           rows: [
-            ['Short-Term Gains', String(gainsObj['shortTerm'] ?? '$0')],
-            ['Long-Term Gains', String(gainsObj['longTerm'] ?? '$0')],
-            ['Total', String(gainsObj['total'] ?? '$0')]
+            ['Short-Term Gains', bucketNet('shortTerm')],
+            ['Long-Term Gains', bucketNet('longTerm')],
+            ['Total', bucketNet('total')]
           ]
         },
         label: 'Tax Estimate',
@@ -278,7 +298,8 @@ export class ChartDataExtractorService {
   private extractComplianceCheck(
     data: Record<string, unknown>
   ): ChartDataItem[] {
-    const rules = data['rules'] ?? data['results'];
+    // Tool output field is `results`, not `rules`
+    const rules = data['results'] ?? data['rules'];
 
     if (!Array.isArray(rules) || rules.length === 0) {
       return [];
@@ -292,7 +313,8 @@ export class ChartDataExtractorService {
           rows: rules
             .slice(0, ChartDataExtractorService.MAX_TABLE_ROWS)
             .map((r: Record<string, unknown>) => [
-              String(r['name'] ?? r['rule'] ?? ''),
+              // Bug fixed: tool uses `ruleName`, not `name` or `rule`.
+              String(r['ruleName'] ?? r['name'] ?? r['rule'] ?? ''),
               String(r['status'] ?? ''),
               String(r['currentValue'] ?? r['current'] ?? ''),
               String(r['threshold'] ?? '')
@@ -307,47 +329,46 @@ export class ChartDataExtractorService {
   private extractPerformanceCompare(
     data: Record<string, unknown>
   ): ChartDataItem[] {
-    const comparison = data['comparison'] ?? data['results'];
+    // Bug fixed: the old code looked for data['comparison'] (an object, not array)
+    // or flat portfolioReturn/benchmarkReturn fields — neither matched the real shape.
+    // Real shape: data.portfolio.netPerformancePercentage + data.benchmarks[].
+    const portfolio = data['portfolio'] as Record<string, unknown> | undefined;
 
-    if (!Array.isArray(comparison) || comparison.length === 0) {
-      // Try flat shape: { portfolioReturn, benchmarkReturn }
-      if (
-        data['portfolioReturn'] !== undefined &&
-        data['benchmarkReturn'] !== undefined
-      ) {
-        return [
-          {
-            chartType: 'horizontalBar',
-            data: {
-              items: [
-                {
-                  name: 'Portfolio',
-                  value: Number(data['portfolioReturn'])
-                },
-                {
-                  name: String(data['benchmarkName'] ?? 'Benchmark'),
-                  value: Number(data['benchmarkReturn'])
-                }
-              ]
-            },
-            label: 'Performance Comparison',
-            toolName: 'performance_compare'
-          }
-        ];
-      }
-
+    if (!portfolio) {
       return [];
+    }
+
+    const items: { name: string; value: number }[] = [];
+
+    // Portfolio period return (already a whole-number %)
+    const portfolioReturn = Number(portfolio['netPerformancePercentage'] ?? 0);
+
+    items.push({ name: 'Portfolio', value: portfolioReturn });
+
+    // Benchmark ATH performance (what's available in the tool output)
+    const benchmarks = data['benchmarks'];
+
+    if (Array.isArray(benchmarks)) {
+      for (const b of benchmarks.slice(0, 4)) {
+        const bench = b as Record<string, unknown>;
+        const perfs = bench['performances'] as
+          | Record<string, unknown>
+          | undefined;
+        const ath = perfs?.['allTimeHigh'] as
+          | Record<string, unknown>
+          | undefined;
+
+        items.push({
+          name: String(bench['name'] ?? bench['symbol'] ?? 'Benchmark'),
+          value: Number(ath?.['performancePercent'] ?? 0)
+        });
+      }
     }
 
     return [
       {
         chartType: 'horizontalBar',
-        data: {
-          items: comparison.slice(0, 5).map((c: Record<string, unknown>) => ({
-            name: String(c['name'] ?? c['label'] ?? 'Unknown'),
-            value: Number(c['return'] ?? c['performance'] ?? c['value'] ?? 0)
-          }))
-        },
+        data: { items },
         label: 'Performance Comparison',
         toolName: 'performance_compare'
       }
@@ -375,7 +396,7 @@ export class ChartDataExtractorService {
               String(t['type'] ?? ''),
               String(t['symbol'] ?? ''),
               String(t['quantity'] ?? ''),
-              String(t['price'] ?? t['unitPrice'] ?? '')
+              String(t['unitPrice'] ?? t['price'] ?? '')
             ])
         },
         label: 'Transaction History',

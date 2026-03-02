@@ -4,7 +4,8 @@ import {
   AGENT_COST_LIMIT_USD,
   AGENT_FALLBACK_COST_PER_1K_TOKENS_USD,
   AGENT_MAX_ITERATIONS,
-  AGENT_TIMEOUT_MS
+  AGENT_TIMEOUT_MS,
+  AGENT_TOOL_OUTPUT_MAX_CHARS
 } from '@ghostfolio/api/app/endpoints/ai/agent/agent.constants';
 import {
   LLM_CLIENT_TOKEN,
@@ -16,9 +17,18 @@ import {
 } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
 import { ToolRegistry } from '@ghostfolio/api/app/endpoints/ai/tools/tool.registry';
 import { ToolResultEnvelope } from '@ghostfolio/api/app/endpoints/ai/tools/tool.types';
+import { summarizeToolOutput } from '@ghostfolio/api/app/endpoints/ai/tools/utils/tool-summarizers';
+import { containsUnbackedPortfolioClaim } from '@ghostfolio/api/app/endpoints/ai/utils/portfolio-claim-detector';
 import type { SseEvent } from '@ghostfolio/common/interfaces';
 
-import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  Optional
+} from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 
 export class AgentTimeoutError extends Error {
   constructor(message = 'The agent exceeded its timeout budget.') {
@@ -46,6 +56,7 @@ export interface ReactAgentRunInput {
   guardrails?: Partial<ReactAgentGuardrails>;
   priorMessages?: LLMMessage[]; // rehydrated conversation history (already capped by caller)
   prompt: string;
+  requestId?: string;
   signal?: AbortSignal;
   systemPrompt?: string;
   toolNames?: string[];
@@ -83,12 +94,12 @@ interface CircuitBreakerState {
 }
 
 @Injectable()
-export class ReactAgentService {
-  private circuitBreaker: CircuitBreakerState = {
-    consecutiveFailures: 0,
-    openedAt: 0,
-    state: 'closed'
-  };
+export class ReactAgentService implements OnModuleDestroy {
+  /**
+   * Per-user circuit breaker state.  Scoped by userId so that one user's
+   * failures do not lock out other users on the same server instance.
+   */
+  private readonly circuitBreakers = new Map<string, CircuitBreakerState>();
 
   private readonly fallbackToolRegistry = new ToolRegistry();
 
@@ -98,13 +109,22 @@ export class ReactAgentService {
   ) {}
 
   /**
+   * Reset all circuit breaker state on module teardown so that a graceful
+   * server restart begins with a clean slate.
+   */
+  public onModuleDestroy(): void {
+    this.circuitBreakers.clear();
+  }
+
+  /**
    * Consumes runStreaming() and returns the final result.
    * Single execution path — no logic drift.
    */
   public async run(input: ReactAgentRunInput): Promise<ReactAgentRunResult> {
+    const requestId = input.requestId ?? randomUUID();
     let result: ReactAgentRunResult | undefined;
 
-    for await (const event of this.runStreaming(input)) {
+    for await (const event of this.runStreaming({ ...input, requestId })) {
       if (event.type === '_agent_done') {
         result = (event as SseAgentDoneEvent).result;
       }
@@ -121,13 +141,23 @@ export class ReactAgentService {
     input: ReactAgentRunInput
   ): AsyncIterable<AgentStreamEvent> {
     const guardrails = this.getGuardrails(input.guardrails);
+    const requestId = input.requestId ?? randomUUID();
     const startedAt = Date.now();
     const signal = input.signal;
+    let finalResult: ReactAgentRunResult | undefined;
 
-    if (this.isCircuitBreakerOpen(guardrails, startedAt)) {
-      yield {
-        type: '_agent_done',
-        result: this.buildGuardrailResult({
+    const doneEvent = (result: ReactAgentRunResult): SseAgentDoneEvent => {
+      finalResult = result;
+
+      return {
+        result,
+        type: '_agent_done'
+      };
+    };
+
+    if (this.isCircuitBreakerOpen(guardrails, startedAt, input.userId)) {
+      yield doneEvent(
+        this.buildGuardrailResult({
           estimatedCostUsd: 0,
           executedTools: [],
           guardrail: 'CIRCUIT_BREAKER',
@@ -135,7 +165,7 @@ export class ReactAgentService {
           startedAt,
           toolCalls: 0
         })
-      };
+      );
 
       return;
     }
@@ -163,9 +193,12 @@ export class ReactAgentService {
     );
     const executedToolResults: ExecutedToolEntry[] = [];
     let estimatedCostUsd = 0;
+    let consecutiveDuplicateToolCalls = 0;
+    let consecutiveEmptyResponses = 0;
     let escalationAttempted = false;
     let escalationPending = false;
     let iterationCount = 0;
+    let lastToolSignature: string | null = null;
     let toolCallsCount = 0;
 
     try {
@@ -178,18 +211,15 @@ export class ReactAgentService {
 
         // Check abort signal before each iteration
         if (signal?.aborted) {
-          yield {
-            type: '_agent_done',
-            result: {
-              elapsedMs: Date.now() - startedAt,
-              estimatedCostUsd: this.roundCost(estimatedCostUsd),
-              executedTools: executedToolResults,
-              iterations: iterationCount,
-              response: 'Request was cancelled.',
-              status: 'partial',
-              toolCalls: toolCallsCount
-            }
-          };
+          yield doneEvent({
+            elapsedMs: Date.now() - startedAt,
+            estimatedCostUsd: this.roundCost(estimatedCostUsd),
+            executedTools: executedToolResults,
+            iterations: iterationCount,
+            response: 'Request was cancelled.',
+            status: 'partial',
+            toolCalls: toolCallsCount
+          });
 
           return;
         }
@@ -202,11 +232,10 @@ export class ReactAgentService {
         };
 
         if (this.hasTimedOut(startedAt, guardrails.timeoutMs)) {
-          this.recordSuccess();
+          this.recordSuccess(input.userId);
 
-          yield {
-            type: '_agent_done',
-            result: this.buildGuardrailResult({
+          yield doneEvent(
+            this.buildGuardrailResult({
               estimatedCostUsd,
               executedTools: executedToolResults,
               guardrail: 'TIMEOUT',
@@ -214,17 +243,16 @@ export class ReactAgentService {
               startedAt,
               toolCalls: toolCallsCount
             })
-          };
+          );
 
           return;
         }
 
         if (estimatedCostUsd >= guardrails.costLimitUsd) {
-          this.recordSuccess();
+          this.recordSuccess(input.userId);
 
-          yield {
-            type: '_agent_done',
-            result: this.buildGuardrailResult({
+          yield doneEvent(
+            this.buildGuardrailResult({
               estimatedCostUsd,
               executedTools: executedToolResults,
               guardrail: 'COST_LIMIT',
@@ -232,7 +260,7 @@ export class ReactAgentService {
               startedAt,
               toolCalls: toolCallsCount
             })
-          };
+          );
 
           return;
         }
@@ -271,11 +299,10 @@ export class ReactAgentService {
         }
 
         if (estimatedCostUsd > guardrails.costLimitUsd) {
-          this.recordSuccess();
+          this.recordSuccess(input.userId);
 
-          yield {
-            type: '_agent_done',
-            result: this.buildGuardrailResult({
+          yield doneEvent(
+            this.buildGuardrailResult({
               estimatedCostUsd,
               executedTools: executedToolResults,
               guardrail: 'COST_LIMIT',
@@ -283,7 +310,7 @@ export class ReactAgentService {
               startedAt,
               toolCalls: toolCallsCount
             })
-          };
+          );
 
           return;
         }
@@ -291,45 +318,90 @@ export class ReactAgentService {
         if (completion.toolCalls.length > 0) {
           toolCallsCount += completion.toolCalls.length;
 
+          // Duplicate tool-call loop detection
+          const currentSignature = JSON.stringify(
+            completion.toolCalls.map((tc) => ({
+              args: tc.arguments,
+              name: tc.name
+            }))
+          );
+
+          if (currentSignature === lastToolSignature) {
+            consecutiveDuplicateToolCalls++;
+          } else {
+            consecutiveDuplicateToolCalls = 1;
+            lastToolSignature = currentSignature;
+          }
+
+          if (consecutiveDuplicateToolCalls >= 3) {
+            this.recordSuccess(input.userId);
+
+            yield doneEvent({
+              elapsedMs: Date.now() - startedAt,
+              estimatedCostUsd: this.roundCost(estimatedCostUsd),
+              executedTools: executedToolResults,
+              iterations: iterationCount,
+              response:
+                'The assistant could not make progress and stopped to avoid repeating the same action.',
+              status: 'partial',
+              toolCalls: toolCallsCount
+            });
+
+            return;
+          }
+
           messages.push({
             content: completion.text ?? '',
             role: 'assistant',
             toolCalls: completion.toolCalls
           });
 
+          // Check abort before tool execution
+          if (signal?.aborted) {
+            yield doneEvent({
+              elapsedMs: Date.now() - startedAt,
+              estimatedCostUsd: this.roundCost(estimatedCostUsd),
+              executedTools: executedToolResults,
+              iterations: iterationCount,
+              response: 'Request was cancelled.',
+              status: 'partial',
+              toolCalls: toolCallsCount
+            });
+
+            return;
+          }
+
+          // Emit tool_call events for all tools before starting parallel execution
           for (const toolCall of completion.toolCalls) {
-            // Check abort before tool execution
-            if (signal?.aborted) {
-              yield {
-                type: '_agent_done',
-                result: {
-                  elapsedMs: Date.now() - startedAt,
-                  estimatedCostUsd: this.roundCost(estimatedCostUsd),
-                  executedTools: executedToolResults,
-                  iterations: iterationCount,
-                  response: 'Request was cancelled.',
-                  status: 'partial',
-                  toolCalls: toolCallsCount
-                }
-              };
-
-              return;
-            }
-
             yield {
               type: 'tool_call',
               toolName: toolCall.name,
               iteration
             };
+          }
 
-            const { envelope, message: toolMessage } =
-              await this.executeToolCall({
+          // Execute all tool calls from this LLM turn in parallel.
+          // Individual tool errors are caught inside executeToolCall and
+          // returned as error envelopes so that one failing tool does not
+          // prevent the others from running.
+          const toolResults = await Promise.all(
+            completion.toolCalls.map((toolCall) =>
+              this.executeToolCall({
+                requestId,
                 startedAt,
                 timeoutMs: guardrails.timeoutMs,
                 toolCall,
                 toolRegistry,
                 userId: input.userId
-              });
+              })
+            )
+          );
+
+          // Collect results: push tool messages, accumulate executed tools,
+          // emit tool_result events (order matches the original toolCalls order).
+          for (let i = 0; i < completion.toolCalls.length; i++) {
+            const toolCall = completion.toolCalls[i];
+            const { envelope, message: toolMessage } = toolResults[i];
 
             messages.push(toolMessage);
             executedToolResults.push({
@@ -348,26 +420,60 @@ export class ReactAgentService {
           continue;
         }
 
+        // Neither tool calls nor text — LLM returned an empty response.
+        // Retry once with an explicit prompt, then fail fast to avoid
+        // burning all remaining iterations on empty turns.
+        if (!completion.text?.trim()) {
+          consecutiveEmptyResponses++;
+
+          if (consecutiveEmptyResponses >= 2) {
+            this.recordSuccess(input.userId);
+
+            yield doneEvent({
+              elapsedMs: Date.now() - startedAt,
+              estimatedCostUsd: this.roundCost(estimatedCostUsd),
+              executedTools: executedToolResults,
+              iterations: iterationCount,
+              response:
+                'The AI assistant could not generate a response. Please try again.',
+              status: 'failed',
+              toolCalls: toolCallsCount
+            });
+
+            return;
+          }
+
+          messages.push({
+            content:
+              'Your previous response was empty. Please respond with either a text answer or the appropriate tool calls.',
+            role: 'user'
+          });
+
+          continue;
+        }
+
+        // Reset empty-response counter on any non-empty response
+        consecutiveEmptyResponses = 0;
+
         if (completion.text?.trim()) {
           const responseText = completion.text.trim();
-          const looksLikePortfolioClaim =
-            /\$[\d,]+/.test(responseText) ||
-            /\d+(\.\d+)?%/.test(responseText) ||
-            /\b[A-Z]{2,5}\b.*(?:shares?|units?|position)/i.test(responseText) ||
-            /\b(?:compliant|non-compliant|portfolio|holdings?|allocation|diversif|rebalanc|risk\s*(?:level|score|rating))\b/i.test(
-              responseText
-            );
-          const looksLikeRefusal =
-            /\b(?:can'?t|cannot|don'?t|unable to|not able to|outside.{0,20}scope|only help with)\b/i.test(
-              responseText
-            );
+
+          // Detect unbacked portfolio claims: the LLM is making specific
+          // assertions about the user's portfolio data without having called
+          // any tools to fetch that data. This is the only scenario where
+          // escalation (forcing tool use) is appropriate.
+          //
+          // Detection logic is in containsUnbackedPortfolioClaim() —
+          // a single shared utility used here and in ResponseVerifierService
+          // to prevent the two callsites from drifting.
+          const looksLikeUnbackedPortfolioClaim =
+            toolCallsCount === 0 &&
+            containsUnbackedPortfolioClaim(responseText);
 
           if (
             toolDefinitions.length > 0 &&
-            toolCallsCount === 0 &&
-            !escalationAttempted &&
-            looksLikePortfolioClaim &&
-            !looksLikeRefusal
+            looksLikeUnbackedPortfolioClaim &&
+            !escalationAttempted
           ) {
             escalationAttempted = true;
             escalationPending = true;
@@ -375,37 +481,33 @@ export class ReactAgentService {
             messages.push({ content: responseText, role: 'assistant' });
             messages.push({
               content:
-                'You must use the available tools to answer portfolio-specific questions. Do not provide determinations without calling the relevant tool first.',
+                "You appear to be making claims about the user's portfolio without calling any tools to verify. Please call the appropriate tool to get real data, or if the request is outside your scope, decline politely.",
               role: 'user'
             });
 
             continue;
           }
 
-          this.recordSuccess();
+          this.recordSuccess(input.userId);
 
-          yield {
-            type: '_agent_done',
-            result: {
-              elapsedMs: Date.now() - startedAt,
-              estimatedCostUsd: this.roundCost(estimatedCostUsd),
-              executedTools: executedToolResults,
-              iterations: iterationCount,
-              response: responseText,
-              status: 'completed',
-              toolCalls: toolCallsCount
-            }
-          };
+          yield doneEvent({
+            elapsedMs: Date.now() - startedAt,
+            estimatedCostUsd: this.roundCost(estimatedCostUsd),
+            executedTools: executedToolResults,
+            iterations: iterationCount,
+            response: responseText,
+            status: 'completed',
+            toolCalls: toolCallsCount
+          });
 
           return;
         }
       }
 
-      this.recordSuccess();
+      this.recordSuccess(input.userId);
 
-      yield {
-        type: '_agent_done',
-        result: this.buildGuardrailResult({
+      yield doneEvent(
+        this.buildGuardrailResult({
           estimatedCostUsd,
           executedTools: executedToolResults,
           guardrail: 'MAX_ITERATIONS',
@@ -413,14 +515,13 @@ export class ReactAgentService {
           startedAt,
           toolCalls: toolCallsCount
         })
-      };
+      );
     } catch (error) {
       if (error instanceof AgentTimeoutError) {
-        this.recordSuccess();
+        this.recordSuccess(input.userId);
 
-        yield {
-          type: '_agent_done',
-          result: this.buildGuardrailResult({
+        yield doneEvent(
+          this.buildGuardrailResult({
             estimatedCostUsd,
             executedTools: executedToolResults,
             guardrail: 'TIMEOUT',
@@ -428,7 +529,7 @@ export class ReactAgentService {
             startedAt,
             toolCalls: toolCallsCount
           })
-        };
+        );
 
         return;
       }
@@ -439,21 +540,22 @@ export class ReactAgentService {
         'ReactAgentService'
       );
 
-      this.recordFailure(guardrails, Date.now());
+      this.recordFailure(guardrails, Date.now(), input.userId);
 
-      yield {
-        type: '_agent_done',
-        result: {
-          elapsedMs: Date.now() - startedAt,
-          estimatedCostUsd: this.roundCost(estimatedCostUsd),
-          executedTools: executedToolResults,
-          iterations: iterationCount,
-          response:
-            'The AI assistant is temporarily unavailable. Please try again shortly.',
-          status: 'failed',
-          toolCalls: toolCallsCount
-        }
-      };
+      yield doneEvent({
+        elapsedMs: Date.now() - startedAt,
+        estimatedCostUsd: this.roundCost(estimatedCostUsd),
+        executedTools: executedToolResults,
+        iterations: iterationCount,
+        response:
+          'The AI assistant is temporarily unavailable. Please try again shortly.',
+        status: 'failed',
+        toolCalls: toolCallsCount
+      });
+    } finally {
+      if (finalResult) {
+        this.emitTelemetry(finalResult, requestId);
+      }
     }
   }
 
@@ -465,8 +567,8 @@ export class ReactAgentService {
     messages: LLMMessage[],
     toolDefinitions: LLMToolDefinition[],
     toolChoice: 'auto' | 'none' | 'required',
-    _guardrails: ReactAgentGuardrails,
-    _startedAt: number,
+    guardrails: ReactAgentGuardrails,
+    startedAt: number,
     signal?: AbortSignal
   ): AsyncGenerator<SseEvent, LLMCompletionResponse> {
     let fullText = '';
@@ -485,7 +587,11 @@ export class ReactAgentService {
       signal
     );
 
-    for await (const chunk of stream) {
+    for await (const chunk of this.withStreamTimeout(
+      stream,
+      startedAt,
+      guardrails.timeoutMs
+    )) {
       if (signal?.aborted) {
         break;
       }
@@ -514,6 +620,38 @@ export class ReactAgentService {
       toolCalls,
       ...(usage ? { usage } : {})
     };
+  }
+
+  /**
+   * Wraps an async iterable with a per-chunk timeout derived from the
+   * agent's overall time budget. Throws AgentTimeoutError if the source
+   * does not yield a chunk before the remaining budget expires.
+   *
+   * This prevents a stalled LLM stream (e.g. OpenAI hanging mid-response)
+   * from keeping the connection open indefinitely, bypassing the agent timeout.
+   */
+  private async *withStreamTimeout<T>(
+    source: AsyncIterable<T>,
+    startedAt: number,
+    timeoutMs: number
+  ): AsyncIterable<T> {
+    const iterator = source[Symbol.asyncIterator]();
+
+    while (true) {
+      const remaining = timeoutMs - (Date.now() - startedAt);
+
+      if (remaining <= 0) {
+        throw new AgentTimeoutError();
+      }
+
+      const next = await this.withTimeout(iterator.next(), remaining);
+
+      if (next.done) {
+        return;
+      }
+
+      yield next.value;
+    }
   }
 
   private buildGuardrailResult({
@@ -555,12 +693,14 @@ export class ReactAgentService {
   }
 
   private async executeToolCall({
+    requestId,
     startedAt,
     timeoutMs,
     toolCall,
     toolRegistry,
     userId
   }: {
+    requestId: string;
     startedAt: number;
     timeoutMs: number;
     toolCall: LLMToolCall;
@@ -571,6 +711,7 @@ export class ReactAgentService {
       const toolResponse = await this.withTimeout(
         toolRegistry.execute({
           context: {
+            requestId,
             userId
           },
           input: toolCall.arguments,
@@ -590,10 +731,34 @@ export class ReactAgentService {
               status: 'success'
             };
 
+      // Context-window guard: summarize + truncate oversized tool output
+      // before injecting it into the LLM conversation. Without this a single
+      // large response (e.g. a full transaction history) can silently overflow
+      // the context window, causing the LLM to error or produce garbled answers.
+      const TRUNCATION_SUFFIX =
+        '\n[TRUNCATED: tool output exceeded the context window limit]';
+
+      const rawContent = summarizeToolOutput(
+        toolCall.name,
+        // Pass data-only to the summarizer for human-readable output, but
+        // embed the full toolResponse (envelope) as the raw JSON so that
+        // downstream toolEnvelope checks can still find status/error fields.
+        envelope.data ?? toolResponse,
+        toolResponse
+      );
+
+      const content =
+        rawContent.length > AGENT_TOOL_OUTPUT_MAX_CHARS
+          ? rawContent.slice(
+              0,
+              AGENT_TOOL_OUTPUT_MAX_CHARS - TRUNCATION_SUFFIX.length
+            ) + TRUNCATION_SUFFIX
+          : rawContent;
+
       return {
         envelope,
         message: {
-          content: JSON.stringify(toolResponse),
+          content,
           name: toolCall.name,
           role: 'tool',
           toolCallId: toolCall.id
@@ -716,53 +881,96 @@ export class ReactAgentService {
     return Date.now() - startedAt >= timeoutMs;
   }
 
+  private getCircuitBreaker(userId: string): CircuitBreakerState {
+    let cb = this.circuitBreakers.get(userId);
+
+    if (!cb) {
+      cb = { consecutiveFailures: 0, openedAt: 0, state: 'closed' };
+      this.circuitBreakers.set(userId, cb);
+    }
+
+    return cb;
+  }
+
   private isCircuitBreakerOpen(
     guardrails: ReactAgentGuardrails,
-    now: number
+    now: number,
+    userId: string
   ): boolean {
-    if (this.circuitBreaker.state !== 'open') {
+    const cb = this.getCircuitBreaker(userId);
+
+    if (cb.state !== 'open') {
       return false;
     }
 
-    if (
-      now - this.circuitBreaker.openedAt <
-      guardrails.circuitBreakerCooldownMs
-    ) {
+    if (now - cb.openedAt < guardrails.circuitBreakerCooldownMs) {
       return true;
     }
 
-    this.circuitBreaker.state = 'half_open';
+    cb.state = 'half_open';
 
     return false;
   }
 
-  private recordFailure(guardrails: ReactAgentGuardrails, now: number) {
-    if (this.circuitBreaker.state === 'half_open') {
-      this.circuitBreaker = {
-        consecutiveFailures: guardrails.circuitBreakerFailureThreshold,
-        openedAt: now,
-        state: 'open'
-      };
+  private recordFailure(
+    guardrails: ReactAgentGuardrails,
+    now: number,
+    userId: string
+  ) {
+    const cb = this.getCircuitBreaker(userId);
+
+    if (cb.state === 'half_open') {
+      cb.consecutiveFailures = guardrails.circuitBreakerFailureThreshold;
+      cb.openedAt = now;
+      cb.state = 'open';
 
       return;
     }
 
-    const consecutiveFailures = this.circuitBreaker.consecutiveFailures + 1;
+    cb.consecutiveFailures += 1;
 
-    this.circuitBreaker.consecutiveFailures = consecutiveFailures;
-
-    if (consecutiveFailures >= guardrails.circuitBreakerFailureThreshold) {
-      this.circuitBreaker.openedAt = now;
-      this.circuitBreaker.state = 'open';
+    if (cb.consecutiveFailures >= guardrails.circuitBreakerFailureThreshold) {
+      cb.openedAt = now;
+      cb.state = 'open';
     }
   }
 
-  private recordSuccess() {
-    this.circuitBreaker = {
-      consecutiveFailures: 0,
-      openedAt: 0,
-      state: 'closed'
+  private recordSuccess(userId: string) {
+    const cb = this.circuitBreakers.get(userId);
+
+    if (cb) {
+      cb.consecutiveFailures = 0;
+      cb.openedAt = 0;
+      cb.state = 'closed';
+    }
+  }
+
+  /**
+   * Emits a structured JSON telemetry log after every agent run.
+   *
+   * Log fields:
+   *  - status / guardrail  — outcome classification
+   *  - toolCalls / iterations — reasoning depth
+   *  - estimatedCostUsd / elapsedMs — cost & latency
+   *  - requestId — correlation ID for log tracing
+   *
+   * userId is intentionally omitted from telemetry to avoid PII in logs.
+   */
+  private emitTelemetry(result: ReactAgentRunResult, requestId: string): void {
+    const record: Record<string, unknown> = {
+      elapsedMs: result.elapsedMs,
+      estimatedCostUsd: result.estimatedCostUsd,
+      iterations: result.iterations,
+      requestId,
+      status: result.status,
+      toolCalls: result.toolCalls
     };
+
+    if (result.guardrail) {
+      record['guardrail'] = result.guardrail;
+    }
+
+    Logger.log(JSON.stringify(record), 'ReactAgentService');
   }
 
   private summarizeToolResult(

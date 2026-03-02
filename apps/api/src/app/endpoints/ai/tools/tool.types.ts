@@ -3,6 +3,7 @@ export type ToolExecutionStatus = 'error' | 'partial' | 'success';
 export type ToolSchemaType =
   | 'array'
   | 'boolean'
+  | 'null'
   | 'number'
   | 'object'
   | 'string';
@@ -16,7 +17,7 @@ export interface ToolJsonSchema {
   minimum?: number;
   properties?: Record<string, ToolJsonSchema>;
   required?: readonly string[];
-  type: ToolSchemaType;
+  type: ToolSchemaType | ToolSchemaType[];
 }
 
 export interface ToolValidationIssue {

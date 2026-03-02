@@ -57,6 +57,18 @@ const DEFAULT_HISTORY_DAYS = 30;
 const MAX_HISTORY_DAYS = 365;
 const MIN_HISTORY_DAYS = 1;
 
+/**
+ * Yahoo Finance (unofficial API) imposes undocumented rate limits.
+ * In practice, ~2,000 requests/hour is a safe upper bound for a single IP.
+ * The `symbolService.get()` path is protected by the Redis quote cache, so
+ * only cold-cache or symbol-resolution lookups hit Yahoo directly.
+ *
+ * We defend against 429s with a simple exponential-backoff retry, and we
+ * cache failed-lookup results in-memory so a repeated unknown symbol does
+ * not burn extra quota.
+ */
+const LOOKUP_NOT_FOUND_TTL_MS = 5 * 60 * 1000; // 5 min negative-result cache
+
 @Injectable()
 export class MarketDataLookupTool implements ToolDefinition<
   MarketDataLookupInput,
@@ -66,6 +78,15 @@ export class MarketDataLookupTool implements ToolDefinition<
     'Look up deterministic symbol quote, profile metadata and optional historical market data.';
 
   public readonly inputSchema: ToolJsonSchema = MARKET_DATA_LOOKUP_INPUT_SCHEMA;
+
+  /**
+   * Per-instance negative-result cache. Maps query keys to expiry timestamps.
+   * Moved from module scope to instance scope so each tool instance (and each
+   * test) has its own isolated cache. In production the NestJS DI container
+   * creates a single instance per module, so the behaviour is identical to
+   * the previous global — but without the test-pollution and DI-leakage issues.
+   */
+  private readonly lookupNegativeCache = new Map<string, number>();
 
   public readonly name = 'market_data_lookup';
 
@@ -77,6 +98,29 @@ export class MarketDataLookupTool implements ToolDefinition<
     private readonly symbolProfileService: SymbolProfileService,
     private readonly userService: UserService
   ) {}
+
+  // ─── Test-only accessors (not part of the public API) ─────────────────
+
+  /** @internal Clear negative cache — for tests only. */
+  public _clearNegativeCache(): void {
+    this.lookupNegativeCache.clear();
+  }
+
+  /** @internal Get negative cache size — for tests only. */
+  public _getNegativeCacheSize(): number {
+    return this.lookupNegativeCache.size;
+  }
+
+  /** Sweep entries whose TTL has elapsed to prevent unbounded Map growth. */
+  private pruneExpiredNegativeCacheEntries(): void {
+    const now = Date.now();
+
+    for (const [key, expiry] of this.lookupNegativeCache) {
+      if (now >= expiry) {
+        this.lookupNegativeCache.delete(key);
+      }
+    }
+  }
 
   public async execute(
     input: MarketDataLookupInput,
@@ -214,7 +258,10 @@ export class MarketDataLookupTool implements ToolDefinition<
           const absoluteChange = lastPoint.marketPrice - firstPoint.marketPrice;
 
           priceChange.absoluteChange = absoluteChange;
-          priceChange.percentChange = absoluteChange / firstPoint.marketPrice;
+          // Multiply by 100 so the value is a whole-number percentage (e.g. 5.3 = +5.3%)
+          // consistent with the schema description and all other *Pct fields in the AI layer.
+          priceChange.percentChange =
+            (absoluteChange / firstPoint.marketPrice) * 100;
           priceChange.periodDays = historyDays;
         }
       }
@@ -297,32 +344,79 @@ export class MarketDataLookupTool implements ToolDefinition<
       }
     | undefined
   > {
+    // Negative cache: skip Yahoo lookup for recently-unresolved queries to
+    // avoid burning rate-limit quota on repeated unknown symbols.
+    const cacheKey = `${userId}:${query.toLowerCase()}`;
+    const negExpiry = this.lookupNegativeCache.get(cacheKey);
+
+    if (negExpiry !== undefined) {
+      if (Date.now() < negExpiry) {
+        return undefined;
+      }
+
+      // Entry has expired — remove it to prevent unbounded Map growth.
+      // Without deletion the Map would accumulate stale keys indefinitely,
+      // causing a memory leak in long-running server processes.
+      this.lookupNegativeCache.delete(cacheKey);
+    }
+
     const user = await this.userService.user({ id: userId });
 
     if (!user) {
       return undefined;
     }
 
-    try {
-      const lookupResponse = await this.symbolService.lookup({
-        includeIndices: false,
-        query,
-        user
-      });
+    // Retry loop: Yahoo Finance returns HTTP 429 when rate-limited.
+    // We retry up to 3 times with exponential backoff (500ms, 1s, 2s).
+    const MAX_RETRIES = 3;
+    const BASE_DELAY_MS = 500;
 
-      const lookupItem = lookupResponse.items?.[0];
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        const lookupResponse = await this.symbolService.lookup({
+          includeIndices: false,
+          query,
+          user
+        });
 
-      if (!lookupItem) {
+        const lookupItem = lookupResponse.items?.[0];
+
+        if (!lookupItem) {
+          // Prune expired entries before inserting to prevent unbounded Map growth,
+          // then cache this negative result to avoid repeat quota burn.
+          this.pruneExpiredNegativeCacheEntries();
+          this.lookupNegativeCache.set(
+            cacheKey,
+            Date.now() + LOOKUP_NOT_FOUND_TTL_MS
+          );
+
+          return undefined;
+        }
+
+        return {
+          dataSource: lookupItem.dataSource.toString(),
+          symbol: lookupItem.symbol
+        };
+      } catch (error: unknown) {
+        const status =
+          (error as { code?: number })?.code ??
+          (error as { status?: number })?.status;
+
+        if (status === 429 && attempt < MAX_RETRIES - 1) {
+          // Rate limited — wait with exponential backoff then retry
+          await new Promise((resolve) =>
+            setTimeout(resolve, BASE_DELAY_MS * 2 ** attempt)
+          );
+
+          continue;
+        }
+
+        // Non-429 error or final retry exhausted — give up gracefully
         return undefined;
       }
-
-      return {
-        dataSource: lookupItem.dataSource.toString(),
-        symbol: lookupItem.symbol
-      };
-    } catch {
-      return undefined;
     }
+
+    return undefined;
   }
 
   private toIsoString(value: Date | string) {

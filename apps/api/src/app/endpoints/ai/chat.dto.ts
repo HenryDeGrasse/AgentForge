@@ -19,11 +19,6 @@ export class ChatDto {
   message: string;
 
   @IsOptional()
-  @IsString()
-  @MaxLength(1_000)
-  systemPrompt?: string;
-
-  @IsOptional()
   @IsArray()
   @ArrayMaxSize(10)
   @IsString({ each: true })

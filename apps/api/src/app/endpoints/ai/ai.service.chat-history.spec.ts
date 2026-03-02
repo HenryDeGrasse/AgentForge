@@ -2,20 +2,19 @@
  * Chat history integration tests for AiService.chat()
  *
  * Tests conversation creation, continuation, priorMessages injection,
- * history cap, updatedAt touch, systemPrompt freeze, and seq ordering.
+ * history cap, updatedAt touch, and seq ordering.
  */
 import {
-  AGENT_DEFAULT_SYSTEM_PROMPT,
+  AGENT_ALLOWED_TOOL_NAMES,
   AGENT_MAX_HISTORY_PAIRS
 } from '@ghostfolio/api/app/endpoints/ai/agent/agent.constants';
 import { ReactAgentService } from '@ghostfolio/api/app/endpoints/ai/agent/react-agent.service';
+import { buildSystemPrompt } from '@ghostfolio/api/app/endpoints/ai/agent/system-prompt-builder';
 import { VerifiedResponse } from '@ghostfolio/api/app/endpoints/ai/contracts/final-response.schema';
 import { LLMClient } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
 import { ResponseVerifierService } from '@ghostfolio/api/app/endpoints/ai/verification/response-verifier.service';
 import { PortfolioService } from '@ghostfolio/api/app/portfolio/portfolio.service';
 import { PrismaService } from '@ghostfolio/api/services/prisma/prisma.service';
-
-import { BadRequestException } from '@nestjs/common';
 
 import { AiService } from './ai.service';
 
@@ -38,8 +37,12 @@ const STUB_VERIFIED: VerifiedResponse = {
   chartData: [],
   confidence: 'high',
   invokedToolNames: ['get_portfolio_summary'],
+  requiresHumanReview: false,
+  traceId: '',
   warnings: []
 };
+
+const DEFAULT_SYSTEM_PROMPT = buildSystemPrompt([...AGENT_ALLOWED_TOOL_NAMES]);
 
 function buildAgentRun(result = STUB_AGENT_RESULT) {
   return jest.fn().mockResolvedValue(result);
@@ -104,12 +107,28 @@ function buildService(
   return new AiService(
     { extract: jest.fn().mockReturnValue([]) } as any,
     { extract: jest.fn().mockReturnValue([]) } as any,
-    { evaluateRulesForBriefing: jest.fn().mockResolvedValue([]) } as any,
+    {
+      evaluateRulesForBriefing: jest
+        .fn()
+        .mockResolvedValue({ briefingItems: [], rulesEvaluated: 0 }),
+      markRulesNotified: jest.fn()
+    } as any,
+    {
+      startTrace: jest.fn().mockReturnValue({ traceId: '', end: jest.fn() }),
+      addScore: jest.fn(),
+      flush: jest.fn()
+    } as any,
     { complete: jest.fn() } as LLMClient,
     { getDetails: jest.fn() } as any as PortfolioService,
     prismaService,
     { run: agentRun } as any as ReactAgentService,
-    { verify: verifierVerify } as any as ResponseVerifierService
+    { verify: verifierVerify } as any as ResponseVerifierService,
+    {
+      selectTools: jest.fn().mockImplementation((_msg, available, caller) => ({
+        tools: caller ?? available,
+        source: caller ? 'caller_override' : 'fallback_all'
+      }))
+    } as any
   );
 }
 
@@ -134,7 +153,7 @@ describe('AiService.chat() — new conversation', () => {
     // Conversation row created with title (message truncated), userId, system prompt
     expect(_txConvCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        systemPrompt: AGENT_DEFAULT_SYSTEM_PROMPT,
+        systemPrompt: expect.stringContaining('portfolio analysis'),
         title: 'What are my top holdings?',
         userId: 'user-1'
       }),
@@ -204,7 +223,7 @@ describe('AiService.chat() — continuing a conversation', () => {
 
     const { prismaService } = buildPrisma({
       conversationId: 'existing-conv-id',
-      existingConvSystemPrompt: AGENT_DEFAULT_SYSTEM_PROMPT,
+      existingConvSystemPrompt: DEFAULT_SYSTEM_PROMPT,
       priorDbMessages
     });
 
@@ -257,7 +276,7 @@ describe('AiService.chat() — updatedAt touch', () => {
   it('updates updatedAt on the ChatConversation row when appending to existing conversation', async () => {
     const { _txConvUpdate, prismaService } = buildPrisma({
       conversationId: 'existing-conv-id',
-      existingConvSystemPrompt: AGENT_DEFAULT_SYSTEM_PROMPT
+      existingConvSystemPrompt: DEFAULT_SYSTEM_PROMPT
     });
 
     const service = buildService(prismaService);
@@ -277,28 +296,6 @@ describe('AiService.chat() — updatedAt touch', () => {
   });
 });
 
-// ─── Test 8: systemPrompt on existing conversation → 400 ─────────────────────
-
-describe('AiService.chat() — systemPrompt freeze', () => {
-  it('throws BadRequestException when systemPrompt is supplied for an existing conversation', async () => {
-    const { prismaService } = buildPrisma({
-      conversationId: 'existing-conv-id',
-      existingConvSystemPrompt: AGENT_DEFAULT_SYSTEM_PROMPT
-    });
-
-    const service = buildService(prismaService);
-
-    await expect(
-      service.chat({
-        conversationId: 'existing-conv-id',
-        message: 'Hello',
-        systemPrompt: 'Different prompt',
-        userId: 'user-1'
-      })
-    ).rejects.toThrow(BadRequestException);
-  });
-});
-
 // ─── Test 9: History cap ──────────────────────────────────────────────────────
 
 describe('AiService.chat() — history cap', () => {
@@ -306,7 +303,7 @@ describe('AiService.chat() — history cap', () => {
     // Simulate a long conversation: DB has 30 messages but we should only fetch 20
     const { prismaService } = buildPrisma({
       conversationId: 'long-conv-id',
-      existingConvSystemPrompt: AGENT_DEFAULT_SYSTEM_PROMPT,
+      existingConvSystemPrompt: DEFAULT_SYSTEM_PROMPT,
       priorDbMessages: [] // doesn't matter for this test — we check the query params
     });
 
@@ -338,7 +335,7 @@ describe('AiService.chat() — history cap', () => {
 
     const { prismaService } = buildPrisma({
       conversationId: 'conv-id',
-      existingConvSystemPrompt: AGENT_DEFAULT_SYSTEM_PROMPT,
+      existingConvSystemPrompt: DEFAULT_SYSTEM_PROMPT,
       priorDbMessages: newestFirst
     });
 
@@ -402,44 +399,10 @@ describe('AiService.chat() — seq ordering guarantee', () => {
   });
 });
 
-// ─── Ambiguous follow-up routing ─────────────────────────────────────────────
+// ─── Follow-up routing (LLM handles scope) ──────────────────────────────────
 
-describe('AiService.chat() — ambiguous follow-up routing', () => {
-  it('asks for clarification when vague follow-up follows a scope refusal', async () => {
-    const priorDbMessages = [
-      {
-        content:
-          "I can't help with that request. I'm a portfolio analysis assistant and can only help with: portfolio summaries, transaction history, risk analysis.",
-        role: 'assistant',
-        seq: 2
-      },
-      { content: 'Tell me a joke', role: 'user', seq: 1 }
-    ];
-
-    const { prismaService } = buildPrisma({
-      conversationId: 'conv-after-refusal',
-      existingConvSystemPrompt: AGENT_DEFAULT_SYSTEM_PROMPT,
-      priorDbMessages
-    });
-
-    const agentRun = buildAgentRun();
-    const service = buildService(prismaService, agentRun);
-
-    const result = await service.chat({
-      conversationId: 'conv-after-refusal',
-      message: 'based on that, tell me more',
-      userId: 'user-1'
-    });
-
-    // Should NOT call the agent — should ask for clarification
-    expect(agentRun).not.toHaveBeenCalled();
-    expect(result.toolCalls).toBe(0);
-    expect(result.response.toLowerCase()).toMatch(
-      /more specific|which|portfolio summar/
-    );
-  });
-
-  it('allows vague follow-up when last assistant message was portfolio-related', async () => {
+describe('AiService.chat() — follow-up routing', () => {
+  it('forwards all follow-ups to the agent (LLM handles scope via system prompt)', async () => {
     const priorDbMessages = [
       {
         content:
@@ -452,38 +415,21 @@ describe('AiService.chat() — ambiguous follow-up routing', () => {
 
     const { prismaService } = buildPrisma({
       conversationId: 'conv-after-portfolio',
-      existingConvSystemPrompt: AGENT_DEFAULT_SYSTEM_PROMPT,
+      existingConvSystemPrompt: DEFAULT_SYSTEM_PROMPT,
       priorDbMessages
     });
 
     const agentRun = buildAgentRun();
     const service = buildService(prismaService, agentRun);
 
+    // Vague follow-up should reach the agent since prior context is available
     await service.chat({
       conversationId: 'conv-after-portfolio',
-      message: 'based on that, analyze the risk',
+      message: 'yes please',
       userId: 'user-1'
     });
 
-    // Should call the agent — valid follow-up to portfolio context
     expect(agentRun).toHaveBeenCalledTimes(1);
-  });
-
-  it('asks for clarification when vague follow-up has no conversation history', async () => {
-    // New conversation (no conversationId) → no prior messages
-    const agentRun = buildAgentRun();
-    const service = buildService(buildPrisma().prismaService, agentRun);
-
-    const result = await service.chat({
-      message: 'tell me more',
-      userId: 'user-1'
-    });
-
-    expect(agentRun).not.toHaveBeenCalled();
-    expect(result.toolCalls).toBe(0);
-    expect(result.response.toLowerCase()).toMatch(
-      /more specific|which|portfolio summar/
-    );
   });
 });
 

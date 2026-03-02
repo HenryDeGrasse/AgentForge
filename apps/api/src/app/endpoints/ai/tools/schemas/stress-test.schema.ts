@@ -4,18 +4,28 @@ export const STRESS_TEST_INPUT_SCHEMA: ToolJsonSchema = {
   additionalProperties: false,
   properties: {
     customShocks: {
+      description:
+        'Custom shock array. Each entry applies a percentage shock to an asset class. Use instead of scenarioId.',
       items: {
         additionalProperties: false,
         properties: {
           assetClass: { type: 'string' },
-          shockPercent: { type: 'number' }
+          shockPercent: {
+            description:
+              'Whole-number shock (e.g. -35 = 35% drop, +5 = 5% gain).',
+            type: 'number'
+          }
         },
         required: ['assetClass', 'shockPercent'],
         type: 'object'
       },
       type: 'array'
     },
-    scenarioId: { type: 'string' }
+    scenarioId: {
+      description:
+        'Predefined scenario: market_crash_2008, dot_com_bust, covid_crash, rising_rates, crypto_winter, or stagflation.',
+      type: 'string'
+    }
   },
   type: 'object'
 };
@@ -28,7 +38,11 @@ export const STRESS_TEST_OUTPUT_SCHEMA: ToolJsonSchema = {
         additionalProperties: false,
         properties: {
           currentValueInBaseCurrency: { type: 'number' },
-          lossPct: { type: 'number' },
+          lossPct: {
+            description:
+              'Whole-number percentage loss applied to this asset class (e.g. -35 = 35% drop). Already multiplied by 100; display as-is.',
+            type: 'number'
+          },
           name: { type: 'string' },
           stressedValueInBaseCurrency: { type: 'number' }
         },
@@ -49,7 +63,11 @@ export const STRESS_TEST_OUTPUT_SCHEMA: ToolJsonSchema = {
       items: {
         additionalProperties: false,
         properties: {
-          lossPct: { type: 'number' },
+          lossPct: {
+            description:
+              'Whole-number percentage loss for this position (e.g. -35 = 35% drop). Already multiplied by 100; display as-is.',
+            type: 'number'
+          },
           symbol: { type: 'string' }
         },
         required: ['symbol', 'lossPct'],
@@ -63,7 +81,11 @@ export const STRESS_TEST_OUTPUT_SCHEMA: ToolJsonSchema = {
         properties: {
           currentValueInBaseCurrency: { type: 'number' },
           lossInBaseCurrency: { type: 'number' },
-          lossPct: { type: 'number' },
+          lossPct: {
+            description:
+              'Whole-number percentage loss for this position (e.g. -35 = 35% drop). Already multiplied by 100; display as-is.',
+            type: 'number'
+          },
           stressedValueInBaseCurrency: { type: 'number' },
           symbol: { type: 'string' }
         },
@@ -78,7 +100,11 @@ export const STRESS_TEST_OUTPUT_SCHEMA: ToolJsonSchema = {
       },
       type: 'array'
     },
-    recoveryNeededPct: { type: 'number' },
+    recoveryNeededPct: {
+      description:
+        'Whole-number percentage gain needed to recover from the stressed value back to current (e.g. 54 = need a 54% gain). Already multiplied by 100; display as-is.',
+      type: 'number'
+    },
     scenario: {
       additionalProperties: false,
       properties: {
@@ -90,7 +116,11 @@ export const STRESS_TEST_OUTPUT_SCHEMA: ToolJsonSchema = {
             additionalProperties: false,
             properties: {
               assetClass: { type: 'string' },
-              shockPercent: { type: 'number' }
+              shockPercent: {
+                description:
+                  'Whole-number shock applied to this asset class (e.g. -35 = 35% drop). Already multiplied by 100; display as-is.',
+                type: 'number'
+              }
             },
             required: ['assetClass', 'shockPercent'],
             type: 'object'

@@ -1,9 +1,5 @@
 import type { LLMCompletionResponse } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
 
-/**
- * Sequential multi-tool: LLM calls portfolio summary first (iteration 1),
- * then analyze_risk (iteration 2), then produces final text (iteration 3).
- */
 export const multiToolSequential: LLMCompletionResponse[] = [
   {
     finishReason: 'tool_calls',
@@ -19,8 +15,8 @@ export const multiToolSequential: LLMCompletionResponse[] = [
   },
   {
     finishReason: 'stop',
-    text: 'Your portfolio has 4 holdings worth $10,000 total. The risk analysis shows a medium overall risk level with a concentration flag on Asset A at 40%. Your portfolio could benefit from better diversification to reduce single-position risk.',
+    text: '**Portfolio Summary:**\nYour portfolio has 4 holdings worth $10,500. Top holding is SYM-A at 40% ($4,000).\n\n**Risk Analysis:**\nYour portfolio carries **HIGH** risk. The main concern is SYM-A at 40% — well above the 25% single-position concentration threshold. Top-3 holdings (SYM-A, SYM-B, SYM-C) account for 90% of the portfolio.',
     toolCalls: [],
-    usage: { estimatedCostUsd: 0.001 }
+    usage: { estimatedCostUsd: 0.002 }
   }
 ];

@@ -10,11 +10,13 @@ import {
 import { PortfolioService } from '@ghostfolio/api/app/portfolio/portfolio.service';
 import { UserService } from '@ghostfolio/api/app/user/user.service';
 import { BenchmarkService } from '@ghostfolio/api/services/benchmark/benchmark.service';
+import { MarketDataService } from '@ghostfolio/api/services/market-data/market-data.service';
 import { getIntervalFromDateRange } from '@ghostfolio/common/calculation-helper';
 import { DEFAULT_CURRENCY } from '@ghostfolio/common/config';
 import { DateRange } from '@ghostfolio/common/types';
 
 import { Injectable } from '@nestjs/common';
+import { DataSource } from '@prisma/client';
 
 interface PerformanceCompareInput {
   benchmarkSymbols?: string[];
@@ -32,6 +34,12 @@ interface PerformanceCompareOutput {
       allTimeHigh: {
         date: string;
         performancePercent: number;
+      };
+      periodReturn?: {
+        dataPoints: number;
+        endDate: string;
+        periodReturnPct: number;
+        startDate: string;
       };
     };
     symbol: string;
@@ -94,6 +102,7 @@ export class PerformanceCompareTool implements ToolDefinition<
   public constructor(
     private readonly portfolioService: PortfolioService,
     private readonly benchmarkService: BenchmarkService,
+    private readonly marketDataService: MarketDataService,
     private readonly userService: UserService
   ) {}
 
@@ -102,6 +111,8 @@ export class PerformanceCompareTool implements ToolDefinition<
     context: ToolExecutionContext
   ): Promise<PerformanceCompareOutput> {
     const dateRange = this.resolveDateRange(input.dateRange);
+    const { endDate, startDate } = getIntervalFromDateRange(dateRange);
+
     const [portfolioResponse, benchmarkResponse, user] = await Promise.all([
       this.portfolioService.getPerformance({
         dateRange,
@@ -137,6 +148,51 @@ export class PerformanceCompareTool implements ToolDefinition<
       });
     }
 
+    // For 'max' range align the benchmark query start with the portfolio's first
+    // order date so the benchmark period covers the same window as the portfolio
+    // return. Without this, 'max' defaults startDate to epoch (new Date(0)) and
+    // the query only retrieves whatever sparse recent data exists in the
+    // database, producing a misleadingly small benchmark return.
+    const benchmarkStartDate =
+      dateRange === 'max' && portfolioResponse.firstOrderDate
+        ? new Date(portfolioResponse.firstOrderDate)
+        : startDate;
+
+    // Fetch period return market data for all filtered benchmarks in a single query
+    const periodReturnMap = await this.getBenchmarkPeriodReturns(
+      filteredBenchmarks,
+      benchmarkStartDate,
+      endDate
+    );
+
+    // Warn when the earliest benchmark data point is more than 30 days after
+    // the requested start — the period return covers a shorter window than the
+    // portfolio return, making the comparison unreliable.
+    const COVERAGE_GAP_THRESHOLD_MS = 30 * 24 * 60 * 60 * 1000;
+
+    for (const benchmark of filteredBenchmarks) {
+      const periodReturn = periodReturnMap.get(benchmark.symbol);
+
+      if (periodReturn) {
+        const dataStartMs = new Date(periodReturn.startDate).getTime();
+
+        if (
+          dataStartMs - benchmarkStartDate.getTime() >
+          COVERAGE_GAP_THRESHOLD_MS
+        ) {
+          warnings.push({
+            code: 'benchmark_data_coverage_gap',
+            message:
+              `Benchmark data for ${benchmark.symbol} only starts at ` +
+              `${new Date(periodReturn.startDate).toISOString().slice(0, 10)}, ` +
+              `not at the requested start of ` +
+              `${benchmarkStartDate.toISOString().slice(0, 10)}. ` +
+              `The period return may not reflect the full comparison window.`
+          });
+        }
+      }
+    }
+
     const benchmarks = await Promise.all(
       filteredBenchmarks.map(async (benchmark) => {
         let trend50d = benchmark.trend50d;
@@ -157,6 +213,8 @@ export class PerformanceCompareTool implements ToolDefinition<
           });
         }
 
+        const periodReturn = periodReturnMap.get(benchmark.symbol);
+
         return {
           dataSource: benchmark.dataSource.toString(),
           marketCondition: benchmark.marketCondition,
@@ -168,7 +226,8 @@ export class PerformanceCompareTool implements ToolDefinition<
               ),
               performancePercent:
                 benchmark.performances?.allTimeHigh?.performancePercent ?? 0
-            }
+            },
+            ...(periodReturn ? { periodReturn } : {})
           },
           symbol: benchmark.symbol,
           trend200d,
@@ -219,15 +278,41 @@ export class PerformanceCompareTool implements ToolDefinition<
       });
     }
 
+    // Track whether any benchmark used period return for the assumptions text
+    let anyBenchmarkUsedPeriodReturn = false;
+
     const comparison = benchmarks.reduce(
       (response, benchmark) => {
-        const benchmarkMetric =
-          benchmark.performances.allTimeHigh.performancePercent;
+        const periodReturn = benchmark.performances.periodReturn;
 
-        if (portfolio.netPerformancePercentage >= benchmarkMetric) {
-          response.outperformingBenchmarks.push(benchmark.symbol);
+        if (periodReturn) {
+          // Period return available — use direct apples-to-apples comparison
+          anyBenchmarkUsedPeriodReturn = true;
+          const benchmarkReturnPct = periodReturn.periodReturnPct;
+
+          if (portfolio.netPerformancePercentage > benchmarkReturnPct) {
+            response.outperformingBenchmarks.push(benchmark.symbol);
+          } else {
+            response.underperformingBenchmarks.push(benchmark.symbol);
+          }
         } else {
-          response.underperformingBenchmarks.push(benchmark.symbol);
+          // Fall back to ATH-drawdown comparison with warning
+          warnings.push({
+            code: 'benchmark_period_return_unavailable',
+            message: `Period return data unavailable for ${benchmark.symbol}; comparison uses ATH drawdown as a proxy (less reliable).`
+          });
+
+          const benchmarkMetric =
+            benchmark.performances.allTimeHigh.performancePercent;
+
+          if (
+            portfolio.netPerformancePercentage > 0 &&
+            portfolio.netPerformancePercentage >= benchmarkMetric
+          ) {
+            response.outperformingBenchmarks.push(benchmark.symbol);
+          } else {
+            response.underperformingBenchmarks.push(benchmark.symbol);
+          }
         }
 
         return response;
@@ -238,12 +323,19 @@ export class PerformanceCompareTool implements ToolDefinition<
       } as PerformanceCompareOutput['comparison']
     );
 
-    const { endDate, startDate } = getIntervalFromDateRange(dateRange);
-
     return {
-      assumptions: [
-        'Benchmark comparison uses all-time-high drawdown as benchmark metric, not period return.'
-      ],
+      assumptions: anyBenchmarkUsedPeriodReturn
+        ? [
+            'Benchmark comparison uses period return when historical price data is available for the selected date range. ' +
+              'When period return data is insufficient (< 2 data points), comparison falls back to ATH drawdown as a proxy metric, with a warning. ' +
+              'Period return is a simple (end/start - 1) calculation and does not account for dividends or splits beyond what the data provider captures.'
+          ]
+        : [
+            'Benchmark comparison uses all-time-high drawdown as benchmark metric, not period return. ' +
+              'Outperformance is reported only when the portfolio has positive net returns AND exceeds the ' +
+              'benchmark ATH-drawdown value. For direct period-return comparisons, use a data provider ' +
+              'that exposes benchmark period returns directly.'
+          ],
       baseCurrency:
         user?.settings?.settings?.baseCurrency?.toString() ?? DEFAULT_CURRENCY,
       benchmarks,
@@ -256,6 +348,83 @@ export class PerformanceCompareTool implements ToolDefinition<
       portfolio,
       warnings
     };
+  }
+
+  /**
+   * Fetch period returns for all benchmarks in a single MarketData query.
+   * Returns a Map from symbol to period return data, or omits symbols
+   * where insufficient data exists (< 2 data points or first price <= 0).
+   */
+  private async getBenchmarkPeriodReturns(
+    benchmarks: { dataSource: DataSource | string; symbol: string }[],
+    startDate: Date,
+    endDate: Date
+  ): Promise<
+    Map<
+      string,
+      {
+        dataPoints: number;
+        endDate: string;
+        periodReturnPct: number;
+        startDate: string;
+      }
+    >
+  > {
+    const result = new Map<
+      string,
+      {
+        dataPoints: number;
+        endDate: string;
+        periodReturnPct: number;
+        startDate: string;
+      }
+    >();
+
+    if (benchmarks.length === 0) {
+      return result;
+    }
+
+    const assetProfileIdentifiers = benchmarks.map((benchmark) => ({
+      dataSource: benchmark.dataSource as DataSource,
+      symbol: benchmark.symbol
+    }));
+
+    const marketData = await this.marketDataService.getRange({
+      assetProfileIdentifiers,
+      dateQuery: { gte: startDate, lt: endDate }
+    });
+
+    // Group by symbol
+    const bySymbol = new Map<string, { date: Date; marketPrice: number }[]>();
+
+    for (const entry of marketData) {
+      const existing = bySymbol.get(entry.symbol) ?? [];
+      existing.push({ date: entry.date, marketPrice: entry.marketPrice });
+      bySymbol.set(entry.symbol, existing);
+    }
+
+    for (const [symbol, prices] of bySymbol) {
+      if (prices.length < 2) {
+        continue;
+      }
+
+      const sorted = prices.sort((a, b) => a.date.getTime() - b.date.getTime());
+      const firstPrice = sorted[0].marketPrice;
+      const lastPrice = sorted[sorted.length - 1].marketPrice;
+
+      if (firstPrice <= 0) {
+        continue;
+      }
+
+      result.set(symbol, {
+        dataPoints: sorted.length,
+        endDate: sorted[sorted.length - 1].date.toISOString(),
+        periodReturnPct: (lastPrice - firstPrice) / firstPrice,
+        startDate: sorted[0].date.toISOString()
+      });
+    }
+
+    return result;
   }
 
   private resolveDateRange(dateRange?: string): DateRange {

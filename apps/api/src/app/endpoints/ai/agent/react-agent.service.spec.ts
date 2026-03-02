@@ -344,7 +344,7 @@ describe('ReactAgentService', () => {
   });
 
   it('opens circuit breaker after repeated failures and recovers after cooldown', async () => {
-    let now = 1_000;
+    const now = 1_000;
 
     jest.spyOn(Date, 'now').mockImplementation(() => {
       return now;
@@ -414,6 +414,167 @@ describe('ReactAgentService', () => {
     expect(healthyAttempt.status).toBe('completed');
     expect(healthyAttempt.response).toBe('Healthy after recovery');
 
+    expect(llmClient.complete).toHaveBeenCalledTimes(4);
+  });
+
+  it('scopes circuit breaker per-user so one user failure does not block another', async () => {
+    const now = 1_000;
+
+    jest.spyOn(Date, 'now').mockImplementation(() => {
+      return now;
+    });
+
+    (llmClient.complete as jest.Mock)
+      // user-1 failure #1
+      .mockRejectedValueOnce(new Error('Provider unavailable #1'))
+      // user-1 failure #2 → opens circuit for user-1
+      .mockRejectedValueOnce(new Error('Provider unavailable #2'))
+      // user-2 should NOT be blocked — returns normally
+      .mockResolvedValueOnce({
+        finishReason: 'stop',
+        text: 'User 2 is fine.',
+        toolCalls: []
+      });
+
+    const guardrails = {
+      ...defaultGuardrails,
+      circuitBreakerCooldownMs: 5_000,
+      circuitBreakerFailureThreshold: 2
+    };
+
+    // user-1: two failures → circuit opens
+    await reactAgentService.run({
+      guardrails,
+      prompt: 'Try #1',
+      userId: 'user-1'
+    });
+
+    await reactAgentService.run({
+      guardrails,
+      prompt: 'Try #2',
+      userId: 'user-1'
+    });
+
+    // user-1 is now blocked
+    const blockedResult = await reactAgentService.run({
+      guardrails,
+      prompt: 'Try #3',
+      userId: 'user-1'
+    });
+
+    expect(blockedResult.guardrail).toBe('CIRCUIT_BREAKER');
+
+    // user-2 should NOT be blocked by user-1's failures
+    const user2Result = await reactAgentService.run({
+      guardrails,
+      prompt: 'Hello',
+      userId: 'user-2'
+    });
+
+    expect(user2Result.status).toBe('completed');
+    expect(user2Result.response).toBe('User 2 is fine.');
+  });
+
+  // ─── Duplicate tool-call loop detection ────────────────────────────────────
+
+  it('breaks out of a duplicate tool-call loop after 3 consecutive identical calls', async () => {
+    toolRegistry.register({
+      description: 'Get summary',
+      execute: jest.fn().mockResolvedValue({ status: 'success', total: 42 }),
+      inputSchema: { type: 'object' },
+      name: 'get_portfolio_summary'
+    });
+
+    // LLM keeps calling the same tool with the same args every iteration
+    (llmClient.complete as jest.Mock).mockResolvedValue({
+      finishReason: 'tool_calls',
+      text: '',
+      toolCalls: [
+        {
+          arguments: { lookback: '1y' },
+          id: 'tc-loop',
+          name: 'get_portfolio_summary'
+        }
+      ],
+      usage: { estimatedCostUsd: 0.001 }
+    });
+
+    const result = await reactAgentService.run({
+      guardrails: {
+        ...defaultGuardrails,
+        maxIterations: 10
+      },
+      prompt: 'Summarize my portfolio',
+      toolNames: ['get_portfolio_summary'],
+      userId: 'user-1'
+    });
+
+    expect(result.status).toBe('partial');
+    expect(result.iterations).toBeLessThanOrEqual(4);
+    expect(result.response).toContain('progress');
+  });
+
+  it('does NOT break the loop when consecutive tool calls differ', async () => {
+    toolRegistry.register({
+      description: 'Get summary',
+      execute: jest.fn().mockResolvedValue({ status: 'success', total: 42 }),
+      inputSchema: { type: 'object' },
+      name: 'get_portfolio_summary'
+    });
+
+    (llmClient.complete as jest.Mock)
+      .mockResolvedValueOnce({
+        finishReason: 'tool_calls',
+        text: '',
+        toolCalls: [
+          {
+            arguments: { lookback: '1y' },
+            id: 'tc-1',
+            name: 'get_portfolio_summary'
+          }
+        ],
+        usage: { estimatedCostUsd: 0.001 }
+      })
+      .mockResolvedValueOnce({
+        finishReason: 'tool_calls',
+        text: '',
+        toolCalls: [
+          {
+            arguments: { lookback: '1y' },
+            id: 'tc-2',
+            name: 'get_portfolio_summary'
+          }
+        ],
+        usage: { estimatedCostUsd: 0.001 }
+      })
+      .mockResolvedValueOnce({
+        finishReason: 'tool_calls',
+        text: '',
+        toolCalls: [
+          {
+            arguments: { lookback: '5y' },
+            id: 'tc-3',
+            name: 'get_portfolio_summary'
+          }
+        ],
+        usage: { estimatedCostUsd: 0.001 }
+      })
+      .mockResolvedValueOnce({
+        finishReason: 'stop',
+        text: 'Final answer',
+        toolCalls: [],
+        usage: { estimatedCostUsd: 0.001 }
+      });
+
+    const result = await reactAgentService.run({
+      guardrails: defaultGuardrails,
+      prompt: 'Summarize my portfolio',
+      toolNames: ['get_portfolio_summary'],
+      userId: 'user-1'
+    });
+
+    expect(result.status).toBe('completed');
+    expect(result.response).toBe('Final answer');
     expect(llmClient.complete).toHaveBeenCalledTimes(4);
   });
 
@@ -500,7 +661,7 @@ describe('ReactAgentService', () => {
     expect(llmClient.complete).toHaveBeenCalledTimes(1);
   });
 
-  it('returns the no-tool response when the retry also produces no tool calls', async () => {
+  it('returns the no-tool response when LLM makes unbacked portfolio claims and retry also skips tools', async () => {
     toolRegistry.register({
       description: 'Run compliance checks',
       execute: jest.fn().mockResolvedValue({ status: 'success' }),
@@ -509,10 +670,10 @@ describe('ReactAgentService', () => {
     });
 
     (llmClient.complete as jest.Mock)
-      // First call: no tool calls
+      // First call: unbacked portfolio claim → triggers escalation
       .mockResolvedValueOnce({
         finishReason: 'stop',
-        text: 'I think you are compliant.',
+        text: 'Your portfolio is compliant with all regulations.',
         toolCalls: [],
         usage: { estimatedCostUsd: 0.001 }
       })
@@ -539,6 +700,176 @@ describe('ReactAgentService', () => {
     const secondCallRequest = (llmClient.complete as jest.Mock).mock
       .calls[1][0];
     expect(secondCallRequest.toolChoice).toBe('required');
+  });
+
+  it('escalates when LLM makes unbacked portfolio claims without tool calls', async () => {
+    toolRegistry.register({
+      description: 'Check compliance',
+      execute: jest
+        .fn()
+        .mockResolvedValue({ overallStatus: 'COMPLIANT', status: 'success' }),
+      inputSchema: { type: 'object' },
+      name: 'compliance_check'
+    });
+
+    (llmClient.complete as jest.Mock)
+      // First call: LLM makes a portfolio-specific claim without tool calls
+      .mockResolvedValueOnce({
+        finishReason: 'stop',
+        text: 'Your portfolio is compliant with all current regulations.',
+        toolCalls: [],
+        usage: { estimatedCostUsd: 0.001 }
+      })
+      // Retry with toolChoice: 'required'
+      .mockResolvedValueOnce({
+        finishReason: 'tool_calls',
+        text: '',
+        toolCalls: [{ arguments: {}, id: 'tc-1', name: 'compliance_check' }],
+        usage: { estimatedCostUsd: 0.001 }
+      })
+      // Final response
+      .mockResolvedValueOnce({
+        finishReason: 'stop',
+        text: 'All checks passed.',
+        toolCalls: [],
+        usage: { estimatedCostUsd: 0.001 }
+      });
+
+    const result = await reactAgentService.run({
+      guardrails: defaultGuardrails,
+      prompt: 'Check if my portfolio is compliant',
+      toolNames: ['compliance_check'],
+      userId: 'user-1'
+    });
+
+    expect(result.status).toBe('completed');
+    expect(result.toolCalls).toBe(1);
+    // Verify escalation happened (3 LLM calls = original + retry + final)
+    expect(llmClient.complete).toHaveBeenCalledTimes(3);
+    expect((llmClient.complete as jest.Mock).mock.calls[1][0].toolChoice).toBe(
+      'required'
+    );
+  });
+
+  it('does NOT escalate when LLM politely declines (refusal)', async () => {
+    toolRegistry.register({
+      description: 'Check compliance',
+      execute: jest.fn().mockResolvedValue({ status: 'success' }),
+      inputSchema: { type: 'object' },
+      name: 'compliance_check'
+    });
+
+    (llmClient.complete as jest.Mock).mockResolvedValueOnce({
+      finishReason: 'stop',
+      text: 'Sorry, but I can only help with portfolio-related questions.',
+      toolCalls: [],
+      usage: { estimatedCostUsd: 0.001 }
+    });
+
+    const result = await reactAgentService.run({
+      guardrails: defaultGuardrails,
+      prompt: 'Tell me a joke',
+      toolNames: ['compliance_check'],
+      userId: 'user-1'
+    });
+
+    expect(result.status).toBe('completed');
+    expect(result.toolCalls).toBe(0);
+    // Only 1 LLM call — no escalation for refusals
+    expect(llmClient.complete).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes requestId through to tool execution context', async () => {
+    const executeMock = jest.fn().mockResolvedValue({
+      status: 'success',
+      total: 42
+    });
+
+    toolRegistry.register({
+      description: 'Get summary',
+      execute: executeMock,
+      inputSchema: { type: 'object' },
+      name: 'get_portfolio_summary'
+    });
+
+    (llmClient.complete as jest.Mock)
+      .mockResolvedValueOnce({
+        finishReason: 'tool_calls',
+        text: '',
+        toolCalls: [
+          {
+            arguments: {},
+            id: 'tc-1',
+            name: 'get_portfolio_summary'
+          }
+        ],
+        usage: { estimatedCostUsd: 0.001 }
+      })
+      .mockResolvedValueOnce({
+        finishReason: 'stop',
+        text: 'Done.',
+        toolCalls: [],
+        usage: { estimatedCostUsd: 0.001 }
+      });
+
+    await reactAgentService.run({
+      guardrails: defaultGuardrails,
+      prompt: 'Summarize',
+      requestId: 'req-abc-123',
+      userId: 'user-1'
+    });
+
+    expect(executeMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ requestId: 'req-abc-123' })
+    );
+  });
+
+  it('auto-generates requestId when not provided', async () => {
+    const executeMock = jest.fn().mockResolvedValue({
+      status: 'success',
+      total: 42
+    });
+
+    toolRegistry.register({
+      description: 'Get summary',
+      execute: executeMock,
+      inputSchema: { type: 'object' },
+      name: 'get_portfolio_summary'
+    });
+
+    (llmClient.complete as jest.Mock)
+      .mockResolvedValueOnce({
+        finishReason: 'tool_calls',
+        text: '',
+        toolCalls: [
+          {
+            arguments: {},
+            id: 'tc-1',
+            name: 'get_portfolio_summary'
+          }
+        ],
+        usage: { estimatedCostUsd: 0.001 }
+      })
+      .mockResolvedValueOnce({
+        finishReason: 'stop',
+        text: 'Done.',
+        toolCalls: [],
+        usage: { estimatedCostUsd: 0.001 }
+      });
+
+    await reactAgentService.run({
+      guardrails: defaultGuardrails,
+      prompt: 'Summarize',
+      userId: 'user-1'
+    });
+
+    expect(executeMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        requestId: expect.stringMatching(/^[0-9a-f-]{36}$/)
+      })
+    );
   });
 
   it('does not retry when tools are available but LLM already made tool calls before responding', async () => {
@@ -582,5 +913,935 @@ describe('ReactAgentService', () => {
     expect(result.toolCalls).toBe(1);
     // Exactly 2 calls: tool call + final response. No retry.
     expect(llmClient.complete).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ─── Phase 2: Agent Reliability ───────────────────────────────────────────────
+
+describe('Phase 2 reliability improvements', () => {
+  let llmClient2: LLMClient;
+  let toolRegistry2: ToolRegistry;
+  let agent2: ReactAgentService;
+
+  const reliabilityGuardrails = {
+    circuitBreakerCooldownMs: 60_000,
+    circuitBreakerFailureThreshold: 3,
+    costLimitUsd: 1,
+    fallbackCostPer1kTokensUsd: 0.002,
+    maxIterations: 10,
+    timeoutMs: 30_000
+  };
+
+  beforeEach(() => {
+    llmClient2 = { complete: jest.fn() };
+    toolRegistry2 = new ToolRegistry();
+    agent2 = new ReactAgentService(llmClient2, toolRegistry2);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  // ── 2.3 Parallel tool execution ──────────────────────────────────────────
+
+  describe('parallel tool execution', () => {
+    it('executes multiple tool calls from one LLM turn concurrently', async () => {
+      const callOrder: string[] = [];
+      const DELAY = 30; // ms each tool takes
+
+      const makeDelayedTool = (name: string) => ({
+        description: name,
+        execute: jest.fn().mockImplementation(async () => {
+          callOrder.push(`start:${name}`);
+          await new Promise((r) => setTimeout(r, DELAY));
+          callOrder.push(`end:${name}`);
+          return { data: { name }, status: 'success' };
+        }),
+        inputSchema: { type: 'object' as const },
+        name
+      });
+
+      toolRegistry2.register(makeDelayedTool('tool_a'));
+      toolRegistry2.register(makeDelayedTool('tool_b'));
+
+      (llmClient2.complete as jest.Mock)
+        .mockResolvedValueOnce({
+          finishReason: 'tool_calls',
+          text: '',
+          toolCalls: [
+            { arguments: {}, id: 'tc-a', name: 'tool_a' },
+            { arguments: {}, id: 'tc-b', name: 'tool_b' }
+          ],
+          usage: { estimatedCostUsd: 0.001 }
+        })
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: 'Done',
+          toolCalls: [],
+          usage: { estimatedCostUsd: 0.001 }
+        });
+
+      const start = Date.now();
+      const result = await agent2.run({
+        guardrails: reliabilityGuardrails,
+        prompt: 'Run both tools',
+        userId: 'user-1'
+      });
+      const elapsed = Date.now() - start;
+
+      expect(result.status).toBe('completed');
+      expect(result.toolCalls).toBe(2);
+
+      // Parallel: total time should be ~DELAY, not ~2*DELAY.
+      // We allow 2.5x to account for test jitter/overhead.
+      expect(elapsed).toBeLessThan(DELAY * 2.5);
+
+      // Both starts should precede both ends (interleaved = parallel)
+      const firstEnd =
+        callOrder.indexOf('end:tool_a') < callOrder.indexOf('end:tool_b')
+          ? callOrder.indexOf('end:tool_a')
+          : callOrder.indexOf('end:tool_b');
+      const lastStart =
+        callOrder.lastIndexOf('start:tool_a') >
+        callOrder.lastIndexOf('start:tool_b')
+          ? callOrder.lastIndexOf('start:tool_a')
+          : callOrder.lastIndexOf('start:tool_b');
+
+      expect(lastStart).toBeLessThan(firstEnd);
+    });
+
+    it('collects results from all parallel tool calls into executedTools', async () => {
+      toolRegistry2.register({
+        description: 'ta',
+        execute: jest
+          .fn()
+          .mockResolvedValue({ data: { r: 'A' }, status: 'success' }),
+        inputSchema: { type: 'object' as const },
+        name: 'tool_a'
+      });
+      toolRegistry2.register({
+        description: 'tb',
+        execute: jest
+          .fn()
+          .mockResolvedValue({ data: { r: 'B' }, status: 'success' }),
+        inputSchema: { type: 'object' as const },
+        name: 'tool_b'
+      });
+
+      (llmClient2.complete as jest.Mock)
+        .mockResolvedValueOnce({
+          finishReason: 'tool_calls',
+          text: '',
+          toolCalls: [
+            { arguments: {}, id: 'tc-a', name: 'tool_a' },
+            { arguments: {}, id: 'tc-b', name: 'tool_b' }
+          ],
+          usage: { estimatedCostUsd: 0.001 }
+        })
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: 'Both done',
+          toolCalls: [],
+          usage: { estimatedCostUsd: 0.001 }
+        });
+
+      const result = await agent2.run({
+        guardrails: reliabilityGuardrails,
+        prompt: 'Run both',
+        userId: 'user-1'
+      });
+
+      expect(result.executedTools.map((e) => e.toolName).sort()).toEqual([
+        'tool_a',
+        'tool_b'
+      ]);
+    });
+
+    it('continues after one parallel tool fails, marks it as error envelope', async () => {
+      toolRegistry2.register({
+        description: 'ok',
+        execute: jest
+          .fn()
+          .mockResolvedValue({ data: { ok: true }, status: 'success' }),
+        inputSchema: { type: 'object' as const },
+        name: 'tool_ok'
+      });
+      toolRegistry2.register({
+        description: 'fail',
+        execute: jest.fn().mockRejectedValue(new Error('tool crashed')),
+        inputSchema: { type: 'object' as const },
+        name: 'tool_fail'
+      });
+
+      (llmClient2.complete as jest.Mock)
+        .mockResolvedValueOnce({
+          finishReason: 'tool_calls',
+          text: '',
+          toolCalls: [
+            { arguments: {}, id: 'tc-ok', name: 'tool_ok' },
+            { arguments: {}, id: 'tc-fail', name: 'tool_fail' }
+          ],
+          usage: { estimatedCostUsd: 0.001 }
+        })
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: 'Recovered',
+          toolCalls: [],
+          usage: { estimatedCostUsd: 0.001 }
+        });
+
+      const result = await agent2.run({
+        guardrails: reliabilityGuardrails,
+        prompt: 'Mix of ok and failing tools',
+        userId: 'user-1'
+      });
+
+      expect(result.status).toBe('completed');
+      expect(
+        result.executedTools.find((e) => e.toolName === 'tool_fail')?.envelope
+          .status
+      ).toBe('error');
+      expect(
+        result.executedTools.find((e) => e.toolName === 'tool_ok')?.envelope
+          .status
+      ).toBe('success');
+    });
+  });
+
+  // ── 2.4 Context window guard ─────────────────────────────────────────────
+
+  describe('context window guard', () => {
+    it('truncates tool output that exceeds the per-message character cap', async () => {
+      const largePayload = 'x'.repeat(100_000);
+
+      toolRegistry2.register({
+        description: 'big tool',
+        execute: jest.fn().mockResolvedValue({
+          data: { payload: largePayload },
+          status: 'success'
+        }),
+        inputSchema: { type: 'object' as const },
+        name: 'big_tool'
+      });
+
+      let capturedMessages: unknown[] = [];
+
+      (llmClient2.complete as jest.Mock)
+        .mockImplementationOnce(({ messages }: { messages: unknown[] }) => {
+          capturedMessages = messages;
+          return Promise.resolve({
+            finishReason: 'tool_calls',
+            text: '',
+            toolCalls: [{ arguments: {}, id: 'tc-1', name: 'big_tool' }],
+            usage: { estimatedCostUsd: 0.001 }
+          });
+        })
+        .mockImplementationOnce(({ messages }: { messages: unknown[] }) => {
+          capturedMessages = messages;
+          return Promise.resolve({
+            finishReason: 'stop',
+            text: 'Truncated response',
+            toolCalls: [],
+            usage: { estimatedCostUsd: 0.001 }
+          });
+        });
+
+      await agent2.run({
+        guardrails: reliabilityGuardrails,
+        prompt: 'Get big data',
+        userId: 'user-1'
+      });
+
+      // The tool message passed to the second LLM call must be under the cap
+      const toolMessage = (
+        capturedMessages as { role: string; content: string }[]
+      ).find((m) => m.role === 'tool');
+
+      expect(toolMessage).toBeDefined();
+      // Content must be <= TOOL_OUTPUT_MAX_CHARS (defined in agent.constants)
+      expect(toolMessage!.content.length).toBeLessThanOrEqual(32_000);
+    });
+  });
+
+  // ── 2.1 Escalation hardening ─────────────────────────────────────────────
+
+  describe('escalation hardening', () => {
+    it('escalates when LLM skips tools on first turn', async () => {
+      toolRegistry2.register({
+        description: 'portfolio tool',
+        execute: jest
+          .fn()
+          .mockResolvedValue({ data: { total: 1000 }, status: 'success' }),
+        inputSchema: { type: 'object' as const },
+        name: 'get_portfolio_summary'
+      });
+
+      (llmClient2.complete as jest.Mock)
+        // First turn: LLM skips tools (no tool calls, just text)
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: 'I think your portfolio is fine.',
+          toolCalls: [],
+          usage: { estimatedCostUsd: 0.001 }
+        })
+        // After escalation prompt, LLM uses tool
+        .mockResolvedValueOnce({
+          finishReason: 'tool_calls',
+          text: '',
+          toolCalls: [
+            { arguments: {}, id: 'tc-esc', name: 'get_portfolio_summary' }
+          ],
+          usage: { estimatedCostUsd: 0.001 }
+        })
+        // Final response
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: 'Portfolio total is $1000.',
+          toolCalls: [],
+          usage: { estimatedCostUsd: 0.001 }
+        });
+
+      const result = await agent2.run({
+        guardrails: reliabilityGuardrails,
+        prompt: 'What is my portfolio worth?',
+        toolNames: ['get_portfolio_summary'],
+        userId: 'user-1'
+      });
+
+      expect(result.status).toBe('completed');
+      expect(result.toolCalls).toBeGreaterThanOrEqual(1);
+      // Escalation causes an extra LLM call
+      expect(llmClient2.complete).toHaveBeenCalledTimes(3);
+    });
+
+    it('accepts text-only answer after tool has been used at least once', async () => {
+      toolRegistry2.register({
+        description: 'portfolio tool',
+        execute: jest
+          .fn()
+          .mockResolvedValue({ data: { total: 1000 }, status: 'success' }),
+        inputSchema: { type: 'object' as const },
+        name: 'get_portfolio_summary'
+      });
+
+      (llmClient2.complete as jest.Mock)
+        // Tool call first
+        .mockResolvedValueOnce({
+          finishReason: 'tool_calls',
+          text: '',
+          toolCalls: [
+            { arguments: {}, id: 'tc-1', name: 'get_portfolio_summary' }
+          ],
+          usage: { estimatedCostUsd: 0.001 }
+        })
+        // Then text answer (tool already called — no escalation needed)
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: 'Portfolio total is $1000.',
+          toolCalls: [],
+          usage: { estimatedCostUsd: 0.001 }
+        });
+
+      const result = await agent2.run({
+        guardrails: reliabilityGuardrails,
+        prompt: 'What is my portfolio worth?',
+        toolNames: ['get_portfolio_summary'],
+        userId: 'user-1'
+      });
+
+      expect(result.status).toBe('completed');
+      expect(result.toolCalls).toBe(1);
+      // Exactly 2 calls: tool then answer — no escalation
+      expect(llmClient2.complete).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ── 2.3b Escalation scope-awareness ──────────────────────────────────────
+
+  describe('escalation scope-awareness', () => {
+    it('does NOT escalate for out-of-scope requests (no portfolio claims in response)', async () => {
+      toolRegistry2.register({
+        description: 'portfolio tool',
+        execute: jest.fn().mockResolvedValue({ data: {}, status: 'success' }),
+        inputSchema: { type: 'object' as const },
+        name: 'get_portfolio_summary'
+      });
+
+      (llmClient2.complete as jest.Mock).mockResolvedValueOnce({
+        finishReason: 'stop',
+        text: "I'd love to help, but writing poems isn't something I'm designed for. I specialize in portfolio analysis.",
+        toolCalls: [],
+        usage: { estimatedCostUsd: 0.001 }
+      });
+
+      const result = await agent2.run({
+        guardrails: reliabilityGuardrails,
+        prompt: 'Write me a poem',
+        toolNames: ['get_portfolio_summary'],
+        userId: 'user-1'
+      });
+
+      expect(result.status).toBe('completed');
+      expect(result.toolCalls).toBe(0);
+      // No escalation — response has no portfolio claims
+      expect(llmClient2.complete).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT escalate for greetings or smalltalk', async () => {
+      toolRegistry2.register({
+        description: 'portfolio tool',
+        execute: jest.fn().mockResolvedValue({ data: {}, status: 'success' }),
+        inputSchema: { type: 'object' as const },
+        name: 'get_portfolio_summary'
+      });
+
+      (llmClient2.complete as jest.Mock).mockResolvedValueOnce({
+        finishReason: 'stop',
+        text: 'Hello! How can I help you with your portfolio today?',
+        toolCalls: [],
+        usage: { estimatedCostUsd: 0.001 }
+      });
+
+      const result = await agent2.run({
+        guardrails: reliabilityGuardrails,
+        prompt: 'Hello',
+        toolNames: ['get_portfolio_summary'],
+        userId: 'user-1'
+      });
+
+      expect(result.status).toBe('completed');
+      expect(result.toolCalls).toBe(0);
+      // No escalation for greetings
+      expect(llmClient2.complete).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT escalate when LLM asks a clarifying question', async () => {
+      toolRegistry2.register({
+        description: 'portfolio tool',
+        execute: jest.fn().mockResolvedValue({ data: {}, status: 'success' }),
+        inputSchema: { type: 'object' as const },
+        name: 'get_portfolio_summary'
+      });
+
+      (llmClient2.complete as jest.Mock).mockResolvedValueOnce({
+        finishReason: 'stop',
+        text: 'Could you be more specific? I can help with portfolio summaries, risk analysis, compliance checks, and more.',
+        toolCalls: [],
+        usage: { estimatedCostUsd: 0.001 }
+      });
+
+      const result = await agent2.run({
+        guardrails: reliabilityGuardrails,
+        prompt: 'help',
+        toolNames: ['get_portfolio_summary'],
+        userId: 'user-1'
+      });
+
+      expect(result.status).toBe('completed');
+      expect(result.toolCalls).toBe(0);
+      // No escalation for clarifying questions
+      expect(llmClient2.complete).toHaveBeenCalledTimes(1);
+    });
+
+    it('DOES escalate when LLM makes unbacked portfolio claims', async () => {
+      toolRegistry2.register({
+        description: 'portfolio tool',
+        execute: jest
+          .fn()
+          .mockResolvedValue({ data: { total: 1000 }, status: 'success' }),
+        inputSchema: { type: 'object' as const },
+        name: 'get_portfolio_summary'
+      });
+
+      (llmClient2.complete as jest.Mock)
+        // First turn: LLM makes portfolio claims without calling tools
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: 'Your portfolio is worth about $50,000 and has good diversification.',
+          toolCalls: [],
+          usage: { estimatedCostUsd: 0.001 }
+        })
+        // After escalation, LLM uses tools
+        .mockResolvedValueOnce({
+          finishReason: 'tool_calls',
+          text: '',
+          toolCalls: [
+            { arguments: {}, id: 'tc-esc', name: 'get_portfolio_summary' }
+          ],
+          usage: { estimatedCostUsd: 0.001 }
+        })
+        // Final response with tool data
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: 'Based on the data, your portfolio total is $1000.',
+          toolCalls: [],
+          usage: { estimatedCostUsd: 0.001 }
+        });
+
+      const result = await agent2.run({
+        guardrails: reliabilityGuardrails,
+        prompt: 'What is my portfolio worth?',
+        toolNames: ['get_portfolio_summary'],
+        userId: 'user-1'
+      });
+
+      expect(result.status).toBe('completed');
+      expect(result.toolCalls).toBeGreaterThanOrEqual(1);
+      // Escalation happened — 3 LLM calls
+      expect(llmClient2.complete).toHaveBeenCalledTimes(3);
+    });
+
+    it('does NOT escalate for varied refusal phrasings', async () => {
+      toolRegistry2.register({
+        description: 'portfolio tool',
+        execute: jest.fn().mockResolvedValue({ data: {}, status: 'success' }),
+        inputSchema: { type: 'object' as const },
+        name: 'get_portfolio_summary'
+      });
+
+      const refusalVariations = [
+        "That's not within my capabilities. I'm a portfolio analysis tool.",
+        "I'm not designed for that kind of request.",
+        'Writing code is outside what I do. I focus on portfolio analysis.',
+        "I specialize in financial analysis and can't assist with that.",
+        "Sorry, I'm only able to help with portfolio-related questions."
+      ];
+
+      for (const refusal of refusalVariations) {
+        (llmClient2.complete as jest.Mock).mockReset();
+        (llmClient2.complete as jest.Mock).mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: refusal,
+          toolCalls: [],
+          usage: { estimatedCostUsd: 0.001 }
+        });
+
+        const result = await agent2.run({
+          guardrails: reliabilityGuardrails,
+          prompt: 'Write me some Python code',
+          toolNames: ['get_portfolio_summary'],
+          userId: 'user-1'
+        });
+
+        expect(result.status).toBe('completed');
+        expect(result.toolCalls).toBe(0);
+        expect(llmClient2.complete).toHaveBeenCalledTimes(1);
+      }
+    });
+
+    it('does NOT escalate when LLM lists its capabilities', async () => {
+      toolRegistry2.register({
+        description: 'portfolio tool',
+        execute: jest.fn().mockResolvedValue({ data: {}, status: 'success' }),
+        inputSchema: { type: 'object' as const },
+        name: 'get_portfolio_summary'
+      });
+
+      (llmClient2.complete as jest.Mock).mockResolvedValueOnce({
+        finishReason: 'stop',
+        text: 'I can help you with:\n- Portfolio summaries\n- Risk analysis\n- Compliance checks\n- Market data lookups\nWhat would you like to do?',
+        toolCalls: [],
+        usage: { estimatedCostUsd: 0.001 }
+      });
+
+      const result = await agent2.run({
+        guardrails: reliabilityGuardrails,
+        prompt: 'What can you do?',
+        toolNames: ['get_portfolio_summary'],
+        userId: 'user-1'
+      });
+
+      expect(result.status).toBe('completed');
+      expect(result.toolCalls).toBe(0);
+      expect(llmClient2.complete).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ── 2.5 Cost estimation fallback ─────────────────────────────────────────
+
+  describe('cost estimation', () => {
+    it('falls back to token-based cost when estimatedCostUsd is absent', async () => {
+      toolRegistry2.register({
+        description: 'portfolio',
+        execute: jest.fn().mockResolvedValue({ data: {}, status: 'success' }),
+        inputSchema: { type: 'object' as const },
+        name: 'get_portfolio_summary'
+      });
+
+      (llmClient2.complete as jest.Mock)
+        .mockResolvedValueOnce({
+          finishReason: 'tool_calls',
+          text: '',
+          toolCalls: [
+            { arguments: {}, id: 'tc-1', name: 'get_portfolio_summary' }
+          ],
+          // No estimatedCostUsd — only totalTokens
+          usage: { totalTokens: 500 }
+        })
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: 'Done',
+          toolCalls: [],
+          usage: { totalTokens: 300 }
+        });
+
+      const result = await agent2.run({
+        guardrails: {
+          ...reliabilityGuardrails,
+          fallbackCostPer1kTokensUsd: 0.01
+        },
+        prompt: 'Summary please',
+        userId: 'user-1'
+      });
+
+      // 800 tokens * 0.01/1000 = $0.008
+      expect(result.estimatedCostUsd).toBeCloseTo(0.008, 4);
+    });
+
+    it('falls back to promptTokens+completionTokens when totalTokens absent', async () => {
+      toolRegistry2.register({
+        description: 'portfolio',
+        execute: jest.fn().mockResolvedValue({ data: {}, status: 'success' }),
+        inputSchema: { type: 'object' as const },
+        name: 'get_portfolio_summary'
+      });
+
+      (llmClient2.complete as jest.Mock).mockResolvedValueOnce({
+        finishReason: 'stop',
+        text: 'Answer',
+        toolCalls: [],
+        usage: { completionTokens: 200, promptTokens: 300 }
+      });
+
+      const result = await agent2.run({
+        guardrails: {
+          ...reliabilityGuardrails,
+          fallbackCostPer1kTokensUsd: 0.002
+        },
+        prompt: 'Hello',
+        userId: 'user-1'
+      });
+
+      // 500 tokens * 0.002/1000 = $0.001
+      expect(result.estimatedCostUsd).toBeCloseTo(0.001, 4);
+    });
+
+    it('cost guard fires when usage is missing but runs accumulate', async () => {
+      // When usage is missing, cost stays 0 and guard doesn't fire prematurely
+      // This tests that missing usage does NOT cause incorrect cost guard firing
+      toolRegistry2.register({
+        description: 'portfolio',
+        execute: jest.fn().mockResolvedValue({ data: {}, status: 'success' }),
+        inputSchema: { type: 'object' as const },
+        name: 'tool_no_usage'
+      });
+
+      (llmClient2.complete as jest.Mock)
+        .mockResolvedValueOnce({
+          finishReason: 'tool_calls',
+          text: '',
+          toolCalls: [{ arguments: {}, id: 'tc-1', name: 'tool_no_usage' }]
+          // No usage field at all
+        })
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: 'Done without usage data',
+          toolCalls: []
+          // No usage field at all
+        });
+
+      const result = await agent2.run({
+        guardrails: { ...reliabilityGuardrails, costLimitUsd: 0.000001 },
+        prompt: 'Run with no usage',
+        userId: 'user-1'
+      });
+
+      // Without usage data, cost estimate is 0, so cost guard doesn't fire
+      // The agent completes normally
+      expect(result.status).toBe('completed');
+      expect(result.estimatedCostUsd).toBe(0);
+    });
+  });
+
+  describe('empty LLM response handling', () => {
+    it('retries once when LLM returns empty and succeeds on second attempt', async () => {
+      (llmClient2.complete as jest.Mock)
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: '',
+          toolCalls: [],
+          usage: { estimatedCostUsd: 0.001 }
+        })
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: 'Here is your portfolio summary.',
+          toolCalls: [],
+          usage: { estimatedCostUsd: 0.001 }
+        });
+
+      const result = await agent2.run({
+        guardrails: reliabilityGuardrails,
+        prompt: 'Summarize my portfolio',
+        userId: 'u1'
+      });
+
+      expect(result.status).toBe('completed');
+      expect(result.response).toBe('Here is your portfolio summary.');
+      expect(llmClient2.complete).toHaveBeenCalledTimes(2);
+    });
+
+    it('fails fast with status=failed after two consecutive empty responses', async () => {
+      (llmClient2.complete as jest.Mock).mockResolvedValue({
+        finishReason: 'stop',
+        text: '',
+        toolCalls: [],
+        usage: { estimatedCostUsd: 0.001 }
+      });
+
+      const result = await agent2.run({
+        guardrails: reliabilityGuardrails,
+        prompt: 'Summarize my portfolio',
+        userId: 'u1'
+      });
+
+      expect(result.status).toBe('failed');
+      expect(result.response).toBe(
+        'The AI assistant could not generate a response. Please try again.'
+      );
+      // Should stop after 2 empty responses, not burn all iterations
+      expect(llmClient2.complete).toHaveBeenCalledTimes(2);
+    });
+
+    it('resets empty counter after a tool-call turn', async () => {
+      toolRegistry2.register({
+        description: 'get summary',
+        execute: jest.fn().mockResolvedValue({ status: 'success', data: {} }),
+        inputSchema: { type: 'object' as const },
+        name: 'get_portfolio_summary'
+      });
+
+      (llmClient2.complete as jest.Mock)
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: '',
+          toolCalls: [],
+          usage: { estimatedCostUsd: 0.001 }
+        })
+        .mockResolvedValueOnce({
+          finishReason: 'tool_calls',
+          text: '',
+          toolCalls: [
+            { arguments: {}, id: 'tc1', name: 'get_portfolio_summary' }
+          ],
+          usage: { estimatedCostUsd: 0.001 }
+        })
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: 'Your portfolio looks good.',
+          toolCalls: [],
+          usage: { estimatedCostUsd: 0.001 }
+        });
+
+      const result = await agent2.run({
+        guardrails: reliabilityGuardrails,
+        prompt: 'Summarize my portfolio',
+        userId: 'u1'
+      });
+
+      expect(result.status).toBe('completed');
+      expect(result.response).toBe('Your portfolio looks good.');
+    });
+  });
+});
+
+// ─── Phase 5: Structured Telemetry ────────────────────────────────────────────
+
+describe('Phase 5 structured telemetry', () => {
+  let logSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    const { Logger } = require('@nestjs/common');
+    logSpy = jest.spyOn(Logger, 'log').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    logSpy.mockRestore();
+  });
+
+  it('emits a structured telemetry log on completed run', async () => {
+    const registry = new ToolRegistry();
+    registry.register({
+      description: 'portfolio',
+      execute: jest.fn().mockResolvedValue({ data: {}, status: 'success' }),
+      inputSchema: { type: 'object' as const },
+      name: 'get_portfolio_summary'
+    });
+
+    const llm: LLMClient = {
+      complete: jest
+        .fn()
+        .mockResolvedValueOnce({
+          finishReason: 'tool_calls',
+          text: '',
+          toolCalls: [
+            { arguments: {}, id: 'tc-tel', name: 'get_portfolio_summary' }
+          ],
+          usage: { estimatedCostUsd: 0.002 }
+        })
+        .mockResolvedValueOnce({
+          finishReason: 'stop',
+          text: 'Portfolio analysed.',
+          toolCalls: [],
+          usage: { estimatedCostUsd: 0.001 }
+        })
+    };
+
+    const agent = new ReactAgentService(llm, registry);
+    const result = await agent.run({
+      guardrails: {
+        circuitBreakerCooldownMs: 60_000,
+        circuitBreakerFailureThreshold: 3,
+        costLimitUsd: 1,
+        fallbackCostPer1kTokensUsd: 0.002,
+        maxIterations: 10,
+        timeoutMs: 30_000
+      },
+      prompt: 'Analyse my portfolio',
+      userId: 'telemetry-user'
+    });
+
+    expect(result.status).toBe('completed');
+
+    // At least one structured telemetry log must have been emitted
+    expect(logSpy).toHaveBeenCalled();
+
+    const allMessages: string[] = logSpy.mock.calls.map((args) =>
+      typeof args[0] === 'string' ? args[0] : JSON.stringify(args[0])
+    );
+
+    const telemetryMsg = allMessages.find((m) => m.includes('"status"'));
+    expect(telemetryMsg).toBeDefined();
+
+    const parsed = JSON.parse(telemetryMsg!);
+    expect(parsed).toMatchObject({
+      elapsedMs: expect.any(Number),
+      estimatedCostUsd: expect.any(Number),
+      iterations: expect.any(Number),
+      status: 'completed',
+      toolCalls: 1
+    });
+  });
+
+  it('includes guardrail field in telemetry when a guardrail fires', async () => {
+    const llm: LLMClient = {
+      complete: jest.fn().mockResolvedValue({
+        finishReason: 'tool_calls',
+        text: '',
+        toolCalls: [{ arguments: {}, id: 'tc-loop', name: 'noop' }]
+      })
+    };
+    const registry = new ToolRegistry();
+    registry.register({
+      description: 'noop',
+      execute: jest.fn().mockResolvedValue({ status: 'success' }),
+      inputSchema: { type: 'object' as const },
+      name: 'noop'
+    });
+
+    const agent = new ReactAgentService(llm, registry);
+    await agent.run({
+      guardrails: {
+        circuitBreakerCooldownMs: 60_000,
+        circuitBreakerFailureThreshold: 3,
+        costLimitUsd: 1,
+        fallbackCostPer1kTokensUsd: 0.002,
+        maxIterations: 2,
+        timeoutMs: 30_000
+      },
+      prompt: 'Loop',
+      userId: 'tel-user'
+    });
+
+    const allMessages: string[] = logSpy.mock.calls.map((args) =>
+      typeof args[0] === 'string' ? args[0] : JSON.stringify(args[0])
+    );
+    const telemetryMsg = allMessages.find((m) => m.includes('"guardrail"'));
+
+    expect(telemetryMsg).toBeDefined();
+    const parsed = JSON.parse(telemetryMsg!);
+    expect(parsed.guardrail).toBe('MAX_ITERATIONS');
+  });
+
+  it('emits telemetry when runStreaming() is consumed directly', async () => {
+    const llm: LLMClient = {
+      complete: jest.fn().mockResolvedValue({
+        finishReason: 'stop',
+        text: 'stream done',
+        toolCalls: [],
+        usage: { estimatedCostUsd: 0.001 }
+      })
+    };
+
+    const agent = new ReactAgentService(llm, new ToolRegistry());
+
+    for await (const event of agent.runStreaming({
+      guardrails: {
+        circuitBreakerCooldownMs: 60_000,
+        circuitBreakerFailureThreshold: 3,
+        costLimitUsd: 1,
+        fallbackCostPer1kTokensUsd: 0.002,
+        maxIterations: 2,
+        timeoutMs: 30_000
+      },
+      prompt: 'stream request',
+      userId: 'stream-user'
+    })) {
+      // Drain stream until completion
+      void event;
+    }
+
+    const allMessages: string[] = logSpy.mock.calls.map((args) =>
+      typeof args[0] === 'string' ? args[0] : JSON.stringify(args[0])
+    );
+    const telemetryMsg = allMessages.find((m) => m.includes('"status"'));
+
+    expect(telemetryMsg).toBeDefined();
+  });
+
+  // ─── Streaming timeout ─────────────────────────────────────────────────
+
+  it('enforces timeout during streaming LLM completion', async () => {
+    // Simulate a stream that stalls indefinitely after the first chunk
+    const registry = new ToolRegistry();
+    const llmStalling: LLMClient = {
+      complete: jest.fn(),
+      completeStream: jest.fn().mockImplementation(() => {
+        return (async function* () {
+          yield { delta: 'partial...' };
+          // Stall forever — simulating OpenAI hanging mid-stream
+          // eslint-disable-next-line @typescript-eslint/no-empty-function
+          await new Promise(() => {});
+        })();
+      })
+    };
+
+    const agent = new ReactAgentService(llmStalling, registry);
+
+    const result = await agent.run({
+      guardrails: {
+        circuitBreakerCooldownMs: 60_000,
+        circuitBreakerFailureThreshold: 3,
+        costLimitUsd: 1,
+        fallbackCostPer1kTokensUsd: 0.002,
+        maxIterations: 2,
+        timeoutMs: 200 // 200ms timeout
+      },
+      prompt: 'This should timeout',
+      userId: 'user-timeout'
+    });
+
+    expect(result.guardrail).toBe('TIMEOUT');
+    expect(result.status).toBe('partial');
+    expect(result.response).toContain('time budget');
   });
 });

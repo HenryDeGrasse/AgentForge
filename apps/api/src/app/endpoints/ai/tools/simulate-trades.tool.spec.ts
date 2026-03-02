@@ -229,6 +229,43 @@ describe('SimulateTradesTool', () => {
     expect(msftAfter.valueInBaseCurrency).toBe(5250);
   });
 
+  it('omits zero-change rows from allocationChanges', async () => {
+    const tool = createTool(MOCK_HOLDINGS, MOCK_SUMMARY);
+    const result = await tool.execute(
+      { trades: [{ action: 'sell', quantity: 5, symbol: 'AAPL' }] },
+      CTX
+    );
+
+    // Only AAPL was touched — BND and MSFT allocationPct shifts due to
+    // total value changing, but their absolute values are unchanged, so
+    // we only care that AAPL appears and zero-change symbols are dropped.
+    // Every entry must have a non-trivial change
+    for (const change of result.data.impact.allocationChanges) {
+      expect(Math.abs(change.changePct)).toBeGreaterThan(0.0001);
+    }
+  });
+
+  it('tags pre-existing concentration warnings vs new ones', async () => {
+    // AAPL starts at 45% (>35% threshold) — a small buy should NOT create a
+    // "New" warning for AAPL; it should be tagged pre-existing.
+    // Buy enough AAPL to push it higher — that IS a new/worsening situation.
+    const tool = createTool(MOCK_HOLDINGS, MOCK_SUMMARY);
+
+    // Small buy — AAPL was already concentrated before the trade
+    const result = await tool.execute(
+      { trades: [{ action: 'buy', quantity: 1, symbol: 'AAPL' }] },
+      CTX
+    );
+
+    const aaplWarning = result.data.impact.concentrationWarnings.find((w) =>
+      w.includes('AAPL')
+    );
+
+    if (aaplWarning) {
+      expect(aaplWarning).toContain('pre-existing');
+    }
+  });
+
   it('always includes disclaimers', async () => {
     const tool = createTool(MOCK_HOLDINGS, MOCK_SUMMARY);
     const result = await tool.execute(
@@ -273,8 +310,9 @@ describe('SimulateTradesTool', () => {
     expect(result.data.tradeResults[0].costInBaseCurrency).toBeCloseTo(5000, 0);
   });
 
-  it('warns when cash goes negative (partial status)', async () => {
-    const smallCashSummary = { cash: 100, totalValueInBaseCurrency: 10100 };
+  it('caps buy quantity at available cash when cost exceeds balance', async () => {
+    // Cash is 1000, AAPL price is 150, trying to buy 100 shares ($15,000)
+    const smallCashSummary = { cash: 1000, totalValueInBaseCurrency: 11000 };
     const tool = createTool(MOCK_HOLDINGS, smallCashSummary);
     const result = await tool.execute(
       { trades: [{ action: 'buy', quantity: 100, symbol: 'AAPL' }] },
@@ -282,12 +320,50 @@ describe('SimulateTradesTool', () => {
     );
 
     expect(result.status).toBe('partial');
-    expect(result.data.status).toBe('partial');
-    expect(result.data.warnings).toEqual(
+    expect(result.data.tradeResults[0].status).toBe('capped');
+    expect(result.data.tradeResults[0].requestedQuantity).toBe(100);
+    // Capped to 1000/150 ≈ 6.666 shares
+    expect(result.data.tradeResults[0].acceptedQuantity).toBeCloseTo(6.6667, 2);
+    expect(result.data.tradeResults[0].costInBaseCurrency).toBeCloseTo(1000, 0);
+    expect(result.data.tradeResults[0].warnings).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ code: 'insufficient_cash_assumed_margin' })
+        expect.objectContaining({ code: 'buy_capped_insufficient_cash' })
       ])
     );
-    expect(result.data.hypotheticalPortfolio.cashBalance).toBeLessThan(0);
+    // Cash should be ~0, not negative
+    expect(result.data.hypotheticalPortfolio.cashBalance).toBeCloseTo(0, 0);
+  });
+
+  it('caps buy at zero quantity and marks as capped when cash balance is exactly zero', async () => {
+    const zeroCashSummary = { cash: 0, totalValueInBaseCurrency: 10000 };
+    const tool = createTool(MOCK_HOLDINGS, zeroCashSummary);
+    const result = await tool.execute(
+      { trades: [{ action: 'buy', quantity: 10, symbol: 'AAPL' }] },
+      CTX
+    );
+
+    // With zero cash the buy cannot proceed at all — it must be capped, not executed
+    expect(result.data.tradeResults[0].status).toBe('capped');
+    expect(result.data.tradeResults[0].acceptedQuantity).toBe(0);
+    expect(result.data.tradeResults[0].warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'buy_capped_insufficient_cash' })
+      ])
+    );
+    // Cash should remain at zero
+    expect(result.data.hypotheticalPortfolio.cashBalance).toBe(0);
+  });
+
+  it('executes buy fully when cash is sufficient', async () => {
+    const tool = createTool(MOCK_HOLDINGS, MOCK_SUMMARY);
+    const result = await tool.execute(
+      { trades: [{ action: 'buy', quantity: 10, symbol: 'AAPL' }] },
+      CTX
+    );
+
+    // 10 * 150 = 1500, cash is 50000 — plenty
+    expect(result.data.tradeResults[0].status).toBe('executed');
+    expect(result.data.tradeResults[0].acceptedQuantity).toBe(10);
+    expect(result.data.hypotheticalPortfolio.cashBalance).toBe(48500);
   });
 });

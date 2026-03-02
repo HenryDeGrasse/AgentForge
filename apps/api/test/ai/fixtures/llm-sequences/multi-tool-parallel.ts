@@ -1,9 +1,5 @@
 import type { LLMCompletionResponse } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
 
-/**
- * Parallel multi-tool: LLM calls both tools in a single iteration
- * (2 tool_calls in one completion). Both execute, then final text.
- */
 export const multiToolParallel: LLMCompletionResponse[] = [
   {
     finishReason: 'tool_calls',
@@ -16,8 +12,8 @@ export const multiToolParallel: LLMCompletionResponse[] = [
   },
   {
     finishReason: 'stop',
-    text: 'Your portfolio holds 4 assets worth $10,000 with $500 in cash. Looking at your transaction history, you have 30 buy orders totaling $9,500 across 4 symbols. Your most recent transactions include purchases of SYM-A and SYM-B.',
+    text: '**Holdings:**\n4 positions totalling $10,500. Top holding: SYM-A at 40% ($4,000).\n\n**Recent transaction history** (5 of 30 total):\n1. BUY SYM-A — 2 shares @ $100 on 2025-01-01\n2. BUY SYM-B — 3 shares @ $115 on 2025-01-02\n3. BUY SYM-C — 1 share @ $100 on 2025-01-03\n4. BUY SYM-D — 2 shares @ $130 on 2025-01-04\n5. BUY SYM-A — 3 shares @ $145 on 2025-01-05\n\nAll recent activity has been purchases. Total recorded transactions: 30.',
     toolCalls: [],
-    usage: { estimatedCostUsd: 0.001 }
+    usage: { estimatedCostUsd: 0.002 }
   }
 ];
