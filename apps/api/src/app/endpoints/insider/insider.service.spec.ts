@@ -33,10 +33,10 @@ function buildMocks() {
 
   const cacheService = {
     queryTransactions: jest.fn().mockResolvedValue([]),
-    upsertTransactions: jest
-      .fn()
-      .mockResolvedValue({ inserted: 0, updated: 0 })
-  } as jest.Mocked<Pick<InsiderCacheService, 'queryTransactions' | 'upsertTransactions'>>;
+    upsertTransactions: jest.fn().mockResolvedValue({ inserted: 0, updated: 0 })
+  } as jest.Mocked<
+    Pick<InsiderCacheService, 'queryTransactions' | 'upsertTransactions'>
+  >;
 
   const portfolioService = {
     getDetails: jest.fn().mockResolvedValue({
@@ -74,7 +74,13 @@ function buildMocks() {
     prismaService as any
   );
 
-  return { cacheService, dataProvider, portfolioService, prismaService, service };
+  return {
+    cacheService,
+    dataProvider,
+    portfolioService,
+    prismaService,
+    service
+  };
 }
 
 describe('InsiderService', () => {
@@ -133,9 +139,7 @@ describe('InsiderService', () => {
 
       expect(result.transactions).toEqual([]);
       expect(result.warnings).toEqual(
-        expect.arrayContaining([
-          expect.stringContaining('returned an error')
-        ])
+        expect.arrayContaining([expect.stringContaining('returned an error')])
       );
     });
 
@@ -241,9 +245,7 @@ describe('InsiderService', () => {
       const result = await service.listRules({ userId: 'user-1' });
 
       expect(result).toEqual(mockRules);
-      expect(
-        prismaService.insiderMonitoringRule.findMany
-      ).toHaveBeenCalledWith(
+      expect(prismaService.insiderMonitoringRule.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { userId: 'user-1' } })
       );
     });

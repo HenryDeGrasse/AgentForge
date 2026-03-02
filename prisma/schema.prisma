@@ -268,9 +268,9 @@ model User {
   apiKeys           ApiKey[]
   authChallenge     String?
   authDevices       AuthDevice[]
-  chatConversations       ChatConversation[]
-  createdAt               DateTime                @default(now())
-  insiderMonitoringRules  InsiderMonitoringRule[]
+  chatConversations      ChatConversation[]
+  createdAt              DateTime               @default(now())
+  insiderMonitoringRules InsiderMonitoringRule[]
   id                String             @id @default(uuid())
   provider          Provider           @default(ANONYMOUS)
   role              Role               @default(USER)

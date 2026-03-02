@@ -42,10 +42,7 @@ describe('GetInsiderActivityTool', () => {
     const insiderService = buildInsiderService();
     const tool = new GetInsiderActivityTool(insiderService as any);
 
-    const result = await tool.execute(
-      { symbols: ['NVDA'] },
-      CONTEXT
-    );
+    const result = await tool.execute({ symbols: ['NVDA'] }, CONTEXT);
 
     expect(insiderService.getInsiderActivity).toHaveBeenCalledWith({
       days: 30,
@@ -92,10 +89,7 @@ describe('GetInsiderActivityTool', () => {
     });
     const tool = new GetInsiderActivityTool(insiderService as any);
 
-    const result = await tool.execute(
-      { symbols: ['ZZZZ'] },
-      CONTEXT
-    );
+    const result = await tool.execute({ symbols: ['ZZZZ'] }, CONTEXT);
 
     expect(result.status).toBe('partial');
     expect(result.data.warnings).toHaveLength(1);
@@ -105,10 +99,7 @@ describe('GetInsiderActivityTool', () => {
     const insiderService = buildInsiderService();
     const tool = new GetInsiderActivityTool(insiderService as any);
 
-    const result = await tool.execute(
-      { symbols: ['NVDA'] },
-      CONTEXT
-    );
+    const result = await tool.execute({ symbols: ['NVDA'] }, CONTEXT);
 
     expect(result.data.transactions[0].txDate).toBe('2026-02-25');
   });

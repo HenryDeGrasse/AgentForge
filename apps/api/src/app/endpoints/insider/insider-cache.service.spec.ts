@@ -1,6 +1,5 @@
-import type { NormalizedInsiderTx } from './providers/insider-data-provider.interface';
-
 import { InsiderCacheService } from './insider-cache.service';
+import type { NormalizedInsiderTx } from './providers/insider-data-provider.interface';
 
 function buildTx(
   overrides: Partial<NormalizedInsiderTx> = {}
