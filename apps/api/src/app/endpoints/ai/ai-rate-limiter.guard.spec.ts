@@ -135,4 +135,28 @@ describe('AiRateLimiterGuard', () => {
 
     expect(guard.canActivate(undefinedReqCtx)).toBe(true);
   });
+
+  it('rejected request does not consume a rate-limit slot', () => {
+    // Fill to the limit
+    for (let i = 0; i < 20; i++) {
+      guard.canActivate(buildContext('user-1'));
+    }
+
+    // 21st is rejected
+    expect(() => guard.canActivate(buildContext('user-1'))).toThrow(
+      HttpException
+    );
+
+    // Advance window so all 20 original slots expire
+    currentTime += 61_000;
+
+    // User should now have a full 20-slot window — not 19 (rejected slot leaked)
+    for (let i = 0; i < 20; i++) {
+      expect(guard.canActivate(buildContext('user-1'))).toBe(true);
+    }
+
+    expect(() => guard.canActivate(buildContext('user-1'))).toThrow(
+      HttpException
+    );
+  });
 });

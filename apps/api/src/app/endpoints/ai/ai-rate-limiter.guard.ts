@@ -59,12 +59,20 @@ export class AiRateLimiterGuard implements CanActivate, OnModuleDestroy {
     const now = Date.now();
     const windowStart = now - AiRateLimiterGuard.WINDOW_MS;
 
-    // Evict stale timestamps and check the current window count.
+    // Evict stale timestamps, record this request, then check the count.
+    // Push-before-check keeps the increment and the guard in a single
+    // synchronous step: if we later throw, we pop the timestamp so the
+    // rejected request does not consume a slot.
     const recentTimestamps = (this.requestLog.get(userId) ?? []).filter(
       (ts) => ts > windowStart
     );
 
-    if (recentTimestamps.length >= AiRateLimiterGuard.MAX_REQUESTS) {
+    recentTimestamps.push(now);
+    this.requestLog.set(userId, recentTimestamps);
+
+    if (recentTimestamps.length > AiRateLimiterGuard.MAX_REQUESTS) {
+      recentTimestamps.pop(); // roll back — rejected request must not consume a slot
+
       throw new HttpException(
         {
           errorCode: 'RATE_LIMITED',
@@ -75,9 +83,6 @@ export class AiRateLimiterGuard implements CanActivate, OnModuleDestroy {
         HttpStatus.TOO_MANY_REQUESTS
       );
     }
-
-    recentTimestamps.push(now);
-    this.requestLog.set(userId, recentTimestamps);
 
     return true;
   }
