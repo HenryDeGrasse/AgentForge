@@ -10,7 +10,7 @@ Built as part of the [GauntletAI](https://gauntletai.com) program.
 
 AgentForge is a fork of [Ghostfolio](https://ghostfol.io) that adds a full AI agent layer on top of the existing wealth management platform. Users can ask natural-language questions about their portfolio and get grounded, data-driven answers powered by a ReAct agent that calls real portfolio tools.
 
-**164 commits · 5 hardening phases · 98 eval cases · 14 AI tools · full observability**
+**164 commits · 98 eval cases · 10 AI tools · full observability**
 
 ---
 
@@ -56,7 +56,7 @@ A premium slide-in chat panel built with Angular Material that provides a conver
 | --------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Day 1** (Feb 23)    | **MVP**                         | ReAct agent core, tool registry, guardrails (max iterations, cost limit, circuit breaker, timeout), 3 tools (portfolio summary, transactions, risk analysis), response verification layer, Angular AI chat page, premium slide-in advisor panel, Railway deployment, MVP eval pack                                                                                                                                                                                            |
 | **Day 2** (Feb 24)    | **Tool Expansion & Evals**      | 5 new tools (market data, performance compare, tax estimate, compliance check, rebalance suggest), demo portfolio seeding, two-speed eval suites, persisted conversation history, scope gate for out-of-scope rejection, escalation retry for tool enforcement                                                                                                                                                                                                                |
-| **Day 3** (Feb 25–26) | **Streaming & Insider Trading** | SSE streaming with unified agent execution engine, action chips + tool indicator in UI, 2 more tools (simulate trades, stress test), insider trading monitoring module with 4 SEC EDGAR tools (bounty branch), CI pipeline improvements                                                                                                                                                                                                                                       |
+| **Day 3** (Feb 25–26) | **Streaming & Insider Trading** | SSE streaming with unified agent execution engine, action chips + tool indicator in UI, 2 more tools (simulate trades, stress test), CI pipeline improvements                                                                                                                                                                                                                                                                                                                 |
 | **Day 4** (Feb 27)    | **Hardening & Reliability**     | 3 critical vulnerability fixes, 7 reliability improvements, parallel tool execution, context window guard, cost estimation fallback, chart data extractor bug fixes, Yahoo Finance rate limit handling (backoff + negative cache), keyword router → tool summarizers, unbacked-claim detection                                                                                                                                                                                |
 | **Day 5** (Feb 28)    | **GPT-4.1 & Observability**     | Upgraded to GPT-4.1, statistical risk metrics (Sharpe, Sortino, CVaR), golden set rewrite (50 cases with realistic LLM behavior), Tier 2 live evals (27/27 pass), Langfuse + Helicone observability, user feedback endpoint, `requiresHumanReview` flag, replay tier with session recording                                                                                                                                                                                   |
 | **Day 6** (Mar 1)     | **Polish & Open Source**        | UI polish (⌘K shortcut, tool timeline, animations, capability list, thinking pill, feedback, legal disclaimer), Railway deploy fixes, 3 tool bug fixes, output sanitizer, conversation history validator, dynamic system prompt builder, stream backpressure, per-user circuit breaker, rate limiter atomicity fix, `systemPrompt` removed from public API, structured error codes, architecture docs, published `@agentforge/finance-eval-dataset` as standalone OSS package |
@@ -150,11 +150,9 @@ The confidence level and warnings are returned with every response so callers ca
 
 ---
 
-## AI Tools (14 total)
+## AI Tools (10 total)
 
 All tools are defined in `apps/api/src/app/endpoints/ai/tools/` with strict JSON input/output schemas. Every schema field has a `description` annotation so the LLM knows exactly how to interpret each value (including whether `*Pct` fields are 0–1 fractions or already-multiplied whole-number percentages).
-
-### Core Portfolio Tools (10)
 
 | Tool                      | Description                                                                  |
 | ------------------------- | ---------------------------------------------------------------------------- |
@@ -168,16 +166,6 @@ All tools are defined in `apps/api/src/app/endpoints/ai/tools/` with strict JSON
 | `simulate_trades`         | What-if simulation — applies hypothetical trades to a portfolio snapshot     |
 | `stress_test`             | Applies predefined or custom market shocks and shows impact per position     |
 | `tax_estimate`            | Short/long-term gain estimates and unrealised gain breakdown                 |
-
-### Insider Trading Monitoring Tools (4) — `bounty` branch
-
-| Tool                   | Description                                                                        |
-| ---------------------- | ---------------------------------------------------------------------------------- |
-| `get_insider_activity` | Fetches recent SEC insider transactions for any symbol via SEC EDGAR data provider |
-| `create_insider_rule`  | Creates a monitoring rule to alert on insider trades matching user criteria        |
-| `list_insider_rules`   | Lists all active insider monitoring rules for the current user                     |
-| `update_insider_rule`  | Updates thresholds, symbols, or conditions on an existing monitoring rule          |
-| `delete_insider_rule`  | Removes an insider monitoring rule                                                 |
 
 ### Notable tool behaviours
 
