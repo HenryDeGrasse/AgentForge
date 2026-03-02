@@ -344,7 +344,7 @@ describe('ReactAgentService', () => {
   });
 
   it('opens circuit breaker after repeated failures and recovers after cooldown', async () => {
-    const now = 1_000;
+    let now = 1_000;
 
     jest.spyOn(Date, 'now').mockImplementation(() => {
       return now;
