@@ -703,26 +703,26 @@ export class AiService {
     return [header, separator, ...body].join('\n');
   }
 
-  private async toMarkdownTable({
+  private toMarkdownTable({
     columns,
     rows
   }: {
     columns: ColumnDescriptor[];
     rows: Record<string, string>[];
-  }) {
-    try {
-      // Dynamic import to load ESM module from CommonJS context
-      // eslint-disable-next-line @typescript-eslint/no-implied-eval
-      const dynamicImport = new Function('s', 'return import(s)') as (
-        s: string
-      ) => Promise<typeof import('tablemark')>;
-      const { tablemark } = await dynamicImport('tablemark');
-
-      return tablemark(rows, {
-        columns
-      });
-    } catch {
-      return this.getMarkdownFallback({ columns, rows });
-    }
+  }): string {
+    // Use the inline fallback directly.
+    //
+    // The previous implementation used new Function('s','return import(s)')
+    // (functionally equivalent to eval) to load the ESM-only `tablemark`
+    // package at runtime.  This pattern:
+    //  - Violates Content-Security-Policy (CSP) in strict environments
+    //  - Triggers security scanners (SonarQube, Semgrep unsafe-function-new)
+    //  - Fails silently in environments that block eval
+    //
+    // The fallback produces correct pipe-delimited markdown and is already
+    // the safety net — there is no reason to prefer tablemark over it.
+    // If column-alignment formatting becomes important, configure the build
+    // system for ESM interop instead of using runtime eval.
+    return this.getMarkdownFallback({ columns, rows });
   }
 }

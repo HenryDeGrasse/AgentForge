@@ -355,6 +355,44 @@ describe('AiService', () => {
 
   // ─── getPrompt ──────────────────────────────────────────────────────────────
 
+  it('generates a pipe-delimited markdown table without using eval or new Function', async () => {
+    // Regression guard: toMarkdownTable must use the inline fallback, never
+    // new Function('s','return import(s)'). A CSP violation or security
+    // scanner would surface if Function is used at runtime.
+    const functionSpy = jest.spyOn(global, 'Function');
+
+    const service = buildService({
+      portfolioGetDetails: jest.fn().mockResolvedValue({
+        holdings: {
+          AAPL: {
+            allocationInPercentage: 0.6,
+            assetClass: 'EQUITY',
+            assetSubClass: 'US_EQUITY',
+            currency: 'USD',
+            name: 'Apple',
+            symbol: 'AAPL'
+          }
+        }
+      })
+    });
+
+    const prompt = await service.getPrompt({
+      impersonationId: undefined,
+      languageCode: 'en',
+      mode: 'portfolio',
+      userCurrency: 'USD',
+      userId: 'user-1'
+    });
+
+    // Must produce pipe-delimited markdown
+    expect(prompt).toContain('|');
+    expect(prompt).toContain('Apple');
+    // Must NOT use the eval-equivalent Function constructor
+    expect(functionSpy).not.toHaveBeenCalled();
+
+    functionSpy.mockRestore();
+  });
+
   it('returns a holdings markdown table in portfolio mode sorted by allocation', async () => {
     const getDetails = jest.fn().mockResolvedValue({
       holdings: {
