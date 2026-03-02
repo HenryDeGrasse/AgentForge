@@ -2,20 +2,19 @@
  * Chat history integration tests for AiService.chat()
  *
  * Tests conversation creation, continuation, priorMessages injection,
- * history cap, updatedAt touch, systemPrompt freeze, and seq ordering.
+ * history cap, updatedAt touch, and seq ordering.
  */
 import {
-  AGENT_DEFAULT_SYSTEM_PROMPT,
+  AGENT_ALLOWED_TOOL_NAMES,
   AGENT_MAX_HISTORY_PAIRS
 } from '@ghostfolio/api/app/endpoints/ai/agent/agent.constants';
 import { ReactAgentService } from '@ghostfolio/api/app/endpoints/ai/agent/react-agent.service';
+import { buildSystemPrompt } from '@ghostfolio/api/app/endpoints/ai/agent/system-prompt-builder';
 import { VerifiedResponse } from '@ghostfolio/api/app/endpoints/ai/contracts/final-response.schema';
 import { LLMClient } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
 import { ResponseVerifierService } from '@ghostfolio/api/app/endpoints/ai/verification/response-verifier.service';
 import { PortfolioService } from '@ghostfolio/api/app/portfolio/portfolio.service';
 import { PrismaService } from '@ghostfolio/api/services/prisma/prisma.service';
-
-import { BadRequestException } from '@nestjs/common';
 
 import { AiService } from './ai.service';
 
@@ -42,6 +41,8 @@ const STUB_VERIFIED: VerifiedResponse = {
   traceId: '',
   warnings: []
 };
+
+const DEFAULT_SYSTEM_PROMPT = buildSystemPrompt([...AGENT_ALLOWED_TOOL_NAMES]);
 
 function buildAgentRun(result = STUB_AGENT_RESULT) {
   return jest.fn().mockResolvedValue(result);
@@ -107,6 +108,12 @@ function buildService(
     { extract: jest.fn().mockReturnValue([]) } as any,
     { extract: jest.fn().mockReturnValue([]) } as any,
     {
+      evaluateRulesForBriefing: jest
+        .fn()
+        .mockResolvedValue({ briefingItems: [], rulesEvaluated: 0 }),
+      markRulesNotified: jest.fn()
+    } as any,
+    {
       startTrace: jest.fn().mockReturnValue({ traceId: '', end: jest.fn() }),
       addScore: jest.fn(),
       flush: jest.fn()
@@ -146,7 +153,7 @@ describe('AiService.chat() — new conversation', () => {
     // Conversation row created with title (message truncated), userId, system prompt
     expect(_txConvCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        systemPrompt: AGENT_DEFAULT_SYSTEM_PROMPT,
+        systemPrompt: expect.stringContaining('portfolio analysis'),
         title: 'What are my top holdings?',
         userId: 'user-1'
       }),
@@ -216,7 +223,7 @@ describe('AiService.chat() — continuing a conversation', () => {
 
     const { prismaService } = buildPrisma({
       conversationId: 'existing-conv-id',
-      existingConvSystemPrompt: AGENT_DEFAULT_SYSTEM_PROMPT,
+      existingConvSystemPrompt: DEFAULT_SYSTEM_PROMPT,
       priorDbMessages
     });
 
@@ -269,7 +276,7 @@ describe('AiService.chat() — updatedAt touch', () => {
   it('updates updatedAt on the ChatConversation row when appending to existing conversation', async () => {
     const { _txConvUpdate, prismaService } = buildPrisma({
       conversationId: 'existing-conv-id',
-      existingConvSystemPrompt: AGENT_DEFAULT_SYSTEM_PROMPT
+      existingConvSystemPrompt: DEFAULT_SYSTEM_PROMPT
     });
 
     const service = buildService(prismaService);
@@ -300,7 +307,7 @@ describe('AiService.chat() — history cap', () => {
     // Simulate a long conversation: DB has 30 messages but we should only fetch 20
     const { prismaService } = buildPrisma({
       conversationId: 'long-conv-id',
-      existingConvSystemPrompt: AGENT_DEFAULT_SYSTEM_PROMPT,
+      existingConvSystemPrompt: DEFAULT_SYSTEM_PROMPT,
       priorDbMessages: [] // doesn't matter for this test — we check the query params
     });
 
@@ -332,7 +339,7 @@ describe('AiService.chat() — history cap', () => {
 
     const { prismaService } = buildPrisma({
       conversationId: 'conv-id',
-      existingConvSystemPrompt: AGENT_DEFAULT_SYSTEM_PROMPT,
+      existingConvSystemPrompt: DEFAULT_SYSTEM_PROMPT,
       priorDbMessages: newestFirst
     });
 
@@ -412,7 +419,7 @@ describe('AiService.chat() — follow-up routing', () => {
 
     const { prismaService } = buildPrisma({
       conversationId: 'conv-after-portfolio',
-      existingConvSystemPrompt: AGENT_DEFAULT_SYSTEM_PROMPT,
+      existingConvSystemPrompt: DEFAULT_SYSTEM_PROMPT,
       priorDbMessages
     });
 
@@ -457,14 +464,19 @@ describe('AiService.chat() — toolNames validation', () => {
     expect(agentRun.mock.calls[0][0].toolNames).toEqual([
       'analyze_risk',
       'compliance_check',
+      'create_insider_monitoring_rule',
+      'delete_insider_monitoring_rule',
+      'get_insider_activity',
       'get_portfolio_summary',
       'get_transaction_history',
+      'list_insider_monitoring_rules',
       'market_data_lookup',
       'performance_compare',
       'rebalance_suggest',
       'simulate_trades',
       'stress_test',
-      'tax_estimate'
+      'tax_estimate',
+      'update_insider_monitoring_rule'
     ]);
   });
 

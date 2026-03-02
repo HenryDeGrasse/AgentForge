@@ -101,6 +101,12 @@ describe('Ai chat integration', () => {
       new ActionExtractor(),
       new ChartExtractor(),
       {
+        evaluateRulesForBriefing: jest
+          .fn()
+          .mockResolvedValue({ briefingItems: [], rulesEvaluated: 0 }),
+        markRulesNotified: jest.fn()
+      } as any,
+      {
         startTrace: jest.fn().mockReturnValue({ traceId: '', end: jest.fn() }),
         addScore: jest.fn(),
         flush: jest.fn()

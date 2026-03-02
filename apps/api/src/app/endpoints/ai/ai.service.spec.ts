@@ -6,6 +6,7 @@ import {
 } from '@ghostfolio/api/app/endpoints/ai/llm/llm-client.interface';
 import { ToolRouterService } from '@ghostfolio/api/app/endpoints/ai/routing/tool-router.service';
 import { ResponseVerifierService } from '@ghostfolio/api/app/endpoints/ai/verification/response-verifier.service';
+import { InsiderService } from '@ghostfolio/api/app/endpoints/insider/insider.service';
 import { PortfolioService } from '@ghostfolio/api/app/portfolio/portfolio.service';
 import { PrismaService } from '@ghostfolio/api/services/prisma/prisma.service';
 
@@ -73,6 +74,12 @@ function buildService({
     { extract: jest.fn().mockReturnValue([]) } as any,
     { extract: jest.fn().mockReturnValue([]) } as any,
     {
+      evaluateRulesForBriefing: jest
+        .fn()
+        .mockResolvedValue({ briefingItems: [], rulesEvaluated: 0 }),
+      markRulesNotified: jest.fn()
+    } as any,
+    {
       startTrace: jest
         .fn()
         .mockReturnValue({ traceId: 'test-trace', end: jest.fn() }),
@@ -128,6 +135,15 @@ describe('AiService', () => {
           }
         },
         { provide: LLM_CLIENT_TOKEN, useValue: llmClient },
+        {
+          provide: InsiderService,
+          useValue: {
+            evaluateRulesForBriefing: jest
+              .fn()
+              .mockResolvedValue({ briefingItems: [], rulesEvaluated: 0 }),
+            markRulesNotified: jest.fn()
+          }
+        },
         { provide: PortfolioService, useValue: { getDetails: jest.fn() } },
         { provide: PrismaService, useValue: buildPrismaStub() },
         { provide: ReactAgentService, useValue: { run: jest.fn() } },

@@ -1,7 +1,7 @@
 /**
  * Deterministic tool stub profiles for eval fixtures.
  *
- * Each profile returns 10 tool stubs with fixed data.
+ * Each profile returns tool stubs with fixed data.
  * All stubs push to an invocationLog for auth scoping and tool count assertions.
  * Schemas are imported from production — zero drift by construction.
  */
@@ -10,6 +10,14 @@ import {
   ANALYZE_RISK_OUTPUT_SCHEMA,
   COMPLIANCE_CHECK_INPUT_SCHEMA,
   COMPLIANCE_CHECK_OUTPUT_SCHEMA,
+  CREATE_INSIDER_RULE_INPUT_SCHEMA,
+  CREATE_INSIDER_RULE_OUTPUT_SCHEMA,
+  DELETE_INSIDER_RULE_INPUT_SCHEMA,
+  DELETE_INSIDER_RULE_OUTPUT_SCHEMA,
+  INSIDER_ACTIVITY_INPUT_SCHEMA,
+  INSIDER_ACTIVITY_OUTPUT_SCHEMA,
+  LIST_INSIDER_RULES_INPUT_SCHEMA,
+  LIST_INSIDER_RULES_OUTPUT_SCHEMA,
   MARKET_DATA_LOOKUP_INPUT_SCHEMA,
   MARKET_DATA_LOOKUP_OUTPUT_SCHEMA,
   PERFORMANCE_COMPARE_INPUT_SCHEMA,
@@ -25,7 +33,9 @@ import {
   TAX_ESTIMATE_INPUT_SCHEMA,
   TAX_ESTIMATE_OUTPUT_SCHEMA,
   TRANSACTION_HISTORY_INPUT_SCHEMA,
-  TRANSACTION_HISTORY_OUTPUT_SCHEMA
+  TRANSACTION_HISTORY_OUTPUT_SCHEMA,
+  UPDATE_INSIDER_RULE_INPUT_SCHEMA,
+  UPDATE_INSIDER_RULE_OUTPUT_SCHEMA
 } from '@ghostfolio/api/app/endpoints/ai/tools/schemas';
 import type { ToolDefinition } from '@ghostfolio/api/app/endpoints/ai/tools/tool.types';
 
@@ -606,6 +616,7 @@ function buildRichProfileTools(log: ToolInvocationEntry[]): ToolDefinition[] {
       name: 'rebalance_suggest',
       outputSchema: REBALANCE_SUGGEST_OUTPUT_SCHEMA
     },
+    // ─── Simulate Trades & Stress Test (from main) ─────────────────────────────
     {
       description: 'Simulate hypothetical trades against the portfolio.',
       execute: (input, context) => {
@@ -788,6 +799,141 @@ function buildRichProfileTools(log: ToolInvocationEntry[]): ToolDefinition[] {
       inputSchema: STRESS_TEST_INPUT_SCHEMA,
       name: 'stress_test',
       outputSchema: STRESS_TEST_OUTPUT_SCHEMA
+    },
+    // ─── Insider Tools (from HEAD) ─────────────────────────────────────────────
+    {
+      description:
+        'Fetch recent insider buy/sell activity (Form 4 filings) for given stock symbols.',
+      execute: (input, context) => {
+        log.push({
+          input,
+          toolName: 'get_insider_activity',
+          userId: context.userId
+        });
+
+        return {
+          disclaimers: [
+            'Insider transaction data is informational only — not investment advice.',
+            'Data may be delayed. Verify via source URLs for the most current filings.'
+          ],
+          providerName: 'stub',
+          transactions: [
+            {
+              insiderName: 'John Exec',
+              insiderRelation: 'CEO',
+              price: 450.0,
+              shares: 5000,
+              side: 'sell',
+              sourceUrl: 'https://sec.gov/stub',
+              symbol: 'NVDA',
+              txDate: '2025-05-20',
+              valueUsd: 2250000
+            }
+          ],
+          warnings: []
+        };
+      },
+      inputSchema: INSIDER_ACTIVITY_INPUT_SCHEMA,
+      name: 'get_insider_activity',
+      outputSchema: INSIDER_ACTIVITY_OUTPUT_SCHEMA
+    },
+    {
+      description:
+        'Create an insider monitoring rule to track insider buys/sells.',
+      execute: (input, context) => {
+        log.push({
+          input,
+          toolName: 'create_insider_monitoring_rule',
+          userId: context.userId
+        });
+
+        const typedInput = input as {
+          minValueUsd?: number;
+          scope: string;
+          side: string;
+          topN?: number;
+        };
+
+        return {
+          message:
+            'Monitoring rule created successfully. You will be briefed about matching insider activity at the start of each chat session.',
+          rule: {
+            id: 'rule-stub-1',
+            isActive: true,
+            lookbackDays: 30,
+            minValueUsd: typedInput.minValueUsd,
+            scope: typedInput.scope,
+            side: typedInput.side,
+            topN: typedInput.topN
+          }
+        };
+      },
+      inputSchema: CREATE_INSIDER_RULE_INPUT_SCHEMA,
+      name: 'create_insider_monitoring_rule',
+      outputSchema: CREATE_INSIDER_RULE_OUTPUT_SCHEMA
+    },
+    {
+      description: 'List all insider monitoring rules for the current user.',
+      execute: (input, context) => {
+        log.push({
+          input,
+          toolName: 'list_insider_monitoring_rules',
+          userId: context.userId
+        });
+
+        return {
+          rules: [
+            {
+              id: 'rule-stub-1',
+              isActive: true,
+              lookbackDays: 30,
+              minValueUsd: 100000,
+              scope: 'portfolio',
+              side: 'sell'
+            }
+          ],
+          total: 1
+        };
+      },
+      inputSchema: LIST_INSIDER_RULES_INPUT_SCHEMA,
+      name: 'list_insider_monitoring_rules',
+      outputSchema: LIST_INSIDER_RULES_OUTPUT_SCHEMA
+    },
+    {
+      description: 'Update an existing insider monitoring rule.',
+      execute: (input, context) => {
+        log.push({
+          input,
+          toolName: 'update_insider_monitoring_rule',
+          userId: context.userId
+        });
+
+        return {
+          message: 'Rule updated successfully.',
+          updatedCount: 1
+        };
+      },
+      inputSchema: UPDATE_INSIDER_RULE_INPUT_SCHEMA,
+      name: 'update_insider_monitoring_rule',
+      outputSchema: UPDATE_INSIDER_RULE_OUTPUT_SCHEMA
+    },
+    {
+      description: 'Delete an insider monitoring rule.',
+      execute: (input, context) => {
+        log.push({
+          input,
+          toolName: 'delete_insider_monitoring_rule',
+          userId: context.userId
+        });
+
+        return {
+          deletedCount: 1,
+          message: 'Rule deleted successfully.'
+        };
+      },
+      inputSchema: DELETE_INSIDER_RULE_INPUT_SCHEMA,
+      name: 'delete_insider_monitoring_rule',
+      outputSchema: DELETE_INSIDER_RULE_OUTPUT_SCHEMA
     }
   ];
 }

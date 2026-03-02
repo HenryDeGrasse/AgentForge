@@ -278,6 +278,7 @@ model User {
   tags              Tag[]
   thirdPartyId      String?
   updatedAt         DateTime           @updatedAt
+  insiderMonitoringRules InsiderMonitoringRule[]
   watchlist         SymbolProfile[]    @relation("UserWatchlist")
   SymbolProfile     SymbolProfile[]
 
@@ -386,6 +387,63 @@ enum Type {
   INTEREST
   LIABILITY
   SELL
+}
+
+model InsiderTransaction {
+  id              String   @id @default(uuid())
+  sourceKey       String   @unique
+  symbol          String
+  txDate          DateTime
+  side            String   // 'buy' | 'sell' | 'other'
+  insiderName     String
+  insiderRelation String?
+  shares          Float?
+  price           Float?
+  valueUsd        Float?
+  sourceProvider  String
+  sourceUrl       String?
+  raw             Json?
+  createdAt       DateTime @default(now())
+
+  @@index([symbol, txDate])
+}
+
+model InsiderMonitoringRule {
+  id             String    @id @default(uuid())
+  userId         String
+  isActive       Boolean   @default(true)
+  scope          String    // 'all_holdings' | 'symbols' | 'top_n'
+  symbols        Json?     // string[]
+  topN           Int?
+  side           String    // 'sell' | 'buy' | 'any'
+  minValueUsd    Float?
+  lookbackDays   Int       @default(30)
+  lastCheckedAt  DateTime?
+  lastNotifiedAt DateTime?
+  agentNotes     String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  user           User      @relation(fields: [userId], onDelete: Cascade, references: [id])
+
+  @@index([userId, updatedAt])
+}
+
+model AiRunLog {
+  id               String   @id @default(uuid())
+  userId           String
+  conversationId   String?
+  invokedToolNames Json     // string[]
+  providerName     String?
+  providerLatencyMs Int?
+  cacheHitCount    Int      @default(0)
+  cacheMissCount   Int      @default(0)
+  estimatedCostUsd Float?
+  elapsedMs        Int?
+  warnings         Json?    // string[]
+  guardrail        String?
+  createdAt        DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
 
 enum ViewMode {

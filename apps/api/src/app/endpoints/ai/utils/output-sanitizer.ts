@@ -41,6 +41,7 @@ const EXTERNAL_IMAGE_LINK_PATTERN = /!\[[^\]]*\]\(https?:\/\/[^)]*\)/gi;
  *  U+FEFF  zero width no-break space / BOM
  *  U+00AD  soft hyphen
  */
+// eslint-disable-next-line no-misleading-character-class
 const ZERO_WIDTH_PATTERN = /[\u200B\u200C\u200D\uFEFF\u00AD]/g;
 
 /**

@@ -24,6 +24,11 @@ import { guardrailCircuitBreaker } from './guardrail-circuit-breaker';
 import { guardrailCostLimit } from './guardrail-cost-limit';
 import { guardrailMaxIterations } from './guardrail-max-iterations';
 import { guardrailTimeout } from './guardrail-timeout';
+import { insiderActivityQuery } from './insider-activity-query';
+import { insiderListRules } from './insider-list-rules';
+import { insiderRuleCrud } from './insider-rule-crud';
+import { insiderScopeGate } from './insider-scope-gate';
+import { insiderUnknownSymbol } from './insider-unknown-symbol';
 import { malformedQueryGibberish } from './malformed-query-gibberish';
 import { multiFullReview } from './multi-full-review';
 import { multiMarketThenSimulate } from './multi-market-then-simulate';
@@ -92,6 +97,11 @@ export const LLM_SEQUENCES: Record<string, LLMCompletionResponse[]> = {
   'guardrail-cost-limit': guardrailCostLimit,
   'guardrail-max-iterations': guardrailMaxIterations,
   'guardrail-timeout': guardrailTimeout,
+  'insider-activity-query': insiderActivityQuery,
+  'insider-list-rules': insiderListRules,
+  'insider-rule-crud': insiderRuleCrud,
+  'insider-scope-gate': insiderScopeGate,
+  'insider-unknown-symbol': insiderUnknownSymbol,
   'malformed-query-gibberish': malformedQueryGibberish,
   'multi-full-review': multiFullReview,
   'multi-market-then-simulate': multiMarketThenSimulate,
