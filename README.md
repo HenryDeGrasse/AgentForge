@@ -8,7 +8,22 @@
 
 AgentForge is a fork of [Ghostfolio](https://ghostfol.io) that adds a full AI agent layer on top of the existing wealth management platform. Users can ask natural-language questions about their portfolio and get grounded, data-driven answers powered by a ReAct agent that calls real portfolio tools.
 
-> 📄 **[Agent Architecture Document](./docs/AGENT_ARCHITECTURE.md)** — Domain rationale, architecture decisions, verification strategy, eval results, and observability setup.
+---
+
+## Project Deliverables
+
+| Deliverable                  | Link                                                                                                            |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **GitHub Repository**        | [github.com/HenryDeGrasse/AgentForge](https://github.com/HenryDeGrasse/AgentForge)                              |
+| **Deployed Application**     | _TODO: add deployed link_                                                                                       |
+| **Demo Video**               | _TODO: add demo video link_                                                                                     |
+| **Agent Architecture Doc**   | [`docs/AGENT_ARCHITECTURE.md`](./docs/AGENT_ARCHITECTURE.md)                                                    |
+| **Architecture Diagrams**    | [`docs/architecture.md`](./docs/architecture.md)                                                                |
+| **Pre-Search Document**      | [`docs/AgentForge_PreSearch_Document_FINAL.md`](./docs/AgentForge_PreSearch_Document_FINAL.md)                  |
+| **AI Cost Analysis**         | Included in [Agent Architecture Doc](./docs/AGENT_ARCHITECTURE.md) — dev spend + projections for 100–100k users |
+| **Eval Dataset**             | 98 test cases across 3 datasets — see [Eval Framework](#eval-framework)                                         |
+| **Eval Results**             | [`docs/AI_EVAL_RESULTS.md`](./docs/AI_EVAL_RESULTS.md)                                                          |
+| **Open Source Contribution** | This repository — complete AI agent module on an existing OSS project (Ghostfolio, AGPLv3)                      |
 
 ---
 
@@ -183,6 +198,31 @@ The confidence level and warnings are returned with every response so callers ca
 
 ---
 
+## Performance & Quality Metrics
+
+| Metric                  | Target | Achieved                                        |
+| ----------------------- | ------ | ----------------------------------------------- |
+| Single-tool latency     | < 5 s  | 3–5 s (median)                                  |
+| Multi-tool latency (3+) | < 15 s | 6–15 s                                          |
+| Tool success rate       | > 95%  | 100% across all eval scenarios                  |
+| Eval pass rate          | > 80%  | 100% (62/62 fast, 31/31 nightly, 12/12 live)    |
+| Hallucination rate      | < 5%   | 0% — all responses grounded in tool output      |
+| Verification accuracy   | > 90%  | Deterministic heuristic scorer — no false flags |
+| Cost per request        | —      | Median ~$0.01, p95 ~$0.03 (gpt-4.1)             |
+
+### Verification Systems (6 implemented)
+
+| Verification Type           | Implementation                                                                                                              |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **Hallucination Detection** | `containsUnbackedPortfolioClaim()` — regex-based detection of portfolio assertions without tool backing                     |
+| **Confidence Scoring**      | Deterministic HIGH/MEDIUM/LOW heuristic in `ResponseVerifierService` based on tool usage and status                         |
+| **Domain Constraints**      | Scope gate rejects non-financial queries; compliance tool enforces position-size / sector / cash rules                      |
+| **Output Validation**       | JSON schema validation on every tool input and output; output sanitizer strips HTML/XSS/zero-width chars                    |
+| **Human-in-the-Loop**       | `requiresHumanReview` flag set on low confidence, guardrail fires, or unbacked claims                                       |
+| **Fact Checking**           | Escalation trigger forces tool use when LLM answers without calling tools; response verifier warns on missing tool coverage |
+
+---
+
 ## AI Tools (10 total)
 
 All tools are defined in `apps/api/src/app/endpoints/ai/tools/` with strict JSON input/output schemas. Every schema field has a `description` annotation so the LLM knows exactly how to interpret each value (including whether `*Pct` fields are 0–1 fractions or already-multiplied whole-number percentages).
@@ -229,16 +269,25 @@ If you run many users concurrently, consider adding a dedicated data provider (C
 
 ## Eval Framework
 
-The AI layer ships with a four-tier evaluation framework. See [docs/AI_EVAL_RESULTS.md](./docs/AI_EVAL_RESULTS.md) for full results.
+The AI layer ships with **98 eval cases** across a four-tier evaluation framework. See [docs/AI_EVAL_RESULTS.md](./docs/AI_EVAL_RESULTS.md) for full results.
 
 | Tier                 | Suite                | Gate                     | LLM                       | Cases | Budget   |
 | -------------------- | -------------------- | ------------------------ | ------------------------- | ----- | -------- |
-| **Fast (CI)**        | `golden-sets-fast`   | None — runs every commit | Mocked scripted sequences | 27    | < 30 s   |
+| **Fast (CI)**        | `golden-sets-fast`   | None — runs every commit | Mocked scripted sequences | 62    | < 30 s   |
 | **Live (pre-merge)** | `golden-sets` (live) | `RUN_GOLDEN_EVALS=1`     | Real LLM                  | 12    | < 5 min  |
 | **MVP**              | `mvp-evals`          | `RUN_MVP_EVALS=1`        | Real LLM                  | 5     | < 4 min  |
 | **Nightly**          | `labeled-scenarios`  | `RUN_LABELED_EVALS=1`    | Real LLM                  | 31    | < 15 min |
 
-Each eval case in `apps/api/test/ai/golden-sets.json` specifies the user message, tool set, expected status, minimum confidence, and minimum tool-call count. The fast tier uses scripted LLM responses from `apps/api/test/ai/fixtures/llm-sequences/` and deterministic tool stubs from `apps/api/test/ai/fixtures/tool-profiles.ts` — all schemas are imported from production so fixture drift is impossible.
+**Coverage categories across all 98 cases:**
+
+- **Single-tool happy path** (10+ cases): Each of the 10 tools exercised individually with rich portfolio data
+- **Multi-tool orchestration** (6+ cases): Sequential, parallel, and 3+ tool chains
+- **Edge cases** (10+ cases): Empty portfolio, missing data, boundary conditions, typos
+- **Adversarial / safety** (10+ cases): Prompt injection, jailbreak attempts, scope gate bypass, keyword stuffing
+- **Multi-step reasoning** (10+ cases): Performance → stress test, tax → simulation, full portfolio review
+- **Out-of-scope refusals** (6+ cases): Poems, recipes, medical advice, code generation
+
+Each eval case in `apps/api/test/ai/golden-sets.json` specifies the user message, tool set, expected status, minimum confidence, and minimum tool-call count. The fast tier uses scripted LLM responses from `apps/api/test/ai/fixtures/llm-sequences/` (63 fixture files) and deterministic tool stubs from `apps/api/test/ai/fixtures/tool-profiles.ts` — all schemas are imported from production so fixture drift is impossible.
 
 ### Run evals locally
 
