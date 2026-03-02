@@ -1,0 +1,45 @@
+{
+  "name": "@agentforge/finance-eval-dataset",
+  "version": "1.0.0",
+  "description": "Structured evaluation dataset for finance AI agents — 98 test cases covering portfolio analysis, risk, tax, compliance, adversarial inputs, and multi-tool orchestration",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./data/golden-sets.json": "./data/golden-sets.json",
+    "./data/labeled-scenarios.json": "./data/labeled-scenarios.json",
+    "./data/mvp-evals.json": "./data/mvp-evals.json"
+  },
+  "files": [
+    "dist",
+    "data",
+    "README.md",
+    "DATACARD.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "eval",
+    "evaluation",
+    "finance",
+    "portfolio",
+    "llm",
+    "react-agent",
+    "tool-calling",
+    "benchmark",
+    "dataset"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

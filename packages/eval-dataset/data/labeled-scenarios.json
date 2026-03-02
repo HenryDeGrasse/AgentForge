@@ -1,0 +1,754 @@
+[
+  {
+    "id": "labeled-rich-summary-basic",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Give me an overview of my portfolio",
+      "toolNames": ["get_portfolio_summary"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredTools": ["get_portfolio_summary"],
+      "mustIncludeAny": ["portfolio", "holding"],
+      "mustNotIncludeAny": ["technical issue", "system prompt"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "single-tool",
+      "subcategory": "portfolio-summary",
+      "difficulty": "basic",
+      "description": "Basic portfolio overview — labeled scenario"
+    }
+  },
+  {
+    "id": "labeled-rich-summary-top3",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Show me my top 3 holdings by value",
+      "toolNames": ["get_portfolio_summary"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredTools": ["get_portfolio_summary"],
+      "mustIncludeAny": ["holding", "value", "top"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "single-tool",
+      "subcategory": "portfolio-summary",
+      "difficulty": "basic",
+      "description": "Top 3 holdings request — tests topN parameter"
+    }
+  },
+  {
+    "id": "labeled-rich-transactions-recent",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "What were my most recent buy orders?",
+      "toolNames": ["get_transaction_history"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredTools": ["get_transaction_history"],
+      "mustIncludeAny": ["buy", "transaction", "order"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "single-tool",
+      "subcategory": "transaction-history",
+      "difficulty": "basic",
+      "description": "Recent buy orders — labeled scenario"
+    }
+  },
+  {
+    "id": "labeled-rich-risk-concentration",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Do I have any concentration risk in my portfolio?",
+      "toolNames": ["analyze_risk"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredTools": ["analyze_risk"],
+      "mustIncludeAny": ["risk", "concentration", "position"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "single-tool",
+      "subcategory": "risk-analysis",
+      "difficulty": "intermediate",
+      "description": "Concentration risk analysis — labeled scenario"
+    }
+  },
+  {
+    "id": "labeled-rich-market-lookup",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "What is the current price of my largest holding?",
+      "toolNames": ["market_data_lookup", "get_portfolio_summary"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredTools": ["market_data_lookup"],
+      "mustIncludeAny": ["price", "market"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "multi-tool",
+      "subcategory": "market-data",
+      "difficulty": "intermediate",
+      "description": "Market data lookup requiring portfolio context"
+    }
+  },
+  {
+    "id": "labeled-rich-performance-ytd",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "How has my portfolio performed year to date?",
+      "toolNames": ["performance_compare"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredTools": ["performance_compare"],
+      "mustIncludeAny": ["performance", "return", "year"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "single-tool",
+      "subcategory": "performance",
+      "difficulty": "basic",
+      "description": "YTD performance request — labeled scenario"
+    }
+  },
+  {
+    "id": "labeled-rich-tax-short-term",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "How much do I owe in short-term capital gains taxes?",
+      "toolNames": ["tax_estimate"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredTools": ["tax_estimate"],
+      "mustIncludeAny": ["tax", "short-term", "gain"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "single-tool",
+      "subcategory": "tax",
+      "difficulty": "intermediate",
+      "description": "Short-term capital gains tax estimate"
+    }
+  },
+  {
+    "id": "labeled-rich-compliance-rules",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Which compliance rules am I violating?",
+      "toolNames": ["compliance_check"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredTools": ["compliance_check"],
+      "mustIncludeAny": ["compliance", "rule", "violat"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "single-tool",
+      "subcategory": "compliance",
+      "difficulty": "basic",
+      "description": "Compliance violations — labeled scenario"
+    }
+  },
+  {
+    "id": "labeled-rich-rebalance-equal",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "What trades would I need to make to equal-weight my portfolio?",
+      "toolNames": ["rebalance_suggest"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredTools": ["rebalance_suggest"],
+      "mustIncludeAny": ["trade", "rebalance", "buy", "sell"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "single-tool",
+      "subcategory": "rebalance",
+      "difficulty": "basic",
+      "description": "Equal-weight rebalance trades — labeled scenario"
+    }
+  },
+  {
+    "id": "labeled-empty-transactions",
+    "profile": "empty",
+    "liveEligible": true,
+    "request": {
+      "message": "Show me my transaction history",
+      "toolNames": ["get_transaction_history"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "medium",
+      "minToolCalls": 1,
+      "requiredTools": ["get_transaction_history"],
+      "mustIncludeAny": ["no transaction", "empty", "no data", "no activity"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "edge-case",
+      "subcategory": "empty-data",
+      "difficulty": "basic",
+      "description": "Transaction history on empty profile — graceful degradation"
+    }
+  },
+  {
+    "id": "labeled-empty-risk",
+    "profile": "empty",
+    "liveEligible": true,
+    "request": {
+      "message": "Analyze my portfolio risk",
+      "toolNames": ["analyze_risk"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "medium",
+      "minToolCalls": 1,
+      "requiredTools": ["analyze_risk"],
+      "mustIncludeAny": ["no holding", "empty", "no data", "risk"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "edge-case",
+      "subcategory": "empty-data",
+      "difficulty": "basic",
+      "description": "Risk analysis on empty profile — graceful degradation"
+    }
+  },
+  {
+    "id": "labeled-multi-summary-and-tax",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Give me my portfolio summary and a tax estimate for the year",
+      "toolNames": ["get_portfolio_summary", "tax_estimate"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 2,
+      "requiredTools": ["get_portfolio_summary", "tax_estimate"],
+      "mustIncludeAny": ["portfolio", "tax"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "multi-tool",
+      "subcategory": "multi-tool-orchestration",
+      "difficulty": "intermediate",
+      "description": "Multi-tool: portfolio summary + tax estimate"
+    }
+  },
+  {
+    "id": "labeled-multi-risk-and-compliance",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Check my portfolio risk and compliance status",
+      "toolNames": ["analyze_risk", "compliance_check"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 2,
+      "requiredTools": ["analyze_risk", "compliance_check"],
+      "mustIncludeAny": ["risk", "complian"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "multi-tool",
+      "subcategory": "multi-tool-orchestration",
+      "difficulty": "intermediate",
+      "description": "Multi-tool: risk analysis + compliance check"
+    }
+  },
+  {
+    "id": "labeled-multi-full-review",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Give me a full review of my portfolio: summary, risk, and rebalancing suggestions",
+      "toolNames": [
+        "get_portfolio_summary",
+        "analyze_risk",
+        "rebalance_suggest"
+      ]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 2,
+      "requiredTools": ["get_portfolio_summary", "analyze_risk"],
+      "mustIncludeAny": ["portfolio", "risk"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "multi-tool",
+      "subcategory": "multi-tool-orchestration",
+      "difficulty": "advanced",
+      "description": "Full portfolio review — 3 tools orchestrated"
+    }
+  },
+  {
+    "id": "labeled-rich-summary-with-cash",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "How much cash do I have in my portfolio?",
+      "toolNames": ["get_portfolio_summary"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredTools": ["get_portfolio_summary"],
+      "mustIncludeAny": ["cash", "balance"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "single-tool",
+      "subcategory": "portfolio-summary",
+      "difficulty": "basic",
+      "description": "Cash balance inquiry — labeled scenario"
+    }
+  },
+  {
+    "id": "labeled-rich-performance-vs-benchmark",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Am I beating the market?",
+      "toolNames": ["performance_compare"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredTools": ["performance_compare"],
+      "mustIncludeAny": ["performance", "benchmark", "market"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "single-tool",
+      "subcategory": "performance",
+      "difficulty": "basic",
+      "description": "Benchmark comparison — colloquial phrasing"
+    }
+  },
+  {
+    "id": "labeled-rich-risk-diversification",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "How diversified is my portfolio across asset classes?",
+      "toolNames": ["analyze_risk"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredTools": ["analyze_risk"],
+      "mustIncludeAny": ["diversif", "asset class", "equity", "bond"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "single-tool",
+      "subcategory": "risk-analysis",
+      "difficulty": "intermediate",
+      "description": "Asset class diversification analysis"
+    }
+  },
+  {
+    "id": "labeled-rich-tax-harvest",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Are there any tax loss harvesting opportunities?",
+      "toolNames": ["tax_estimate"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredTools": ["tax_estimate"],
+      "mustIncludeAny": ["tax", "loss", "harvest"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "single-tool",
+      "subcategory": "tax",
+      "difficulty": "intermediate",
+      "description": "Tax loss harvesting opportunities"
+    }
+  },
+  {
+    "id": "labeled-rich-rebalance-turnover",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "How much portfolio turnover would rebalancing require?",
+      "toolNames": ["rebalance_suggest"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredTools": ["rebalance_suggest"],
+      "mustIncludeAny": ["turnover", "rebalance", "trade"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "single-tool",
+      "subcategory": "rebalance",
+      "difficulty": "intermediate",
+      "description": "Rebalance turnover estimation"
+    }
+  },
+  {
+    "id": "labeled-empty-compliance",
+    "profile": "empty",
+    "liveEligible": true,
+    "request": {
+      "message": "Check my compliance status",
+      "toolNames": ["compliance_check"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "medium",
+      "minToolCalls": 1,
+      "requiredTools": ["compliance_check"],
+      "mustIncludeAny": ["no holding", "empty", "compliance", "no data"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "edge-case",
+      "subcategory": "empty-data",
+      "difficulty": "basic",
+      "description": "Compliance check on empty portfolio"
+    }
+  },
+  {
+    "id": "labeled-rich-summary-allocation",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "What percentage of my portfolio is in each holding?",
+      "toolNames": ["get_portfolio_summary"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredTools": ["get_portfolio_summary"],
+      "mustIncludeAny": ["allocation", "percent", "%"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "single-tool",
+      "subcategory": "portfolio-summary",
+      "difficulty": "basic",
+      "description": "Portfolio allocation percentages"
+    }
+  },
+  {
+    "id": "labeled-rich-transactions-count",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "How many transactions have I made in total?",
+      "toolNames": ["get_transaction_history"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredTools": ["get_transaction_history"],
+      "mustIncludeAny": ["transaction", "30", "total"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "single-tool",
+      "subcategory": "transaction-history",
+      "difficulty": "basic",
+      "description": "Transaction count inquiry"
+    }
+  },
+  {
+    "id": "labeled-multi-summary-performance-risk",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Give me a comprehensive view: my portfolio value, how it is performing, and what risks I should watch",
+      "toolNames": [
+        "get_portfolio_summary",
+        "performance_compare",
+        "analyze_risk"
+      ]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 2,
+      "requiredTools": ["get_portfolio_summary", "analyze_risk"],
+      "mustIncludeAny": ["portfolio", "performance", "risk"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "multi-tool",
+      "subcategory": "multi-tool-orchestration",
+      "difficulty": "advanced",
+      "description": "3-tool comprehensive portfolio analysis"
+    }
+  },
+  {
+    "id": "labeled-empty-rebalance",
+    "profile": "empty",
+    "liveEligible": true,
+    "request": {
+      "message": "How should I rebalance my portfolio?",
+      "toolNames": ["rebalance_suggest"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "medium",
+      "minToolCalls": 1,
+      "requiredTools": ["rebalance_suggest"],
+      "mustIncludeAny": ["no holding", "empty", "no data", "rebalance"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "edge-case",
+      "subcategory": "empty-data",
+      "difficulty": "basic",
+      "description": "Rebalance suggestion on empty portfolio"
+    }
+  },
+  {
+    "id": "labeled-rich-market-sector",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "What sector is SYM-A in and what is its recent price trend?",
+      "toolNames": ["market_data_lookup"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredTools": ["market_data_lookup"],
+      "mustIncludeAny": ["sector", "price", "trend"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "single-tool",
+      "subcategory": "market-data",
+      "difficulty": "basic",
+      "description": "Sector and price trend lookup"
+    }
+  },
+  {
+    "id": "labeled-rich-compliance-position-limit",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Am I within the maximum position size limits?",
+      "toolNames": ["compliance_check"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredTools": ["compliance_check"],
+      "mustIncludeAny": ["position", "limit", "complian"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "single-tool",
+      "subcategory": "compliance",
+      "difficulty": "intermediate",
+      "description": "Position size compliance check"
+    }
+  },
+  {
+    "id": "labeled-rich-tax-total-gains",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "What are my total realized gains for the year?",
+      "toolNames": ["tax_estimate"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredTools": ["tax_estimate"],
+      "mustIncludeAny": ["gain", "realized", "total"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "single-tool",
+      "subcategory": "tax",
+      "difficulty": "basic",
+      "description": "Total realized gains inquiry"
+    }
+  },
+  {
+    "id": "labeled-rich-simulate-trades",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Simulate selling some SYM-A and buying more SYM-B",
+      "toolNames": ["simulate_trades"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredTools": ["simulate_trades"],
+      "mustIncludeAny": ["simulate", "trade", "allocation"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "single-tool",
+      "subcategory": "simulate-trades",
+      "difficulty": "intermediate",
+      "description": "Trade simulation scenario"
+    }
+  },
+  {
+    "id": "labeled-rich-stress-test",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "Run a stress test on my portfolio for a market crash scenario",
+      "toolNames": ["stress_test"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredTools": ["stress_test"],
+      "mustIncludeAny": ["stress", "scenario", "loss"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "single-tool",
+      "subcategory": "stress-test",
+      "difficulty": "intermediate",
+      "description": "Stress test scenario evaluation"
+    }
+  },
+  {
+    "id": "labeled-empty-performance",
+    "profile": "empty",
+    "liveEligible": true,
+    "request": {
+      "message": "How is my portfolio performing?",
+      "toolNames": ["performance_compare"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "medium",
+      "minToolCalls": 1,
+      "requiredTools": ["performance_compare"],
+      "mustIncludeAny": ["no holding", "empty", "no data", "performance"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "edge-case",
+      "subcategory": "empty-data",
+      "difficulty": "basic",
+      "description": "Performance check on empty portfolio"
+    }
+  },
+  {
+    "id": "labeled-rich-summary-net-worth",
+    "profile": "rich",
+    "liveEligible": true,
+    "request": {
+      "message": "What is my total net worth including cash?",
+      "toolNames": ["get_portfolio_summary"]
+    },
+    "expect": {
+      "status": "completed",
+      "minConfidence": "high",
+      "minToolCalls": 1,
+      "requiredTools": ["get_portfolio_summary"],
+      "mustIncludeAny": ["total", "value", "worth", "cash"],
+      "mustNotIncludeAny": ["technical issue"]
+    },
+    "meta": {
+      "stage": "labeled",
+      "category": "single-tool",
+      "subcategory": "portfolio-summary",
+      "difficulty": "basic",
+      "description": "Net worth inquiry including cash"
+    }
+  }
+]

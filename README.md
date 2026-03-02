@@ -360,6 +360,30 @@ POST http://localhost:3333/api/v1/import
 
 ---
 
+## Open Source Contribution
+
+The eval framework used to test this agent is published as a standalone, dependency-free dataset anyone can use to benchmark their own finance AI:
+
+**[`@agentforge/finance-eval-dataset`](./packages/eval-dataset)** — 98 structured test cases covering portfolio summary, risk, tax, compliance, rebalancing, simulation, stress testing, market data, adversarial inputs, multi-tool orchestration, auth isolation, and guardrail behavior.
+
+```bash
+npm install @agentforge/finance-eval-dataset
+```
+
+```ts
+import {
+  loadAll,
+  liveEligible,
+  byCategory
+} from '@agentforge/finance-eval-dataset';
+
+const cases = loadAll().filter(liveEligible).filter(byCategory('single-tool'));
+```
+
+See [`packages/eval-dataset/README.md`](./packages/eval-dataset/README.md) for full documentation.
+
+---
+
 ## License
 
 © 2021 – 2026 [Ghostfolio](https://ghostfol.io) and contributors  
