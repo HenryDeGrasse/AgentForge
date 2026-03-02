@@ -73,6 +73,12 @@ function buildService({
     { extract: jest.fn().mockReturnValue([]) } as any,
     { extract: jest.fn().mockReturnValue([]) } as any,
     {
+      evaluateRulesForBriefing: jest
+        .fn()
+        .mockResolvedValue({ rulesEvaluated: 0, briefingItems: [] }),
+      markRulesNotified: jest.fn()
+    } as any,
+    {
       startTrace: jest
         .fn()
         .mockReturnValue({ traceId: 'test-trace', end: jest.fn() }),
@@ -112,11 +118,23 @@ describe('AiService', () => {
     const { ChartDataExtractorService } =
       await import('@ghostfolio/api/app/endpoints/ai/chart-data-extractor.service');
 
+    const { InsiderService } =
+      await import('@ghostfolio/api/app/endpoints/insider/insider.service');
+
     const module = await Test.createTestingModule({
       providers: [
         ActionExtractorService,
         AiService,
         ChartDataExtractorService,
+        {
+          provide: InsiderService,
+          useValue: {
+            evaluateRulesForBriefing: jest
+              .fn()
+              .mockResolvedValue({ rulesEvaluated: 0, briefingItems: [] }),
+            markRulesNotified: jest.fn()
+          }
+        },
         {
           provide: LangfuseService,
           useValue: {
