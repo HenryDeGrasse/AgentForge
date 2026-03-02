@@ -364,7 +364,7 @@ POST http://localhost:3333/api/v1/import
 
 The eval framework used to test this agent is published as a standalone, dependency-free dataset anyone can use to benchmark their own finance AI:
 
-**[`@agentforge/finance-eval-dataset`](./packages/eval-dataset)** — 98 structured test cases covering portfolio summary, risk, tax, compliance, rebalancing, simulation, stress testing, market data, adversarial inputs, multi-tool orchestration, auth isolation, and guardrail behavior.
+**[`agentforge-finance-eval-dataset`](https://github.com/HenryDeGrasse/agentforge-finance-eval-dataset)** — 98 structured test cases covering portfolio summary, risk, tax, compliance, rebalancing, simulation, stress testing, market data, adversarial inputs, multi-tool orchestration, auth isolation, and guardrail behavior.
 
 ```bash
 npm install @agentforge/finance-eval-dataset
@@ -380,7 +380,7 @@ import {
 const cases = loadAll().filter(liveEligible).filter(byCategory('single-tool'));
 ```
 
-See [`packages/eval-dataset/README.md`](./packages/eval-dataset/README.md) for full documentation.
+See [github.com/HenryDeGrasse/agentforge-finance-eval-dataset](https://github.com/HenryDeGrasse/agentforge-finance-eval-dataset) for full documentation.
 
 ---
 
