@@ -8,6 +8,8 @@
 
 AgentForge is a fork of [Ghostfolio](https://ghostfol.io) that adds a full AI agent layer on top of the existing wealth management platform. Users can ask natural-language questions about their portfolio and get grounded, data-driven answers powered by a ReAct agent that calls real portfolio tools.
 
+> 📄 **[Agent Architecture Document](./docs/AGENT_ARCHITECTURE.md)** — Domain rationale, architecture decisions, verification strategy, eval results, and observability setup.
+
 ---
 
 ## What's New in This Fork
