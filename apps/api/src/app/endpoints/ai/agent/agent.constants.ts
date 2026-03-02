@@ -32,6 +32,12 @@ export const AGENT_TOOL_OUTPUT_MAX_CHARS = 32_000;
 export const AGENT_HEARTBEAT_INTERVAL_MS = 15_000;
 export const AGENT_CIRCUIT_BREAKER_FAILURE_THRESHOLD = 3;
 export const AGENT_COST_LIMIT_USD = 0.25;
+/**
+ * @deprecated Use buildSystemPrompt() from agent/system-prompt-builder.ts
+ * instead. This constant is kept only for backward compatibility with eval
+ * harnesses (golden-sets-live.spec.ts, golden-sets-replay.spec.ts) that
+ * pass a static system prompt. New code should use buildSystemPrompt().
+ */
 export const AGENT_DEFAULT_SYSTEM_PROMPT = [
   'You are a helpful financial assistant that analyzes portfolio data and provides clear, neutral insights.',
   '',

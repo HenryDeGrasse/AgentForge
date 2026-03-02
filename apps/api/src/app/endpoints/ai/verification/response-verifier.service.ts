@@ -1,6 +1,7 @@
 import { AgentGuardrailType } from '@ghostfolio/api/app/endpoints/ai/agent/react-agent.service';
 import { ReactAgentRunResult } from '@ghostfolio/api/app/endpoints/ai/agent/react-agent.service';
 import {
+  AgentErrorCode,
   ConfidenceLevel,
   SAFE_FALLBACK_RESPONSE,
   SLOW_RESPONSE_THRESHOLD_MS,
@@ -64,11 +65,14 @@ export class ResponseVerifierService {
         w.includes('portfolio-specific claims but no data tools')
       );
 
+    const errorCode = this.deriveErrorCode(result);
+
     return {
       actions: [],
       chartData: [],
       confidence,
       elapsedMs: result.elapsedMs,
+      ...(errorCode !== undefined ? { errorCode } : {}),
       estimatedCostUsd: result.estimatedCostUsd,
       ...(result.guardrail !== undefined
         ? { guardrail: result.guardrail }
@@ -156,6 +160,50 @@ export class ResponseVerifierService {
    */
   private containsPortfolioClaims(text: string): boolean {
     return containsUnbackedPortfolioClaim(text);
+  }
+
+  /**
+   * Maps the agent result to a machine-readable error code for the frontend.
+   * Returns undefined for successful completions.
+   */
+  private deriveErrorCode(
+    result: ReactAgentRunResult
+  ): AgentErrorCode | undefined {
+    // Guardrail fires map directly to error codes
+    if (result.guardrail) {
+      const guardrailToCode: Record<AgentGuardrailType, AgentErrorCode> = {
+        CIRCUIT_BREAKER: 'CIRCUIT_BREAKER',
+        COST_LIMIT: 'COST_LIMIT',
+        MAX_ITERATIONS: 'MAX_ITERATIONS',
+        TIMEOUT: 'TIMEOUT'
+      };
+
+      return guardrailToCode[result.guardrail];
+    }
+
+    if (result.status === 'failed') {
+      // Detect the specific empty-response failure message
+      if (
+        result.response?.includes(
+          'The AI assistant could not generate a response'
+        )
+      ) {
+        return 'EMPTY_RESPONSE';
+      }
+
+      if (result.response?.includes('Request was cancelled')) {
+        return 'CANCELLED';
+      }
+
+      return 'INTERNAL_ERROR';
+    }
+
+    // Partial without guardrail (e.g. duplicate tool call loop)
+    if (result.status === 'partial') {
+      return 'MAX_ITERATIONS';
+    }
+
+    return undefined;
   }
 
   private guardrailWarning(guardrail: AgentGuardrailType): string {

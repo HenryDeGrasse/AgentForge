@@ -21,7 +21,13 @@ import { summarizeToolOutput } from '@ghostfolio/api/app/endpoints/ai/tools/util
 import { containsUnbackedPortfolioClaim } from '@ghostfolio/api/app/endpoints/ai/utils/portfolio-claim-detector';
 import type { SseEvent } from '@ghostfolio/common/interfaces';
 
-import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  Optional
+} from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 
 export class AgentTimeoutError extends Error {
@@ -88,7 +94,7 @@ interface CircuitBreakerState {
 }
 
 @Injectable()
-export class ReactAgentService {
+export class ReactAgentService implements OnModuleDestroy {
   private circuitBreaker: CircuitBreakerState = {
     consecutiveFailures: 0,
     openedAt: 0,
@@ -101,6 +107,19 @@ export class ReactAgentService {
     @Inject(LLM_CLIENT_TOKEN) private readonly llmClient: LLMClient,
     @Optional() private readonly toolRegistry?: ToolRegistry
   ) {}
+
+  /**
+   * Reset circuit breaker state on module teardown so that a graceful server
+   * restart begins with a clean slate and does not inherit a previously-open
+   * circuit from the last run.
+   */
+  public onModuleDestroy(): void {
+    this.circuitBreaker = {
+      consecutiveFailures: 0,
+      openedAt: 0,
+      state: 'closed'
+    };
+  }
 
   /**
    * Consumes runStreaming() and returns the final result.

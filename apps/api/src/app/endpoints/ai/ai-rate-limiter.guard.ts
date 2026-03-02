@@ -5,7 +5,8 @@ import {
   ExecutionContext,
   HttpException,
   HttpStatus,
-  Injectable
+  Injectable,
+  OnModuleDestroy
 } from '@nestjs/common';
 
 /**
@@ -20,7 +21,7 @@ import {
  * replace this implementation.
  */
 @Injectable()
-export class AiRateLimiterGuard implements CanActivate {
+export class AiRateLimiterGuard implements CanActivate, OnModuleDestroy {
   /** Rolling window length in milliseconds (1 minute). */
   private static readonly WINDOW_MS = 60_000;
 
@@ -32,6 +33,15 @@ export class AiRateLimiterGuard implements CanActivate {
    * window are evicted lazily on each check to bound memory growth.
    */
   private readonly requestLog = new Map<string, number[]>();
+
+  /**
+   * Clear all rate-limit state on module teardown.
+   * Ensures a graceful restart begins with empty counters, and prevents
+   * the request log from leaking memory across test runs.
+   */
+  public onModuleDestroy(): void {
+    this.requestLog.clear();
+  }
 
   public canActivate(context: ExecutionContext): boolean {
     const request = context
@@ -57,6 +67,7 @@ export class AiRateLimiterGuard implements CanActivate {
     if (recentTimestamps.length >= AiRateLimiterGuard.MAX_REQUESTS) {
       throw new HttpException(
         {
+          errorCode: 'RATE_LIMITED',
           error: 'Too Many Requests',
           message: `Rate limit exceeded. Maximum ${AiRateLimiterGuard.MAX_REQUESTS} requests per minute.`,
           statusCode: HttpStatus.TOO_MANY_REQUESTS
