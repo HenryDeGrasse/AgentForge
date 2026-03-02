@@ -6,17 +6,34 @@ import {
   SLOW_RESPONSE_THRESHOLD_MS,
   VerifiedResponse
 } from '@ghostfolio/api/app/endpoints/ai/contracts/final-response.schema';
+import { containsUnbackedPortfolioClaim } from '@ghostfolio/api/app/endpoints/ai/utils/portfolio-claim-detector';
 
 import { Injectable } from '@nestjs/common';
 
+/**
+ * Enriches a raw agent result with heuristic quality signals before it
+ * reaches the frontend.
+ *
+ * Confidence scoring is DETERMINISTIC (no second LLM call):
+ *  - HIGH   → completed, tools called, no tool errors
+ *  - MEDIUM → partial completion OR tool errors OR no tools used
+ *  - LOW    → failed status
+ *
+ * Warnings are generated for: slow responses, guardrail fires, missing
+ * tool coverage, and unbacked portfolio claims (detected via regex).
+ *
+ * "Requires human review" is set when confidence is low, a guardrail fired,
+ * or the response contains portfolio claims without tool backing.
+ */
 @Injectable()
 export class ResponseVerifierService {
   /**
-   * Verify and enrich a raw agent result before it reaches the frontend.
+   * Build a fully-populated VerifiedResponse from a raw agent result.
    *
    * @param result  - Raw output from ReactAgentService.run()
    * @param invokedToolNames - Tool names that were actually invoked (derived from executedTools)
-   * @returns A fully-populated VerifiedResponse — never throws
+   * @param traceId - Optional Langfuse trace ID for feedback correlation
+   * @returns VerifiedResponse — never throws
    */
   public verify(
     result: ReactAgentRunResult,
@@ -130,14 +147,12 @@ export class ResponseVerifierService {
 
   /**
    * Returns true if the text contains specific portfolio data assertions
-   * (values, holdings, compliance status) that should be backed by tools.
-   * Generic mentions of "portfolio" (e.g., "I can help with your portfolio")
-   * do NOT trigger this.
+   * that should be backed by tools.
+   * Delegates to containsUnbackedPortfolioClaim() — the single source of
+   * truth shared with ReactAgentService to prevent pattern drift.
    */
   private containsPortfolioClaims(text: string): boolean {
-    return /\b(?:your portfolio (?:is|has|shows|contains|looks|total|value|worth)|your holdings (?:are|include|show|consist)|total value (?:is|of)|net worth (?:is|of)|worth (?:about |approximately )?\$[\d,]+|(?:you have|you own|you hold) [\d]+ (?:share|position|holding|stock|asset)|(?:gain|loss|return) of [\d.]+%|(?:compliant|non-compliant) with)\b/i.test(
-      text
-    );
+    return containsUnbackedPortfolioClaim(text);
   }
 
   private guardrailWarning(guardrail: AgentGuardrailType): string {

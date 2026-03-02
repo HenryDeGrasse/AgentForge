@@ -18,6 +18,7 @@ import {
 import { ToolRegistry } from '@ghostfolio/api/app/endpoints/ai/tools/tool.registry';
 import { ToolResultEnvelope } from '@ghostfolio/api/app/endpoints/ai/tools/tool.types';
 import { summarizeToolOutput } from '@ghostfolio/api/app/endpoints/ai/tools/utils/tool-summarizers';
+import { containsUnbackedPortfolioClaim } from '@ghostfolio/api/app/endpoints/ai/utils/portfolio-claim-detector';
 import type { SseEvent } from '@ghostfolio/common/interfaces';
 
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
@@ -412,18 +413,12 @@ export class ReactAgentService {
           // any tools to fetch that data. This is the only scenario where
           // escalation (forcing tool use) is appropriate.
           //
-          // We intentionally do NOT detect "refusals" (negative) because the
-          // LLM can refuse in countless ways. Instead we detect the positive
-          // signal: portfolio-specific claims that should be backed by tools.
-          //
-          // The pattern requires a concrete assertion (verb + predicate),
-          // not just a mention of "portfolio" (which could be a greeting
-          // like "How can I help with your portfolio?").
+          // Detection logic is in containsUnbackedPortfolioClaim() —
+          // a single shared utility used here and in ResponseVerifierService
+          // to prevent the two callsites from drifting.
           const looksLikeUnbackedPortfolioClaim =
             toolCallsCount === 0 &&
-            /\b(?:your portfolio (?:is|has|shows|contains|looks|total|value|worth)|your holdings (?:are|include|show|consist)|total value (?:is|of)|net worth (?:is|of)|worth (?:about |approximately )?\$[\d,]+|(?:you have|you own|you hold) [\d]+ (?:share|position|holding|stock|asset)|(?:portfolio|account) (?:is worth|has a|total is|value is|contains)|(?:gain|loss|return) of [\d.]+%|risk (?:score|level|rating) (?:is|of) |(?:compliant|non-compliant) with|(?:tax liability|tax estimate) (?:is|of)|your (?:allocation is|exposure is|positions? (?:are|include)))\b/i.test(
-              responseText
-            );
+            containsUnbackedPortfolioClaim(responseText);
 
           if (
             toolDefinitions.length > 0 &&

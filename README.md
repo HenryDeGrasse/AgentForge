@@ -76,6 +76,7 @@ New test file: `apps/api/test/ai/phase3-evals.spec.ts`
    - `AiRateLimiterGuard` implements a sliding-window rate limit: 20 requests per user per 60-second window.
    - Applied to both `POST /ai/chat` and `POST /ai/chat/stream`. Excess requests receive HTTP 429.
    - Guard is `@Injectable()` and registered in `AiModule`; stale timestamps are evicted lazily on each access to prevent unbounded memory growth.
+   - **Note:** This is an in-memory guard — it does not share state across multiple server instances. For multi-instance deployments a Redis-backed throttler should replace it.
    - 8 tests cover: single request, at-limit, over-limit, HTTP 429 status, per-user isolation, window expiry, stale eviction, unauthenticated pass-through.
 
 2. **Scope gate keyword-stuffing tests** (`ai.service.spec.ts`):
@@ -83,6 +84,11 @@ New test file: `apps/api/test/ai/phase3-evals.spec.ts`
      - "write a poem about my stock portfolio" → rejected ("write a poem" matches before "stock")
      - "predict the future price of my ETF" → rejected ("predict the future" matches before "ETF")
      - "use my portfolio returns to buy lottery tickets" → rejected ("lottery" matches before "portfolio")
+
+3. **Output sanitization** (`utils/output-sanitizer.ts`):
+   - LLM responses are sanitized before reaching the frontend: HTML tags stripped, markdown-image exfiltration links neutralized, zero-width Unicode characters removed.
+   - Preserves all valid markdown (bold, italic, tables, lists, code blocks).
+   - Applied in `ResponseVerifierService.verify()` before building the final response envelope.
 
 #### Phase 5 Operational Improvements
 
@@ -117,17 +123,19 @@ Built-in guardrails:
 - **Max iterations** — prevents infinite tool-call loops (default: 15)
 - **Cost limit** — aborts if estimated LLM spend exceeds threshold (default: $0.25)
 - **Circuit breaker** — backs off after repeated tool failures
-- **Request timeout** — per-turn deadline (default: 30 s)
+- **Request timeout** — total agent deadline (default: 60 s)
 
-### Response Verifier (`response-verifier.service.ts`)
+### Response Quality Assessor (`response-verifier.service.ts`)
 
-After the agent finishes, a second LLM call grades the response on a `LOW / MEDIUM / HIGH` confidence scale by checking:
+After the agent finishes, a deterministic heuristic scorer assigns a `LOW / MEDIUM / HIGH` confidence level:
 
-- Did the agent call at least one tool?
-- Does the response cite specific figures from tool outputs?
-- Are tool outputs schema-valid?
+- **HIGH** — agent completed, called at least one tool, no tool errors
+- **MEDIUM** — partial completion, tool errors present, or no tools used
+- **LOW** — agent failed entirely
 
-The confidence level is returned with every response so callers can show uncertainty signals in the UI.
+Additional warnings are attached for: slow responses, guardrail fires, missing tool coverage, and unbacked portfolio claims detected via pattern matching. A `requiresHumanReview` flag is set when confidence is low or a guardrail fired.
+
+The confidence level and warnings are returned with every response so callers can show uncertainty signals in the UI.
 
 ---
 
@@ -243,11 +251,11 @@ The `dev.sh` commands:
 
 The full set of upstream Ghostfolio env vars is still supported. The AI-specific additions are:
 
-| Name             | Type     | Default  | Description                                               |
-| ---------------- | -------- | -------- | --------------------------------------------------------- |
-| `OPENAI_API_KEY` | `string` | —        | OpenAI API key (used for the ReAct agent and verifier)    |
-| `OPENAI_MODEL`   | `string` | `gpt-4o` | Model to use for agent turns                              |
-| `EVAL_API_URL`   | `string` | —        | Base URL for live eval runs in CI (`pre-merge-evals` job) |
+| Name             | Type     | Default   | Description                                               |
+| ---------------- | -------- | --------- | --------------------------------------------------------- |
+| `OPENAI_API_KEY` | `string` | —         | OpenAI API key (used for the ReAct agent and verifier)    |
+| `OPENAI_MODEL`   | `string` | `gpt-4.1` | Model to use for agent turns                              |
+| `EVAL_API_URL`   | `string` | —         | Base URL for live eval runs in CI (`pre-merge-evals` job) |
 
 Standard Ghostfolio env vars:
 
