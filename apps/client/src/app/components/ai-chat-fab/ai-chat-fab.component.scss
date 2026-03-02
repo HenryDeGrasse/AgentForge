@@ -1,50 +1,109 @@
+// ─── Design tokens ────────────────────────────────────────────────────────────
+$c-indigo: #5c6bc0;
+$c-navy: #1a1a2e;
+$c-navy-hover: #16213e;
+
+// ─── Host positioning ────────────────────────────────────────────────────────
 :host {
   position: fixed;
   bottom: 1.75rem;
   right: 1.75rem;
   z-index: 1000;
+
+  // Smooth repositioning when stacking above a page-level FAB
   transition:
     opacity 0.2s ease,
-    transform 0.2s ease;
+    transform 0.2s ease,
+    bottom 0.3s cubic-bezier(0.34, 1.4, 0.64, 1);
 
   &.hidden {
     opacity: 0;
     pointer-events: none;
     transform: scale(0.85);
   }
+
+  // On pages that render their own page-level FAB (e.g. /accounts, /portfolio/activities)
+  // shift the AI FAB up so the two buttons never overlap.
+  // A Material FAB is 56px tall; we add 1rem gap → 56 + 16 + original 28 = 100px ≈ 6.25rem.
+  &.has-page-fab {
+    bottom: 6.25rem;
+  }
 }
 
+// ─── Button ──────────────────────────────────────────────────────────────────
 .fab-btn {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.5rem;
   padding: 0.65rem 1.25rem;
   border: none;
   border-radius: 9999px;
-  background: #1a1a2e;
+  background: linear-gradient(135deg, $c-navy 0%, #16213e 60%, #0f3460 100%);
   color: #fff;
   font-size: 0.875rem;
   font-weight: 600;
   letter-spacing: 0.02em;
   cursor: pointer;
   box-shadow:
-    0 4px 16px rgba(0, 0, 0, 0.18),
+    0 4px 16px rgba(0, 0, 0, 0.22),
     0 1px 4px rgba(0, 0, 0, 0.1);
   transition:
-    background 0.15s ease,
     box-shadow 0.15s ease,
     transform 0.15s ease;
+  overflow: visible;
+
+  // Pulsing glow ring — draws attention on first appearance
+  &::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 9999px;
+    background: linear-gradient(135deg, $c-indigo, #7e57c2);
+    opacity: 0;
+    z-index: -1;
+    animation: fabPulse 4s ease-in-out infinite;
+  }
 
   &:hover {
-    background: #16213e;
     box-shadow:
-      0 6px 24px rgba(0, 0, 0, 0.22),
-      0 2px 6px rgba(0, 0, 0, 0.12);
-    transform: translateY(-1px);
+      0 6px 24px rgba(0, 0, 0, 0.28),
+      0 2px 8px rgba(92, 107, 192, 0.25);
+    transform: translateY(-2px) scale(1.02);
   }
 
   &:active {
-    transform: translateY(0);
+    transform: translateY(0) scale(0.98);
+  }
+}
+
+@keyframes fabPulse {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(1.1);
+  }
+}
+
+// ─── Icon + label ─────────────────────────────────────────────────────────────
+.fab-icon-wrap {
+  font-size: 0.9rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 6px rgba(129, 140, 248, 0.8));
+  animation: iconGlow 3s ease-in-out infinite;
+}
+
+@keyframes iconGlow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 4px rgba(129, 140, 248, 0.5));
+  }
+  50% {
+    filter: drop-shadow(0 0 10px rgba(129, 140, 248, 1));
   }
 }
 
@@ -52,7 +111,7 @@
   white-space: nowrap;
 }
 
-// Animated loading dots
+// ─── Loading dots ─────────────────────────────────────────────────────────────
 .fab-loading {
   display: flex;
   align-items: center;
@@ -88,5 +147,19 @@
   40% {
     transform: scale(1);
     opacity: 1;
+  }
+}
+
+// ─── Dark mode ────────────────────────────────────────────────────────────────
+:host-context(.theme-dark) .fab-btn {
+  background: linear-gradient(135deg, #3949ab 0%, $c-indigo 100%);
+  box-shadow:
+    0 4px 20px rgba(92, 107, 192, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.06);
+
+  &:hover {
+    box-shadow:
+      0 6px 28px rgba(92, 107, 192, 0.5),
+      0 0 0 1px rgba(255, 255, 255, 0.1);
   }
 }
