@@ -1749,4 +1749,40 @@ describe('Phase 5 structured telemetry', () => {
 
     expect(telemetryMsg).toBeDefined();
   });
+
+  // ─── Streaming timeout ─────────────────────────────────────────────────
+
+  it('enforces timeout during streaming LLM completion', async () => {
+    // Simulate a stream that stalls indefinitely after the first chunk
+    const registry = new ToolRegistry();
+    const llmStalling: LLMClient = {
+      complete: jest.fn(),
+      completeStream: jest.fn().mockImplementation(() => {
+        return (async function* () {
+          yield { delta: 'partial...' };
+          // Stall forever — simulating OpenAI hanging mid-stream
+          await new Promise(() => {});
+        })();
+      })
+    };
+
+    const agent = new ReactAgentService(llmStalling, registry);
+
+    const result = await agent.run({
+      guardrails: {
+        circuitBreakerCooldownMs: 60_000,
+        circuitBreakerFailureThreshold: 3,
+        costLimitUsd: 1,
+        fallbackCostPer1kTokensUsd: 0.002,
+        maxIterations: 2,
+        timeoutMs: 200 // 200ms timeout
+      },
+      prompt: 'This should timeout',
+      userId: 'user-timeout'
+    });
+
+    expect(result.guardrail).toBe('TIMEOUT');
+    expect(result.status).toBe('partial');
+    expect(result.response).toContain('time budget');
+  });
 });

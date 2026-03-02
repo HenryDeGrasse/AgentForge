@@ -572,8 +572,8 @@ export class ReactAgentService implements OnModuleDestroy {
     messages: LLMMessage[],
     toolDefinitions: LLMToolDefinition[],
     toolChoice: 'auto' | 'none' | 'required',
-    _guardrails: ReactAgentGuardrails,
-    _startedAt: number,
+    guardrails: ReactAgentGuardrails,
+    startedAt: number,
     signal?: AbortSignal
   ): AsyncGenerator<SseEvent, LLMCompletionResponse> {
     let fullText = '';
@@ -592,7 +592,11 @@ export class ReactAgentService implements OnModuleDestroy {
       signal
     );
 
-    for await (const chunk of stream) {
+    for await (const chunk of this.withStreamTimeout(
+      stream,
+      startedAt,
+      guardrails.timeoutMs
+    )) {
       if (signal?.aborted) {
         break;
       }
@@ -621,6 +625,38 @@ export class ReactAgentService implements OnModuleDestroy {
       toolCalls,
       ...(usage ? { usage } : {})
     };
+  }
+
+  /**
+   * Wraps an async iterable with a per-chunk timeout derived from the
+   * agent's overall time budget. Throws AgentTimeoutError if the source
+   * does not yield a chunk before the remaining budget expires.
+   *
+   * This prevents a stalled LLM stream (e.g. OpenAI hanging mid-response)
+   * from keeping the connection open indefinitely, bypassing the agent timeout.
+   */
+  private async *withStreamTimeout<T>(
+    source: AsyncIterable<T>,
+    startedAt: number,
+    timeoutMs: number
+  ): AsyncIterable<T> {
+    const iterator = source[Symbol.asyncIterator]();
+
+    while (true) {
+      const remaining = timeoutMs - (Date.now() - startedAt);
+
+      if (remaining <= 0) {
+        throw new AgentTimeoutError();
+      }
+
+      const next = await this.withTimeout(iterator.next(), remaining);
+
+      if (next.done) {
+        return;
+      }
+
+      yield next.value;
+    }
   }
 
   private buildGuardrailResult({
