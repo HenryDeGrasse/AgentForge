@@ -296,6 +296,10 @@ describe('AiService.chat() — updatedAt touch', () => {
   });
 });
 
+// Test 8 removed: systemPrompt was removed from the public API (Phase 4).
+// The guard that rejected systemPrompt on existing conversations no longer
+// exists because the field itself is gone from ChatDto.
+
 // ─── Test 9: History cap ──────────────────────────────────────────────────────
 
 describe('AiService.chat() — history cap', () => {

@@ -1,0 +1,314 @@
+{
+  "repo_notes": [
+    {
+      "content": "AgentForge is a fork of Ghostfolio. Everything under apps/api/src/app/endpoints/ai/ is new — the rest of the platform is inherited without modification. Documentation should always make this boundary explicit. The fork was built in 5 phases (bug fixes → reliability → eval coverage → security hardening → operational improvements), all now complete."
+    }
+  ],
+  "pages": [
+    {
+      "title": "Overview",
+      "purpose": "Introduce the AgentForge repository as a fork of Ghostfolio, summarizing its purpose as a self-hostable wealth management platform with an added AI agent layer, its main capabilities, and how the project is organized at the top level",
+      "page_notes": [
+        {
+          "content": "Emphasize the fork boundary: everything under apps/api/src/app/endpoints/ai/ is new, the rest is inherited. All 5 development phases are complete."
+        }
+      ]
+    },
+    {
+      "title": "Architecture Overview",
+      "purpose": "Describe the high-level system architecture: Angular frontend, NestJS backend, AI agent layer, PostgreSQL database, Redis cache, BullMQ job queues, and external service integrations",
+      "parent": "Overview",
+      "page_notes": [
+        {
+          "content": "The AI layer is self-contained within endpoints/ai/ and does not modify any upstream Ghostfolio module. It calls into existing PortfolioService, OrderService, and ExchangeRateDataService — no new data-access logic was introduced."
+        }
+      ]
+    },
+    {
+      "title": "Monorepo Structure",
+      "purpose": "Explain the Nx monorepo layout, listing the main projects (apps/api, apps/client, libs/common, libs/ui) and how they relate, including angular.json, nx.json, and package.json roles",
+      "parent": "Overview",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Deployment and Configuration",
+      "purpose": "Top-level page covering all deployment and configuration topics for self-hosting AgentForge",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Docker Setup",
+      "purpose": "Document the Dockerfile build process and the three docker-compose files (docker-compose.yml, docker-compose.build.yml, docker-compose.dev.yml), explaining service definitions for ghostfolio, postgres, and redis, and the dev.sh helper script commands",
+      "parent": "Deployment and Configuration",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Environment Variables and Configuration",
+      "purpose": "List and explain all environment variables from .env.example, covering database credentials, Redis connection, JWT secrets, OpenAI API key and model selection, Langfuse and Helicone observability keys, and feature flags",
+      "parent": "Deployment and Configuration",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Backend API",
+      "purpose": "Top-level page for the NestJS backend API, briefly summarizing the major modules and how they are composed in AppModule",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "API Bootstrap and Middleware",
+      "purpose": "Document the NestJS bootstrap function in main.ts (global prefix, versioning, ValidationPipe, AllExceptionsFilter, helmet, CORS), HtmlTemplateMiddleware for client-side rendering with localized metadata, and the frontend serving setup",
+      "parent": "Backend API",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Database Schema",
+      "purpose": "Document the Prisma schema, describing all models (User, Account, AccountBalance, Order, Subscription, SymbolProfile, MarketData, Tag, Platform, Property, Access, Analytics, ChatConversation, ChatMessage) and their relationships and key fields",
+      "parent": "Backend API",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Configuration, Permissions and System Info",
+      "purpose": "Document ConfigurationService (typed environment variable access), the permissions system and permission constants, global constants from config.ts (queue names, cache TTLs, PROPERTY_ keys, default values), InfoService statistics, and RedisCacheModule setup",
+      "parent": "Backend API",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Portfolio Service",
+      "purpose": "Document PortfolioService and PortfolioController in detail: all API endpoints (details, dividends, holdings, investments, performance, report, holding tags), the PortfolioDetails and PortfolioPosition interfaces, subscription-based data redaction, and how the portfolio calculator is invoked",
+      "parent": "Backend API",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Portfolio Calculator",
+      "purpose": "Document the portfolio calculation engine: TWR and RoAI calculation methods, CurrentRateService, position snapshots, performance metrics computation, and how the calculator processes orders into portfolio positions with annualized performance figures",
+      "parent": "Backend API",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "User and Account Management",
+      "purpose": "Document UserService and UserController (user CRUD, access token rotation, settings updates, impersonation), AccountService and AccountController (account CRUD, balance management, transfer-balance endpoint, getCashDetails), and the PortfolioChangedEvent pattern",
+      "parent": "Backend API",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Activity Management and Import/Export",
+      "purpose": "Document OrderService and OrderController (activity CRUD, bulk delete, filter/sort/paginate), ImportService and ImportController (JSON/CSV import with dry-run validation), and ExportService and ExportController (filtered export of accounts, activities, asset profiles, tags into ExportResponse)",
+      "parent": "Backend API",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Market Data Providers",
+      "purpose": "Document the DataProviderInterface contract, DataProviderService orchestration (quote caching via Redis, historical data, search, derived currencies), all provider implementations (Yahoo Finance with YahooFinanceDataEnhancerService, FMP, EOD Historical Data, Manual/Scraper, CoinGecko, Alpha Vantage, Rapid API, Google Sheets), and CryptocurrencyService",
+      "parent": "Backend API",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Data Gathering and Background Jobs",
+      "purpose": "Document DataGatheringService (gather7Days, gatherMax, gatherSymbol, gatherSymbolForDate, addJobsToQueue), CronService scheduling, BullMQ queue setup (DATA_GATHERING_QUEUE, PORTFOLIO_SNAPSHOT_COMPUTATION_QUEUE), job processors, priority levels, and retry/backoff configuration from config constants",
+      "parent": "Backend API",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Admin API",
+      "purpose": "Document AdminService and AdminController: asset profile CRUD (addAssetProfile, deleteProfileData, patchAssetProfileData), getMarketData with MarketDataPreset filters, putSetting, getUsers/getUser with analytics, scraper configuration testing, and the extended Prisma client with computed fields",
+      "parent": "Backend API",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Subscription and Payments",
+      "purpose": "Document SubscriptionService and SubscriptionController: Stripe checkout session creation, Stripe callback processing (createSubscriptionViaStripe), coupon redemption endpoint, createSubscription, getSubscription (Premium/Basic determination, early-bird renewal offers), and SubscriptionOffer/SubscriptionOfferKey types",
+      "parent": "Backend API",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Symbol Lookup and Exchange Rates",
+      "purpose": "Document SymbolService and SymbolController (GET /symbol/lookup, GET /symbol/:dataSource/:symbol, GET /symbol/:dataSource/:symbol/:dateString), ExchangeRateService and ExchangeRateController (GET /exchange-rate/:symbol/:dateString), and ExchangeRateDataService for currency conversions",
+      "parent": "Backend API",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Benchmark and Rules Engine",
+      "purpose": "Document BenchmarkService (benchmark asset management, performance comparison data), the portfolio rules engine used in the X-Ray report endpoint, individual risk rule implementations (account cluster risk, etc.), and how rule results are redacted for basic subscriptions",
+      "parent": "Backend API",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "AI Agent Layer",
+      "purpose": "Top-level page introducing the AgentForge AI agent layer: its purpose, the POST /api/v1/ai/chat endpoint, the ReAct pattern overview, the 10 tools, and the overall flow from user message to verified response",
+      "page_notes": [
+        {
+          "content": "The AI layer is entirely self-contained in apps/api/src/app/endpoints/ai/. Key subdirectories: agent/ (ReAct loop + system prompt builder), tools/ (10 tools + schemas + validators), verification/ (response verifier), routing/ (tool router — now a trivial pass-through), llm/ (OpenAI client abstraction), observability/ (Langfuse), utils/ (output sanitizer, conversation validator, portfolio claim detector), contracts/ (structured error codes)."
+        }
+      ]
+    },
+    {
+      "title": "AI API Endpoints and AiService",
+      "purpose": "Document AiController endpoints (POST /ai/chat, POST /ai/chat/stream, GET /ai/conversations, DELETE /ai/conversations/:id, GET /ai/prompt/:mode, POST /ai/feedback), AiService methods (chat, chatStream, getPrompt, generateText), SystemPromptBuilderService (dynamic per-request prompt assembly), and LangfuseService integration for tracing and feedback",
+      "parent": "AI Agent Layer",
+      "page_notes": [
+        {
+          "content": "The systemPrompt field was removed from the public ChatDto API to prevent guardrail bypass. SystemPromptBuilderService now assembles the prompt dynamically from modular sections (CORE_IDENTITY, SCOPE_RULES, TOOL_USAGE, etc.) — only including sections relevant to the selected tool set. The keyword-based ToolRouterService was replaced with a pass-through that sends all tools to the LLM."
+        }
+      ]
+    },
+    {
+      "title": "ReAct Agent",
+      "purpose": "Document ReactAgentService in detail: the iterative reasoning loop, parallel tool execution via Promise.all(), tool output truncation (AGENT_TOOL_OUTPUT_MAX_CHARS), guardrails (COST_LIMIT with per-model pricing, MAX_ITERATIONS, TIMEOUT with AbortController on streams, per-user CIRCUIT_BREAKER), escalation hardening with toolChoice:'required', context window guard, structured telemetry emission (status, guardrail, toolCalls, iterations, estimatedCostUsd, elapsedMs), and the deprecated AGENT_DEFAULT_SYSTEM_PROMPT",
+      "parent": "AI Agent Layer",
+      "page_notes": [
+        {
+          "content": "Recent changes: circuit breaker is now per-user (keyed by userId) to prevent cross-user DoS. Cost estimation uses per-model pricing for prompt/completion/cached tokens separately. Stream timeout is enforced via AbortController threaded to the OpenAI client. Structured telemetry emits JSON log lines after every agent run."
+        }
+      ]
+    },
+    {
+      "title": "AI Tools Reference",
+      "purpose": "Document all 10 AI tools (get_portfolio_summary, get_transaction_history, analyze_risk, market_data_lookup, performance_compare, compliance_check, rebalance_suggest, simulate_trades, stress_test, tax_estimate), their JSON input/output schemas, description annotations used by the LLM, the ToolRegistry registration mechanism, and per-instance negative caching in market_data_lookup",
+      "parent": "AI Agent Layer",
+      "page_notes": [
+        {
+          "content": "The keyword-based tool router was removed — all 10 tools are always passed to the LLM, which selects the appropriate ones. market_data_lookup's negative cache was moved from module scope to per-tool-instance to prevent cross-test and cross-instance cache pollution. Tool bugs fixed: zero-cash buy in simulate_trades, TLH holding period in tax_estimate, cache leak in market_data_lookup."
+        }
+      ]
+    },
+    {
+      "title": "Security and Guardrails",
+      "purpose": "Document all security hardening from Phases 4 and 5: AiRateLimiterGuard (sliding-window, atomic push-before-check, per-user isolation, in-memory caveat), output sanitizer (HTML stripping, markdown-image exfiltration, zero-width Unicode), systemPrompt removal from public API, new Function() elimination, per-user circuit breaker, scope gate keyword-stuffing defense, and conversation history validator (leading-assistant-drop, consecutive-role dedup)",
+      "parent": "AI Agent Layer",
+      "page_notes": [
+        {
+          "content": "This is a new page that consolidates security work from Phase 4 and Phase 5. The rate limiter has an atomic TOCTOU fix. The output sanitizer runs in ResponseVerifierService.verify() before building the final response. The conversation history validator repairs malformed priorMessages arrays without throwing."
+        }
+      ]
+    },
+    {
+      "title": "Response Verification and Conversation History",
+      "purpose": "Document ResponseVerifierService (confidence scoring LOW/MEDIUM/HIGH, warnings, requiresHumanReview, structured AgentErrorCode derivation, output sanitization pass), ActionExtractorService (deterministic follow-up action chips based on invoked tools), ChatConversationService (conversation and message persistence via Prisma), portfolio-claim-detector as shared utility, and the VerifiedResponse schema with optional errorCode field",
+      "parent": "AI Agent Layer",
+      "page_notes": [
+        {
+          "content": "ResponseVerifierService now runs output sanitization and derives structured error codes (CIRCUIT_BREAKER, COST_LIMIT, MAX_ITERATIONS, TIMEOUT, EMPTY_RESPONSE, CANCELLED, INTERNAL_ERROR) without a second LLM call. The portfolio-claim detector was extracted as a shared utility used by both the agent (escalation trigger) and verifier (warning generation)."
+        }
+      ]
+    },
+    {
+      "title": "AI Evaluation and Testing",
+      "purpose": "Document the four-tier evaluation framework: fast-tier unit tests (mocked, 27 cases, <30s), live golden sets (real LLM, 12 cases), MVP evals (real LLM, 5 cases), nightly labeled scenarios (31 cases). Cover golden-sets.json fixture format, llm-sequences/ scripted responses, tool-profiles.ts deterministic stubs, and how schemas are imported from production to prevent fixture drift. Include dev.sh eval commands and the evals.yml GitHub Actions workflow.",
+      "parent": "AI Agent Layer",
+      "page_notes": [
+        {
+          "content": "Precision numerical regression tests were added for statistical helpers (Sharpe, Sortino, CVaR, annualized return) with tight tolerance. Multi-turn conversation rehydration and indirect prompt injection tests were added in Phase 3."
+        }
+      ]
+    },
+    {
+      "title": "Frontend Client",
+      "purpose": "Top-level page for the Angular frontend client application, summarizing the main page sections and routing structure",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Application Shell, Routing and Theming",
+      "purpose": "Document GfAppComponent (theme management, global keyboard shortcuts, holding detail dialog), GfHeaderComponent (navigation, impersonation menu, assistant hotkey), app routing module, AuthGuard, route definitions (internalRoutes, publicRoutes), global SCSS theming, CSS variables for light and dark themes, and the theme-dark class mechanism",
+      "parent": "Frontend Client",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Home Page",
+      "purpose": "Document GfHomePageComponent (tabbed layout with markets, holdings, summary, watchlist tabs), GfHomeOverviewComponent (portfolio performance line chart, new user onboarding guide), GfHomeHoldingsComponent (table/treemap toggle, HoldingType filter), GfPortfolioPerformanceComponent (CountUp animated metrics), and GfTreemapChartComponent",
+      "parent": "Frontend Client",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Portfolio Section",
+      "purpose": "Document PortfolioPageComponent (tabbed layout), GfAnalysisPageComponent (investment chart, benchmark comparator, AI prompt copy), GfAllocationsPageComponent (allocation breakdown charts), GfActivitiesPageComponent (activities table with import/export), GfFirePageComponent (FIRE calculator), X-Ray page, and GfHoldingDetailDialogComponent",
+      "parent": "Frontend Client",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    }
+  ]
+}

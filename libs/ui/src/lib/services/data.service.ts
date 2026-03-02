@@ -1016,7 +1016,10 @@ export class DataService {
     score: 'down' | 'up';
     traceId: string;
   }) {
-    return this.http.post<void>('/api/v1/ai/feedback', { score, traceId });
+    return this.http.post<void>('/api/v1/ai/feedback', {
+      traceId,
+      value: score === 'up' ? 1 : -1
+    });
   }
 
   public updateInfo() {
