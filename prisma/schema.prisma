@@ -268,8 +268,9 @@ model User {
   apiKeys           ApiKey[]
   authChallenge     String?
   authDevices       AuthDevice[]
-  chatConversations ChatConversation[]
-  createdAt         DateTime           @default(now())
+  chatConversations       ChatConversation[]
+  createdAt               DateTime                @default(now())
+  insiderMonitoringRules  InsiderMonitoringRule[]
   id                String             @id @default(uuid())
   provider          Provider           @default(ANONYMOUS)
   role              Role               @default(USER)
@@ -319,6 +320,62 @@ model ChatMessage {
 enum ChatRole {
   assistant
   user
+}
+
+model AiRunLog {
+  cacheHitCount    Int?
+  cacheMissCount   Int?
+  conversationId   String?
+  createdAt        DateTime @default(now())
+  elapsedMs        Int?
+  estimatedCostUsd Float?
+  guardrail        String?
+  id               String   @id @default(uuid())
+  invokedToolNames String?
+  providerLatencyMs Int?
+  providerName     String?
+  userId           String
+  warnings         String?
+
+  @@index([userId, createdAt])
+}
+
+model InsiderTransaction {
+  createdAt       DateTime @default(now())
+  id              String   @id @default(uuid())
+  insiderName     String
+  insiderRelation String?
+  price           Float?
+  shares          Float?
+  side            String
+  sourceKey       String   @unique
+  sourceProvider  String
+  sourceUrl       String?
+  symbol          String
+  txDate          DateTime
+  valueUsd        Float?
+
+  @@index([symbol, txDate])
+}
+
+model InsiderMonitoringRule {
+  agentNotes     String?
+  createdAt      DateTime  @default(now())
+  id             String    @id @default(uuid())
+  isActive       Boolean   @default(true)
+  lastCheckedAt  DateTime?
+  lastNotifiedAt DateTime?
+  lookbackDays   Int       @default(30)
+  minValueUsd    Float?
+  scope          String
+  side           String
+  symbols        String?
+  topN           Int?
+  updatedAt      DateTime  @updatedAt
+  user           User      @relation(fields: [userId], onDelete: Cascade, references: [id])
+  userId         String
+
+  @@index([userId, updatedAt])
 }
 
 enum AccessPermission {
