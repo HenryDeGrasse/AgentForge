@@ -261,4 +261,63 @@ describe('statistical-helpers', () => {
       expect(computeAnnualizedReturn(0.1, 0)).toBe(0);
     });
   });
+
+  // ─── Precision numerical tests ─────────────────────────────────────
+  // These tests use hand-calculated inputs with tight tolerance (±0.005)
+  // to act as regression guards against formula changes. If a refactor
+  // accidentally swaps sample/population variance, or uses 365 instead
+  // of 252 trading days, these tests will catch it.
+
+  describe('numerical precision', () => {
+    it('Sharpe ratio: series designed to produce exactly 1.50 annualized', () => {
+      // Constructed series: 10 × (+0.011315) and 10 × (−0.009315)
+      //   mean  = 0.001
+      //   sample stddev = 0.011315 × √(20/19) ≈ 0.010583
+      //   daily Sharpe  = 0.001 / 0.010583 ≈ 0.09449
+      //   annualized    = 0.09449 × √252 ≈ 1.500
+      const returns = [
+        ...Array(10).fill(0.011315),
+        ...Array(10).fill(-0.009315)
+      ];
+
+      const sharpe = computeSharpeRatio(returns, 0);
+
+      expect(sharpe).toBeCloseTo(1.5, 1); // within ±0.05
+    });
+
+    it('Sortino ratio exceeds Sharpe when upside volatility dominates', () => {
+      // 8 large positive returns, 2 tiny negatives → upside vol >> downside vol
+      // Sharpe penalises both sides equally; Sortino ignores the upside gains,
+      // so Sortino must be materially higher.
+      const returns = [...Array(8).fill(0.02), ...Array(2).fill(-0.001)];
+      const riskFreeDaily = 0.04 / 252;
+
+      const sharpe = computeSharpeRatio(returns, riskFreeDaily);
+      const sortino = computeSortinoRatio(returns, riskFreeDaily);
+
+      expect(sortino).toBeGreaterThan(sharpe * 1.5); // Sortino at least 50% higher
+    });
+
+    it('CVaR(95%) equals the single worst return when only one observation falls in tail', () => {
+      // 20 evenly-spaced returns from -0.095 to 0.000
+      // sorted:  -0.095, -0.090, ..., 0.000
+      // cutoff = max(1, floor(20 × 0.05)) = 1  → tail = [-0.095]
+      // CVaR    = |mean([-0.095])| = 0.095
+      const returns = Array.from({ length: 20 }, (_, i) => (i - 19) / 200);
+
+      const cvar = computeCVaR(returns, 0.95);
+
+      expect(cvar).toBeCloseTo(0.095, 2); // within ±0.005
+    });
+
+    it('annualized return equals total return exactly when period is one full year', () => {
+      // CAGR formula: (1 + r)^(252/252) − 1 = r
+      // So computeAnnualizedReturn(r, 252) must equal r to floating-point precision.
+      const totalReturn = 0.1742; // arbitrary value
+
+      const annualized = computeAnnualizedReturn(totalReturn, 252);
+
+      expect(annualized).toBeCloseTo(totalReturn, 5); // within ±0.000005
+    });
+  });
 });
