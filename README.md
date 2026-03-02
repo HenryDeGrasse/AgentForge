@@ -15,7 +15,7 @@ AgentForge is a fork of [Ghostfolio](https://ghostfol.io) that adds a full AI ag
 | Deliverable                  | Link                                                                                                            |
 | ---------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | **GitHub Repository**        | [github.com/HenryDeGrasse/AgentForge](https://github.com/HenryDeGrasse/AgentForge)                              |
-| **Deployed Application**     | _TODO: add deployed link_                                                                                       |
+| **Deployed Application**     | [Deployed Link](https://agentforge-production-6b51.up.railway.app/)                                                                                     |
 | **Demo Video**               | _TODO: add demo video link_                                                                                     |
 | **Agent Architecture Doc**   | [`docs/AGENT_ARCHITECTURE.md`](./docs/AGENT_ARCHITECTURE.md)                                                    |
 | **Architecture Diagrams**    | [`docs/architecture.md`](./docs/architecture.md)                                                                |
