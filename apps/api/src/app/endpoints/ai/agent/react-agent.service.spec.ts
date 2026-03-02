@@ -417,6 +417,64 @@ describe('ReactAgentService', () => {
     expect(llmClient.complete).toHaveBeenCalledTimes(4);
   });
 
+  it('scopes circuit breaker per-user so one user failure does not block another', async () => {
+    let now = 1_000;
+
+    jest.spyOn(Date, 'now').mockImplementation(() => {
+      return now;
+    });
+
+    (llmClient.complete as jest.Mock)
+      // user-1 failure #1
+      .mockRejectedValueOnce(new Error('Provider unavailable #1'))
+      // user-1 failure #2 → opens circuit for user-1
+      .mockRejectedValueOnce(new Error('Provider unavailable #2'))
+      // user-2 should NOT be blocked — returns normally
+      .mockResolvedValueOnce({
+        finishReason: 'stop',
+        text: 'User 2 is fine.',
+        toolCalls: []
+      });
+
+    const guardrails = {
+      ...defaultGuardrails,
+      circuitBreakerCooldownMs: 5_000,
+      circuitBreakerFailureThreshold: 2
+    };
+
+    // user-1: two failures → circuit opens
+    await reactAgentService.run({
+      guardrails,
+      prompt: 'Try #1',
+      userId: 'user-1'
+    });
+
+    await reactAgentService.run({
+      guardrails,
+      prompt: 'Try #2',
+      userId: 'user-1'
+    });
+
+    // user-1 is now blocked
+    const blockedResult = await reactAgentService.run({
+      guardrails,
+      prompt: 'Try #3',
+      userId: 'user-1'
+    });
+
+    expect(blockedResult.guardrail).toBe('CIRCUIT_BREAKER');
+
+    // user-2 should NOT be blocked by user-1's failures
+    const user2Result = await reactAgentService.run({
+      guardrails,
+      prompt: 'Hello',
+      userId: 'user-2'
+    });
+
+    expect(user2Result.status).toBe('completed');
+    expect(user2Result.response).toBe('User 2 is fine.');
+  });
+
   // ─── Duplicate tool-call loop detection ────────────────────────────────────
 
   it('breaks out of a duplicate tool-call loop after 3 consecutive identical calls', async () => {

@@ -95,11 +95,11 @@ interface CircuitBreakerState {
 
 @Injectable()
 export class ReactAgentService implements OnModuleDestroy {
-  private circuitBreaker: CircuitBreakerState = {
-    consecutiveFailures: 0,
-    openedAt: 0,
-    state: 'closed'
-  };
+  /**
+   * Per-user circuit breaker state.  Scoped by userId so that one user's
+   * failures do not lock out other users on the same server instance.
+   */
+  private readonly circuitBreakers = new Map<string, CircuitBreakerState>();
 
   private readonly fallbackToolRegistry = new ToolRegistry();
 
@@ -109,16 +109,11 @@ export class ReactAgentService implements OnModuleDestroy {
   ) {}
 
   /**
-   * Reset circuit breaker state on module teardown so that a graceful server
-   * restart begins with a clean slate and does not inherit a previously-open
-   * circuit from the last run.
+   * Reset all circuit breaker state on module teardown so that a graceful
+   * server restart begins with a clean slate.
    */
   public onModuleDestroy(): void {
-    this.circuitBreaker = {
-      consecutiveFailures: 0,
-      openedAt: 0,
-      state: 'closed'
-    };
+    this.circuitBreakers.clear();
   }
 
   /**
@@ -160,7 +155,7 @@ export class ReactAgentService implements OnModuleDestroy {
       };
     };
 
-    if (this.isCircuitBreakerOpen(guardrails, startedAt)) {
+    if (this.isCircuitBreakerOpen(guardrails, startedAt, input.userId)) {
       yield doneEvent(
         this.buildGuardrailResult({
           estimatedCostUsd: 0,
@@ -237,7 +232,7 @@ export class ReactAgentService implements OnModuleDestroy {
         };
 
         if (this.hasTimedOut(startedAt, guardrails.timeoutMs)) {
-          this.recordSuccess();
+          this.recordSuccess(input.userId);
 
           yield doneEvent(
             this.buildGuardrailResult({
@@ -254,7 +249,7 @@ export class ReactAgentService implements OnModuleDestroy {
         }
 
         if (estimatedCostUsd >= guardrails.costLimitUsd) {
-          this.recordSuccess();
+          this.recordSuccess(input.userId);
 
           yield doneEvent(
             this.buildGuardrailResult({
@@ -304,7 +299,7 @@ export class ReactAgentService implements OnModuleDestroy {
         }
 
         if (estimatedCostUsd > guardrails.costLimitUsd) {
-          this.recordSuccess();
+          this.recordSuccess(input.userId);
 
           yield doneEvent(
             this.buildGuardrailResult({
@@ -339,7 +334,7 @@ export class ReactAgentService implements OnModuleDestroy {
           }
 
           if (consecutiveDuplicateToolCalls >= 3) {
-            this.recordSuccess();
+            this.recordSuccess(input.userId);
 
             yield doneEvent({
               elapsedMs: Date.now() - startedAt,
@@ -432,7 +427,7 @@ export class ReactAgentService implements OnModuleDestroy {
           consecutiveEmptyResponses++;
 
           if (consecutiveEmptyResponses >= 2) {
-            this.recordSuccess();
+            this.recordSuccess(input.userId);
 
             yield doneEvent({
               elapsedMs: Date.now() - startedAt,
@@ -493,7 +488,7 @@ export class ReactAgentService implements OnModuleDestroy {
             continue;
           }
 
-          this.recordSuccess();
+          this.recordSuccess(input.userId);
 
           yield doneEvent({
             elapsedMs: Date.now() - startedAt,
@@ -509,7 +504,7 @@ export class ReactAgentService implements OnModuleDestroy {
         }
       }
 
-      this.recordSuccess();
+      this.recordSuccess(input.userId);
 
       yield doneEvent(
         this.buildGuardrailResult({
@@ -523,7 +518,7 @@ export class ReactAgentService implements OnModuleDestroy {
       );
     } catch (error) {
       if (error instanceof AgentTimeoutError) {
-        this.recordSuccess();
+        this.recordSuccess(input.userId);
 
         yield doneEvent(
           this.buildGuardrailResult({
@@ -545,7 +540,7 @@ export class ReactAgentService implements OnModuleDestroy {
         'ReactAgentService'
       );
 
-      this.recordFailure(guardrails, Date.now());
+      this.recordFailure(guardrails, Date.now(), input.userId);
 
       yield doneEvent({
         elapsedMs: Date.now() - startedAt,
@@ -886,53 +881,68 @@ export class ReactAgentService implements OnModuleDestroy {
     return Date.now() - startedAt >= timeoutMs;
   }
 
+  private getCircuitBreaker(userId: string): CircuitBreakerState {
+    let cb = this.circuitBreakers.get(userId);
+
+    if (!cb) {
+      cb = { consecutiveFailures: 0, openedAt: 0, state: 'closed' };
+      this.circuitBreakers.set(userId, cb);
+    }
+
+    return cb;
+  }
+
   private isCircuitBreakerOpen(
     guardrails: ReactAgentGuardrails,
-    now: number
+    now: number,
+    userId: string
   ): boolean {
-    if (this.circuitBreaker.state !== 'open') {
+    const cb = this.getCircuitBreaker(userId);
+
+    if (cb.state !== 'open') {
       return false;
     }
 
-    if (
-      now - this.circuitBreaker.openedAt <
-      guardrails.circuitBreakerCooldownMs
-    ) {
+    if (now - cb.openedAt < guardrails.circuitBreakerCooldownMs) {
       return true;
     }
 
-    this.circuitBreaker.state = 'half_open';
+    cb.state = 'half_open';
 
     return false;
   }
 
-  private recordFailure(guardrails: ReactAgentGuardrails, now: number) {
-    if (this.circuitBreaker.state === 'half_open') {
-      this.circuitBreaker = {
-        consecutiveFailures: guardrails.circuitBreakerFailureThreshold,
-        openedAt: now,
-        state: 'open'
-      };
+  private recordFailure(
+    guardrails: ReactAgentGuardrails,
+    now: number,
+    userId: string
+  ) {
+    const cb = this.getCircuitBreaker(userId);
+
+    if (cb.state === 'half_open') {
+      cb.consecutiveFailures = guardrails.circuitBreakerFailureThreshold;
+      cb.openedAt = now;
+      cb.state = 'open';
 
       return;
     }
 
-    const consecutiveFailures = this.circuitBreaker.consecutiveFailures + 1;
+    cb.consecutiveFailures += 1;
 
-    this.circuitBreaker.consecutiveFailures = consecutiveFailures;
-
-    if (consecutiveFailures >= guardrails.circuitBreakerFailureThreshold) {
-      this.circuitBreaker.openedAt = now;
-      this.circuitBreaker.state = 'open';
+    if (cb.consecutiveFailures >= guardrails.circuitBreakerFailureThreshold) {
+      cb.openedAt = now;
+      cb.state = 'open';
     }
   }
 
-  private recordSuccess() {
-    this.circuitBreaker = {
-      consecutiveFailures: 0,
-      openedAt: 0,
-      state: 'closed'
-    };
+  private recordSuccess(userId: string) {
+    const cb = this.circuitBreakers.get(userId);
+
+    if (cb) {
+      cb.consecutiveFailures = 0;
+      cb.openedAt = 0;
+      cb.state = 'closed';
+    }
   }
 
   /**
