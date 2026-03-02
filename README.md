@@ -16,13 +16,13 @@ Everything under `apps/api/src/app/endpoints/ai/` is new. The upstream Ghostfoli
 
 ### Improvement Log
 
-| Phase       | Description                                                                         | Status     |
-| ----------- | ----------------------------------------------------------------------------------- | ---------- |
-| **Phase 1** | Bug fixes — chart data extraction, benchmark comparison, memory leak                | ✅ Done    |
-| **Phase 2** | Agent reliability — parallel tool calls, context guard, escalation, cost estimation | ✅ Done    |
-| **Phase 3** | Eval coverage expansion — chart extractor tests, multi-turn evals, injection evals  | ✅ Done    |
-| **Phase 4** | Security hardening — rate limiting, scope gate, output sanitization                 | ✅ Done    |
-| **Phase 5** | Operational improvements — structured telemetry, heartbeat tuning                   | 🔜 Planned |
+| Phase       | Description                                                                                              | Status  |
+| ----------- | -------------------------------------------------------------------------------------------------------- | ------- |
+| **Phase 1** | Bug fixes — chart data extraction, benchmark comparison, memory leak                                     | ✅ Done |
+| **Phase 2** | Agent reliability — parallel tool calls, context guard, escalation, cost estimation                      | ✅ Done |
+| **Phase 3** | Eval coverage expansion — chart extractor tests, multi-turn evals, injection evals                       | ✅ Done |
+| **Phase 4** | Security hardening — rate limiting, scope gate, output sanitization, guardrail bypass prevention         | ✅ Done |
+| **Phase 5** | Operational improvements — structured error codes, dynamic system prompt, stream backpressure, telemetry | ✅ Done |
 
 #### Phase 1 Bug Fixes
 
@@ -90,16 +90,58 @@ New test file: `apps/api/test/ai/phase3-evals.spec.ts`
    - Preserves all valid markdown (bold, italic, tables, lists, code blocks).
    - Applied in `ResponseVerifierService.verify()` before building the final response envelope.
 
+4. **Atomic rate limiter** (`ai-rate-limiter.guard.ts`):
+   - Fixed a TOCTOU race: the request counter is now incremented _before_ the limit check and rolled back only if the request is rejected. Previously a burst of concurrent requests could all read the same counter value and all be let through.
+
+5. **`new Function()` removed** (`system-prompt-builder.ts`):
+   - Dynamic code evaluation replaced with a plain inline markdown builder. Eliminates a CSP violation and a potential sandbox-escape vector if the system prompt template was ever sourced from user-controlled input.
+
+6. **Per-user circuit breaker** (`react-agent.service.ts`):
+   - The circuit breaker state is now keyed by `userId` instead of being global. Previously a single user's repeated tool failures could trip the circuit breaker for all other users (cross-user DoS).
+
+7. **`systemPrompt` removed from public API** (`chat.dto.ts` / `ai.controller.ts`):
+   - The `systemPrompt` field was removed from the `ChatDto` request body. Callers can no longer inject an arbitrary system prompt to override safety instructions or escalation guardrails.
+
 #### Phase 5 Operational Improvements
 
-1. **Structured telemetry** (`react-agent.service.ts`):
-   - `emitTelemetry()` emits a JSON-structured `Logger.log` line after every agent run (both `run()` and the streaming path via `run()`).
-   - Fields: `status`, `guardrail`, `toolCalls`, `iterations`, `estimatedCostUsd`, `elapsedMs`, `requestId`. `userId` is intentionally omitted to avoid PII in logs.
-   - 2 tests verify: completed run emits correct telemetry fields; guardrail run includes the `guardrail` field.
+1. **Structured error codes** (`contracts/final-response.schema.ts`):
+   - Every `VerifiedResponse` now carries an optional `errorCode` field (`AgentErrorCode`) when the agent does not complete cleanly: `CIRCUIT_BREAKER`, `COST_LIMIT`, `MAX_ITERATIONS`, `TIMEOUT`, `EMPTY_RESPONSE`, `CANCELLED`, `INTERNAL_ERROR`.
+   - Derived deterministically in `ResponseVerifierService.deriveErrorCode()` — no second LLM call.
+   - Enables the frontend to display specific, actionable error states instead of a generic failure message.
 
-2. **Heartbeat interval extracted to `agent.constants.ts`**:
-   - `AGENT_HEARTBEAT_INTERVAL_MS = 15_000` replaces the inline magic number in `ai.service.ts`.
-   - Documented: 15s chosen to stay below typical 30–60s proxy idle timeouts; tune down for strict proxy environments.
+2. **Dynamic system prompt builder** (`agent/system-prompt-builder.ts`):
+   - `SystemPromptBuilderService` assembles the system prompt at request time from injected context (current date, available tools, user locale). Previously the prompt was a static string defined at module load.
+   - Eliminates the `systemPrompt` override vulnerability (see Phase 4, item 7) and allows per-request prompt tuning without restarting the server.
+   - Fully unit-tested (`system-prompt-builder.spec.ts`, 10 tests).
+
+3. **Accurate cost model** (`react-agent.service.ts`):
+   - Cost estimation now accounts for prompt tokens, completion tokens, and cached prompt tokens separately using per-model pricing from `agent.constants.ts`. Previously all tokens were billed at a single flat rate, underestimating cost on cache-heavy workloads.
+
+4. **Stream backpressure** (`ai.service.ts` / `openai-client.service.ts`):
+   - The streaming path now enforces a request timeout via `AbortController` threaded through to the OpenAI client. Previously a stalled stream would hold the connection open indefinitely until the proxy timed out, with no server-side cancellation.
+
+5. **Conversation history validator** (`utils/conversation-history-validator.ts`):
+   - `validateConversationHistory()` repairs the `priorMessages` array before it enters the LLM conversation: leading assistant messages are dropped (LLMs require user-first turn ordering), and consecutive same-role messages are deduplicated (keeping the newer one).
+   - Handles persistence inconsistencies where a user message was saved but the assistant reply was lost.
+   - Logs a `WARN` when repair is applied; never throws. 20 tests cover all repair rules.
+
+6. **Keyword router removed** (`routing/tool-router.service.ts`):
+   - The keyword-scoring pre-filter that mapped user messages to a subset of tools was replaced with a pass-through that sends all available tools to the LLM. The LLM is significantly better at tool selection than substring matching — the keyword router caused real misrouting (e.g. "history of Apple stock" → `get_transaction_history` instead of `market_data_lookup`; "risky question" → `analyze_risk`). Token cost of the full tool list is negligible on a 128 k context window.
+   - `callerOverrideTools` is still honoured unchanged.
+
+7. **Portfolio claim detector extracted** (`utils/portfolio-claim-detector.ts`):
+   - `containsUnbackedPortfolioClaim()` is now a shared utility used by both `ReactAgentService` (escalation trigger) and `ResponseVerifierService` (warning generation). Previously each had its own regex — they had already drifted, producing inconsistent escalation vs. warning behaviour.
+
+8. **Precision numerical regression tests** (`tools/utils/statistical-helpers.spec.ts`):
+   - Four hand-calculated test cases with tight tolerance (±0.005) guard against formula changes: Sharpe ratio, Sortino > Sharpe when upside dominates, CVaR(95%), and annualized return identity at exactly one year.
+
+9. **Structured telemetry** (`react-agent.service.ts`):
+   - `emitTelemetry()` emits a JSON-structured `Logger.log` line after every agent run.
+   - Fields: `status`, `guardrail`, `toolCalls`, `iterations`, `estimatedCostUsd`, `elapsedMs`, `requestId`. `userId` is intentionally omitted to avoid PII in logs.
+
+10. **Heartbeat interval extracted to `agent.constants.ts`**:
+    - `AGENT_HEARTBEAT_INTERVAL_MS = 15_000` replaces the inline magic number in `ai.service.ts`.
+    - Documented: 15 s chosen to stay below typical 30–60 s proxy idle timeouts.
 
 > **Known pre-existing issue**: A worker process does not exit gracefully after the test suite (upstream NestJS/BullMQ module teardown). This manifests as a warning but does not affect test correctness. Fixing it requires closing Redis/BullMQ connections in `afterAll` hooks for the modules that import `RedisCacheModule` / `PortfolioSnapshotQueueModule`.
 
@@ -162,7 +204,7 @@ All tools are defined in `apps/api/src/app/endpoints/ai/tools/` with strict JSON
 
 **`simulate_trades`** — `allocationChanges` only includes positions where allocation shifted by more than 0.01 percentage points. Untouched positions are omitted so the LLM cannot list unchanged holdings as if they were affected. `concentrationWarnings` are tagged `(pre-existing)` or `(new)` so the LLM can distinguish warnings caused by the simulation from those that already existed.
 
-**`market_data_lookup`** — Queries go through Ghostfolio's Redis quote cache (populated by the scheduled data-gathering jobs), so most lookups never hit Yahoo Finance directly. When a symbol isn't in the cache, the tool falls back to a Yahoo Finance lookup with **exponential-backoff retry** on HTTP 429 (500 ms → 1 s → 2 s, 3 attempts) and a **5-minute negative-result cache** so the same unresolvable symbol cannot drain rate-limit quota across repeated questions.
+**`market_data_lookup`** — Queries go through Ghostfolio's Redis quote cache (populated by the scheduled data-gathering jobs), so most lookups never hit Yahoo Finance directly. When a symbol isn't in the cache, the tool falls back to a Yahoo Finance lookup with **exponential-backoff retry** on HTTP 429 (500 ms → 1 s → 2 s, 3 attempts) and a **5-minute negative-result cache** so the same unresolvable symbol cannot drain rate-limit quota across repeated questions. The negative cache is **per-instance** (not module-scoped) so different tool instances — and different tests — never share cache state.
 
 ---
 
@@ -283,7 +325,7 @@ AgentForge inherits the Ghostfolio stack and adds:
 | Database          | [PostgreSQL](https://www.postgresql.org) + [Prisma](https://www.prisma.io)       |
 | Cache             | [Redis](https://redis.io) (quote cache + BullMQ job queue)                       |
 | Frontend          | [Angular](https://angular.dev) + [Angular Material](https://material.angular.io) |
-| AI / LLM          | OpenAI API (`gpt-4o`)                                                            |
+| AI / LLM          | OpenAI API (`gpt-4.1`)                                                           |
 | Market data       | Yahoo Finance (via `yahoo-finance2`) · CoinGecko                                 |
 | Monorepo tooling  | [Nx](https://nx.dev)                                                             |
 
