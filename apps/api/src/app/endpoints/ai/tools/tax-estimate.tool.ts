@@ -295,12 +295,34 @@ export class TaxEstimateTool implements ToolDefinition<
         continue;
       }
 
-      const holdingPeriodDays = holding.dateOfFirstActivity
-        ? Math.max(
-            0,
-            differenceInDays(new Date(), new Date(holding.dateOfFirstActivity))
-          )
-        : 0;
+      // Derive holding period from the oldest remaining FIFO lot so that prior
+      // lots consumed by sells don't inflate the holding period.  Fall back to
+      // dateOfFirstActivity only when no lot-book entry exists (e.g. no BUY
+      // history was loaded for this symbol).
+      const lotEntry = this.findLotsBySymbol(lotBook, holding.symbol);
+      const openLots = (lotEntry ?? []).filter(
+        (lot) => lot.remainingQuantity > Number.EPSILON
+      );
+      const oldestLotDate =
+        openLots.length > 0
+          ? openLots.reduce(
+              (earliest, lot) =>
+                lot.acquiredAt < earliest ? lot.acquiredAt : earliest,
+              openLots[0].acquiredAt
+            )
+          : null;
+
+      const holdingPeriodDays = oldestLotDate
+        ? Math.max(0, differenceInDays(new Date(), oldestLotDate))
+        : holding.dateOfFirstActivity
+          ? Math.max(
+              0,
+              differenceInDays(
+                new Date(),
+                new Date(holding.dateOfFirstActivity)
+              )
+            )
+          : 0;
 
       tlhCandidates.push({
         costBasisInBaseCurrency,

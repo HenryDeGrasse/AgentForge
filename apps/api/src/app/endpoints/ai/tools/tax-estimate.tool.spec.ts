@@ -701,6 +701,80 @@ describe('TaxEstimateTool — hypothetical trades', () => {
     expect(trade.warning).toBeUndefined();
   });
 
+  it('uses oldest remaining FIFO lot date for TLH holding period, not dateOfFirstActivity', async () => {
+    // Scenario: user bought 100 shares in 2020 (long-term), sold all 100 in 2023,
+    // then re-bought 50 shares in early 2025 (short-term — only ~2 months old).
+    // dateOfFirstActivity is 2020-01-01 (stale), but the correct holding period
+    // should reflect the 2025 re-buy (short-term).
+    const taxEstimateTool = new TaxEstimateTool(
+      {
+        getOrders: jest.fn().mockResolvedValue({
+          activities: [
+            {
+              SymbolProfile: { dataSource: 'YAHOO', symbol: 'AAPL' },
+              date: new Date('2020-01-01T00:00:00.000Z'),
+              feeInBaseCurrency: 0,
+              quantity: 100,
+              type: 'BUY',
+              valueInBaseCurrency: 10000 // $100 each
+            },
+            {
+              SymbolProfile: { dataSource: 'YAHOO', symbol: 'AAPL' },
+              date: new Date('2023-06-01T00:00:00.000Z'),
+              feeInBaseCurrency: 0,
+              quantity: 100,
+              type: 'SELL',
+              valueInBaseCurrency: 15000 // sold all — lots consumed
+            },
+            {
+              SymbolProfile: { dataSource: 'YAHOO', symbol: 'AAPL' },
+              // Recent re-buy: only ~5 months ago (short-term, < 12 months)
+              date: new Date('2025-10-01T00:00:00.000Z'),
+              feeInBaseCurrency: 0,
+              quantity: 50,
+              type: 'BUY',
+              valueInBaseCurrency: 15000 // $300 each — bought high, now down
+            }
+          ],
+          count: 3
+        })
+      } as any,
+      {
+        getDetails: jest.fn().mockResolvedValue({
+          holdings: {
+            AAPL: {
+              // dateOfFirstActivity is from the 2020 purchase — stale (> 5 years)
+              dateOfFirstActivity: new Date('2020-01-01T00:00:00.000Z'),
+              name: 'Apple',
+              // current value $250 × 50 = $12 500, cost was $15 000 → unrealized loss
+              netPerformanceWithCurrencyEffect: -2500,
+              symbol: 'AAPL',
+              valueInBaseCurrency: 12500
+            }
+          }
+        })
+      } as any,
+      {
+        user: jest.fn().mockResolvedValue({
+          settings: { settings: { baseCurrency: 'USD' } }
+        })
+      } as any
+    );
+
+    const result = await taxEstimateTool.execute(
+      { jurisdiction: 'US', taxYear: 2025 },
+      { userId: 'user-1' }
+    );
+
+    expect(result.taxLossHarvestingCandidates).toHaveLength(1);
+    const candidate = result.taxLossHarvestingCandidates[0];
+
+    // The remaining lot is from 2025-01-15 — short-term (< 12 months)
+    expect(candidate.isLongTerm).toBe(false);
+    // Holding period should reflect the Jan 2025 re-buy, not the 2020 original purchase
+    expect(candidate.holdingPeriodDays).toBeLessThan(365);
+  });
+
   it('returns undefined hypotheticalImpact when no hypotheticalTrades provided', async () => {
     const tool = buildHypotheticalTool({ activities: [], holdings: {} });
 

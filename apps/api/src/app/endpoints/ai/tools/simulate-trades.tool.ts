@@ -247,9 +247,9 @@ export class SimulateTradesTool implements ToolDefinition<
       if (trade.action === 'buy') {
         const maxAffordable = cashAfter / price;
 
-        if (acceptedQuantity > maxAffordable && maxAffordable > 0) {
+        if (acceptedQuantity > maxAffordable) {
           const originalQuantity = acceptedQuantity;
-          acceptedQuantity = maxAffordable;
+          acceptedQuantity = Math.max(0, maxAffordable);
           tradeStatus = 'capped';
           tradeWarnings.push({
             code: 'buy_capped_insufficient_cash',
