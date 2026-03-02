@@ -4,32 +4,51 @@
 
 **AI-powered portfolio intelligence — built on [Ghostfolio](https://ghostfol.io)**
 
+Built as part of the [GauntletAI](https://gauntletai.com) program.
+
 </div>
 
 AgentForge is a fork of [Ghostfolio](https://ghostfol.io) that adds a full AI agent layer on top of the existing wealth management platform. Users can ask natural-language questions about their portfolio and get grounded, data-driven answers powered by a ReAct agent that calls real portfolio tools.
+
+**164 commits · 5 hardening phases · 98 eval cases · 14 AI tools · full observability**
 
 ---
 
 ## Project Deliverables
 
-| Deliverable                  | Link                                                                                                            |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| **GitHub Repository**        | [github.com/HenryDeGrasse/AgentForge](https://github.com/HenryDeGrasse/AgentForge)                              |
-| **Deployed Application**     | [Deployed Link](https://agentforge-production-6b51.up.railway.app/)                                                                                     |
-| **Demo Video**               | _TODO: add demo video link_                                                                                     |
-| **Agent Architecture Doc**   | [`docs/AGENT_ARCHITECTURE.md`](./docs/AGENT_ARCHITECTURE.md)                                                    |
-| **Architecture Diagrams**    | [`docs/architecture.md`](./docs/architecture.md)                                                                |
-| **Pre-Search Document**      | [`docs/AgentForge_PreSearch_Document_FINAL.md`](./docs/AgentForge_PreSearch_Document_FINAL.md)                  |
-| **AI Cost Analysis**         | Included in [Agent Architecture Doc](./docs/AGENT_ARCHITECTURE.md) — dev spend + projections for 100–100k users |
-| **Eval Dataset**             | 98 test cases across 3 datasets — see [Eval Framework](#eval-framework)                                         |
-| **Eval Results**             | [`docs/AI_EVAL_RESULTS.md`](./docs/AI_EVAL_RESULTS.md)                                                          |
-| **Open Source Contribution** | This repository — complete AI agent module on an existing OSS project (Ghostfolio, AGPLv3)                      |
+| Deliverable                  | Link                                                                                                                            |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **GitHub Repository**        | [github.com/HenryDeGrasse/AgentForge](https://github.com/HenryDeGrasse/AgentForge)                                              |
+| **Agent Architecture Doc**   | [`docs/AGENT_ARCHITECTURE.md`](./docs/AGENT_ARCHITECTURE.md)                                                                    |
+| **Architecture Diagrams**    | [`docs/architecture.md`](./docs/architecture.md)                                                                                |
+| **Pre-Search Document**      | [`docs/AgentForge_PreSearch_Document_FINAL.md`](./docs/AgentForge_PreSearch_Document_FINAL.md)                                  |
+| **AI Cost Analysis**         | Included in [Agent Architecture Doc](./docs/AGENT_ARCHITECTURE.md) — dev spend + projections for 100–100k users                 |
+| **Eval Dataset**             | 98 test cases across 3 datasets — see [Eval Framework](#eval-framework)                                                         |
+| **Eval Results**             | [`docs/AI_EVAL_RESULTS.md`](./docs/AI_EVAL_RESULTS.md)                                                                          |
+| **Open Source Eval Dataset** | [`@agentforge/finance-eval-dataset`](https://github.com/HenryDeGrasse/agentforge-finance-eval-dataset) — standalone npm package |
+| **Open Source Contribution** | This repository — complete AI agent module on an existing OSS project (Ghostfolio, AGPLv3)                                      |
 
 ---
 
 ## What's New in This Fork
 
 Everything under `apps/api/src/app/endpoints/ai/` is new. The upstream Ghostfolio codebase is otherwise unchanged.
+
+### Frontend — AI Advisor Panel
+
+A premium slide-in chat panel built with Angular Material that provides a conversational interface to the AI agent:
+
+- **⌘K / Ctrl+K keyboard shortcut** to open the advisor from anywhere in the app
+- **Streaming responses** with real-time token rendering via Server-Sent Events
+- **Tool timeline** — each tool call is shown as an expandable step so users can see exactly what data the agent accessed
+- **Thinking indicator** — animated pill shows when the agent is reasoning
+- **Context chips** — current page context (portfolio, account) is displayed as chips above the input
+- **Message animations** — smooth enter/exit transitions for conversation flow
+- **Capability list** — clickable suggested prompts for discoverability
+- **Copy to clipboard** on any response
+- **User feedback** — thumbs up/down on every response, persisted to the backend
+- **Escape key** dismissal, auto-focus on open, legal disclaimer footer
+- **Responsive** — works on desktop and mobile viewports
 
 ### Improvement Log
 
@@ -200,15 +219,15 @@ The confidence level and warnings are returned with every response so callers ca
 
 ## Performance & Quality Metrics
 
-| Metric                  | Target | Achieved                                        |
-| ----------------------- | ------ | ----------------------------------------------- |
-| Single-tool latency     | < 5 s  | 3–5 s (median)                                  |
-| Multi-tool latency (3+) | < 15 s | 6–15 s                                          |
-| Tool success rate       | > 95%  | 100% across all eval scenarios                  |
-| Eval pass rate          | > 80%  | 100% (62/62 fast, 31/31 nightly, 12/12 live)    |
-| Hallucination rate      | < 5%   | 0% — all responses grounded in tool output      |
-| Verification accuracy   | > 90%  | Deterministic heuristic scorer — no false flags |
-| Cost per request        | —      | Median ~$0.01, p95 ~$0.03 (gpt-4.1)             |
+| Metric                  | Target | Achieved                                              |
+| ----------------------- | ------ | ----------------------------------------------------- |
+| Single-tool latency     | < 5 s  | 3–5 s (median)                                        |
+| Multi-tool latency (3+) | < 15 s | 6–15 s                                                |
+| Tool success rate       | > 95%  | 100% across all eval scenarios                        |
+| Eval pass rate          | > 80%  | 100% (62/62 fast, 31/31 nightly, 12/12 live, 5/5 MVP) |
+| Hallucination rate      | < 5%   | 0% — all responses grounded in tool output            |
+| Verification accuracy   | > 90%  | Deterministic heuristic scorer — no false flags       |
+| Cost per request        | —      | Median ~$0.01, p95 ~$0.03 (gpt-4.1)                   |
 
 ### Verification Systems (6 implemented)
 
@@ -223,9 +242,11 @@ The confidence level and warnings are returned with every response so callers ca
 
 ---
 
-## AI Tools (10 total)
+## AI Tools (14 total)
 
 All tools are defined in `apps/api/src/app/endpoints/ai/tools/` with strict JSON input/output schemas. Every schema field has a `description` annotation so the LLM knows exactly how to interpret each value (including whether `*Pct` fields are 0–1 fractions or already-multiplied whole-number percentages).
+
+### Core Portfolio Tools (10)
 
 | Tool                      | Description                                                                  |
 | ------------------------- | ---------------------------------------------------------------------------- |
@@ -239,6 +260,16 @@ All tools are defined in `apps/api/src/app/endpoints/ai/tools/` with strict JSON
 | `simulate_trades`         | What-if simulation — applies hypothetical trades to a portfolio snapshot     |
 | `stress_test`             | Applies predefined or custom market shocks and shows impact per position     |
 | `tax_estimate`            | Short/long-term gain estimates and unrealised gain breakdown                 |
+
+### Insider Trading Monitoring Tools (4) — `bounty` branch
+
+| Tool                   | Description                                                                        |
+| ---------------------- | ---------------------------------------------------------------------------------- |
+| `get_insider_activity` | Fetches recent SEC insider transactions for any symbol via SEC EDGAR data provider |
+| `create_insider_rule`  | Creates a monitoring rule to alert on insider trades matching user criteria        |
+| `list_insider_rules`   | Lists all active insider monitoring rules for the current user                     |
+| `update_insider_rule`  | Updates thresholds, symbols, or conditions on an existing monitoring rule          |
+| `delete_insider_rule`  | Removes an insider monitoring rule                                                 |
 
 ### Notable tool behaviours
 
@@ -264,6 +295,48 @@ How this repo stays within limits:
 | LLM tool calls             | Tools are single-symbol per call; the agent typically calls 1–3 tools per session.            |
 
 If you run many users concurrently, consider adding a dedicated data provider (CoinGecko for crypto, Financial Modeling Prep for equities) to reduce reliance on Yahoo.
+
+---
+
+## Observability & Feedback
+
+### Langfuse + Helicone Integration
+
+Every agent run is traced end-to-end:
+
+- **[Langfuse](https://langfuse.com)** — full LLM trace with spans for each agent iteration, tool call, and verification step. Each trace carries `traceId`, `userId` (hashed), `model`, `estimatedCostUsd`, `toolCalls`, and `requiresHumanReview`.
+- **[Helicone](https://helicone.ai)** — request-level LLM observability (latency, token counts, cost, cache hits) via OpenAI proxy headers.
+- **Structured telemetry** — every agent run emits a JSON log line with `status`, `guardrail`, `toolCalls`, `iterations`, `estimatedCostUsd`, `elapsedMs`, and `requestId`.
+
+### User Feedback
+
+- `POST /api/v1/ai/chat/feedback` accepts thumbs-up/down ratings per response, keyed by `traceId`.
+- Feedback is forwarded to Langfuse as score annotations on the corresponding trace, enabling quality monitoring over time.
+- The `requiresHumanReview` flag is automatically set on low-confidence or guardrail-triggered responses, surfacing them for review in the Langfuse dashboard.
+
+---
+
+## Deployment
+
+### Railway
+
+AgentForge is configured for one-click deployment on [Railway](https://railway.app):
+
+- `railway.toml` and `entrypoint.sh` handle build, migration, demo seeding, and server start.
+- Redis and PostgreSQL are provisioned as Railway services; `REDIS_URL` is parsed automatically.
+- Demo portfolio is auto-seeded on first boot so the app is immediately usable.
+
+See [`docs/deploy-mvp.md`](./docs/deploy-mvp.md) for the full deployment guide.
+
+---
+
+## Open Source Eval Dataset
+
+The eval dataset is published as a standalone package so anyone building AI finance agents can benchmark against it:
+
+📦 **[`@agentforge/finance-eval-dataset`](https://github.com/HenryDeGrasse/agentforge-finance-eval-dataset)**
+
+Includes golden-set test cases, tool profiles, LLM sequence fixtures, and a schema for defining new eval scenarios. Usable independently of AgentForge.
 
 ---
 
@@ -344,11 +417,15 @@ The `dev.sh` commands:
 
 The full set of upstream Ghostfolio env vars is still supported. The AI-specific additions are:
 
-| Name             | Type     | Default   | Description                                               |
-| ---------------- | -------- | --------- | --------------------------------------------------------- |
-| `OPENAI_API_KEY` | `string` | —         | OpenAI API key (used for the ReAct agent and verifier)    |
-| `OPENAI_MODEL`   | `string` | `gpt-4.1` | Model to use for agent turns                              |
-| `EVAL_API_URL`   | `string` | —         | Base URL for live eval runs in CI (`pre-merge-evals` job) |
+| Name                  | Type     | Default   | Description                                               |
+| --------------------- | -------- | --------- | --------------------------------------------------------- |
+| `OPENAI_API_KEY`      | `string` | —         | OpenAI API key (used for the ReAct agent and verifier)    |
+| `OPENAI_MODEL`        | `string` | `gpt-4.1` | Model to use for agent turns                              |
+| `EVAL_API_URL`        | `string` | —         | Base URL for live eval runs in CI (`pre-merge-evals` job) |
+| `LANGFUSE_PUBLIC_KEY` | `string` | —         | Langfuse public key for LLM tracing                       |
+| `LANGFUSE_SECRET_KEY` | `string` | —         | Langfuse secret key for LLM tracing                       |
+| `LANGFUSE_BASE_URL`   | `string` | —         | Langfuse API base URL (defaults to Langfuse Cloud)        |
+| `HELICONE_API_KEY`    | `string` | —         | Helicone API key for request-level LLM observability      |
 
 Standard Ghostfolio env vars:
 
@@ -370,15 +447,17 @@ Standard Ghostfolio env vars:
 
 AgentForge inherits the Ghostfolio stack and adds:
 
-| Layer             | Technology                                                                       |
-| ----------------- | -------------------------------------------------------------------------------- |
-| Backend framework | [NestJS](https://nestjs.com)                                                     |
-| Database          | [PostgreSQL](https://www.postgresql.org) + [Prisma](https://www.prisma.io)       |
-| Cache             | [Redis](https://redis.io) (quote cache + BullMQ job queue)                       |
-| Frontend          | [Angular](https://angular.dev) + [Angular Material](https://material.angular.io) |
-| AI / LLM          | OpenAI API (`gpt-4.1`)                                                           |
-| Market data       | Yahoo Finance (via `yahoo-finance2`) · CoinGecko                                 |
-| Monorepo tooling  | [Nx](https://nx.dev)                                                             |
+| Layer             | Technology                                                                                       |
+| ----------------- | ------------------------------------------------------------------------------------------------ |
+| Backend framework | [NestJS](https://nestjs.com)                                                                     |
+| Database          | [PostgreSQL](https://www.postgresql.org) + [Prisma](https://www.prisma.io)                       |
+| Cache             | [Redis](https://redis.io) (quote cache + BullMQ job queue)                                       |
+| Frontend          | [Angular](https://angular.dev) + [Angular Material](https://material.angular.io)                 |
+| AI / LLM          | OpenAI API (`gpt-4.1`)                                                                           |
+| Observability     | [Langfuse](https://langfuse.com) (tracing) · [Helicone](https://helicone.ai) (LLM proxy metrics) |
+| Market data       | Yahoo Finance (via `yahoo-finance2`) · CoinGecko                                                 |
+| Deployment        | [Railway](https://railway.app)                                                                   |
+| Monorepo tooling  | [Nx](https://nx.dev)                                                                             |
 
 ---
 
