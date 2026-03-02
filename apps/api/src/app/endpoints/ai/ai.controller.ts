@@ -50,13 +50,10 @@ export class AiController {
   @Post('chat')
   @HasPermission(permissions.accessAssistant)
   @UseGuards(AuthGuard('jwt'), HasPermissionGuard, AiRateLimiterGuard)
-  public chat(
-    @Body() { conversationId, message, systemPrompt, toolNames }: ChatDto
-  ) {
+  public chat(@Body() { conversationId, message, toolNames }: ChatDto) {
     return this.aiService.chat({
       conversationId,
       message,
-      systemPrompt,
       toolNames,
       userId: this.request.user.id
     });
@@ -66,7 +63,7 @@ export class AiController {
   @HasPermission(permissions.accessAssistant)
   @UseGuards(AuthGuard('jwt'), HasPermissionGuard, AiRateLimiterGuard)
   public async chatStream(
-    @Body() { conversationId, message, systemPrompt, toolNames }: ChatDto,
+    @Body() { conversationId, message, toolNames }: ChatDto,
     @Req() req: Request,
     @Res() res: Response
   ) {
@@ -89,7 +86,6 @@ export class AiController {
         conversationId,
         message,
         signal: abortController.signal,
-        systemPrompt,
         toolNames,
         userId: this.request.user.id
       })) {

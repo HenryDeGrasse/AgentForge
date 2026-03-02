@@ -93,13 +93,11 @@ export class AiService {
   public async chat({
     conversationId,
     message,
-    systemPrompt,
     toolNames,
     userId
   }: {
     conversationId?: string;
     message: string;
-    systemPrompt?: string;
     toolNames?: string[];
     userId: string;
   }): Promise<ChatResponse> {
@@ -119,13 +117,6 @@ export class AiService {
     let resolvedConversationId: string | undefined = conversationId;
 
     if (conversationId) {
-      // Continuing an existing conversation
-      if (systemPrompt) {
-        throw new BadRequestException(
-          'Cannot change the system prompt of an existing conversation'
-        );
-      }
-
       // Load stored system prompt (ownership enforced — throws 404 if wrong user)
       const conversation = await this.prismaService.chatConversation.findFirst({
         select: { systemPrompt: true },
@@ -159,9 +150,9 @@ export class AiService {
       );
     } else {
       // New conversation — build a prompt tailored to the selected tool set.
-      // buildSystemPrompt returns the custom prompt unchanged when provided,
-      // or assembles the minimal set of prompt sections for the routed tools.
-      effectiveSystemPrompt = buildSystemPrompt(routedToolNames, systemPrompt);
+      // Always uses the server-controlled prompt builder; caller-supplied
+      // system prompts are not accepted to prevent guardrail bypass.
+      effectiveSystemPrompt = buildSystemPrompt(routedToolNames);
     }
 
     // 3. Run the agent (outside any transaction — failure = no DB writes)
@@ -284,14 +275,12 @@ export class AiService {
     conversationId,
     message,
     signal,
-    systemPrompt,
     toolNames,
     userId
   }: {
     conversationId?: string;
     message: string;
     signal?: AbortSignal;
-    systemPrompt?: string;
     toolNames?: string[];
     userId: string;
   }): AsyncIterable<SseEvent> {
@@ -310,15 +299,6 @@ export class AiService {
     let effectiveSystemPrompt: string;
 
     if (conversationId) {
-      if (systemPrompt) {
-        yield {
-          type: 'error',
-          message: 'Cannot change the system prompt of an existing conversation'
-        };
-
-        return;
-      }
-
       const conversation = await this.prismaService.chatConversation.findFirst({
         select: { systemPrompt: true },
         where: { id: conversationId, userId }
@@ -351,7 +331,7 @@ export class AiService {
         'AiService.chatStream'
       );
     } else {
-      effectiveSystemPrompt = buildSystemPrompt(routedToolNames, systemPrompt);
+      effectiveSystemPrompt = buildSystemPrompt(routedToolNames);
     }
 
     // 3. Start heartbeat timer (top-level, not inside agent)

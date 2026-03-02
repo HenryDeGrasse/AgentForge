@@ -209,7 +209,6 @@ describe('AiService', () => {
 
     const response = await service.chat({
       message: 'What changed in my portfolio this week?',
-      systemPrompt: 'be concise',
       toolNames: ['get_portfolio_summary'],
       userId: 'user-1'
     });
@@ -218,7 +217,7 @@ describe('AiService', () => {
       priorMessages: [],
       prompt: 'What changed in my portfolio this week?',
       requestId: expect.any(String),
-      systemPrompt: 'be concise',
+      systemPrompt: expect.stringContaining('portfolio analysis'),
       toolNames: ['get_portfolio_summary'],
       userId: 'user-1'
     });
@@ -294,6 +293,35 @@ describe('AiService', () => {
   });
 
   // ─── getPrompt ──────────────────────────────────────────────────────────────
+
+  // ─── systemPrompt ignored on new conversations ──────────────────────────
+
+  it('does not accept systemPrompt in the chat() signature', async () => {
+    const run = jest.fn().mockResolvedValue({
+      elapsedMs: 100,
+      estimatedCostUsd: 0,
+      executedTools: [],
+      iterations: 1,
+      response: 'ok',
+      status: 'completed',
+      toolCalls: 0
+    });
+
+    const service = buildService({ agentRun: run });
+
+    // Even if a rogue caller passes systemPrompt via cast, the service
+    // always uses the server-controlled buildSystemPrompt output.
+    await service.chat({
+      message: 'Show my portfolio',
+      userId: 'user-1'
+    });
+
+    const callArgs = run.mock.calls[0][0];
+
+    // systemPrompt must always be the server-built prompt, never caller-controlled
+    expect(callArgs.systemPrompt).toContain('portfolio analysis');
+    expect(callArgs.systemPrompt).toContain('Scope');
+  });
 
   // ─── scope enforcement (LLM-based via system prompt) ─────────────────────
 
